@@ -5,6 +5,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\Admin\DirectoryEntryController;
 use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\UserListController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -124,21 +125,12 @@ Route::middleware(['auth', 'role:admin,manager'])->prefix('admin-data')->group(f
     Route::delete('/entries/{entry}', [DirectoryEntryController::class, 'destroy']);
     Route::post('/entries/bulk-update', [DirectoryEntryController::class, 'bulkUpdate']);
     
-    // Categories endpoint
-    Route::get('/categories', function () {
-        // Get all parent categories
-        $parentCategories = \App\Models\Category::whereNull('parent_id')->get();
-        
-        // Get all categories grouped by parent
-        $categoriesWithChildren = [];
-        
-        foreach ($parentCategories as $parent) {
-            $parent->children = \App\Models\Category::where('parent_id', $parent->id)->get();
-            $categoriesWithChildren[] = $parent;
-        }
-        
-        return response()->json($categoriesWithChildren);
-    });
+    // Categories management
+    Route::get('/categories', [AdminCategoryController::class, 'index']);
+    Route::post('/categories', [AdminCategoryController::class, 'store']);
+    Route::get('/categories/{category}', [AdminCategoryController::class, 'show']);
+    Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
+    Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
 });
 
 /*
