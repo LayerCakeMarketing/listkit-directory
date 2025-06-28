@@ -19,6 +19,7 @@ class UserList extends Model
         'description',
         'featured_image',
         'is_public',
+        'visibility',
         'view_count',
         'settings'
     ];
@@ -77,11 +78,54 @@ class UserList extends Model
     //     return $this->hasMany(ListMedia::class, 'list_id')->orderBy('order_index');
     // }
 
-    // Scopes
+    // Visibility scopes
     public function scopePublic($query)
     {
-        return $query->where('is_public', true);
+        return $query->where('visibility', 'public');
     }
+
+    public function scopeUnlisted($query)
+    {
+        return $query->where('visibility', 'unlisted');
+    }
+
+    public function scopePrivate($query)
+    {
+        return $query->where('visibility', 'private');
+    }
+
+    public function scopeViewableByGuests($query)
+    {
+        return $query->whereIn('visibility', ['public', 'unlisted']);
+    }
+
+    public function scopeSearchable($query)
+    {
+        return $query->where('visibility', 'public');
+    }
+
+    // Helper methods
+    public function isPublic()
+    {
+        return $this->visibility === 'public';
+    }
+
+    public function isUnlisted()
+    {
+        return $this->visibility === 'unlisted';
+    }
+
+    public function isPrivate()
+    {
+        return $this->visibility === 'private';
+    }
+
+    public function isViewableByGuests()
+    {
+        return in_array($this->visibility, ['public', 'unlisted']);
+    }
+
+    // Additional scopes
 
     public function scopeByUser($query, $userId)
     {

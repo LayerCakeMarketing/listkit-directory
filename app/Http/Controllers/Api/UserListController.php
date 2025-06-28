@@ -98,11 +98,18 @@ class UserListController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'is_public' => 'sometimes|boolean',
+            'visibility' => 'sometimes|in:public,unlisted,private',
             'featured_image' => 'nullable|string',
         ]);
 
         if (isset($validated['name']) && $validated['name'] !== $list->name) {
             $validated['slug'] = Str::slug($validated['name']);
+        }
+
+        // Handle visibility transition - convert is_public to visibility if present
+        if (isset($validated['is_public'])) {
+            $validated['visibility'] = $validated['is_public'] ? 'public' : 'private';
+            unset($validated['is_public']);
         }
 
         $list->update($validated);
@@ -425,6 +432,20 @@ public function removeFromFavorites($listId)
         ->delete();
     
     return response()->json(['success' => true]);
+}
+
+/**
+ * Get public lists for a specific user
+ */
+public function userPublicLists(\App\Models\User $user)
+{
+    $lists = $user->lists()
+        ->searchable()  // Only public lists
+        ->withCount('items')
+        ->latest()
+        ->paginate(12);
+        
+    return response()->json($lists);
 }
 
 

@@ -10,7 +10,24 @@ if (token) {
     window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.getAttribute('content');
 }
 
-// For Sanctum CSRF protection, ensure we get the CSRF cookie first
-window.axios.get('/sanctum/csrf-cookie').catch(() => {
-    // If this fails, we'll fall back to the meta tag token
+// Add interceptor to handle CSRF token refresh
+window.axios.interceptors.request.use(config => {
+    const token = document.head.querySelector('meta[name="csrf-token"]');
+    if (token) {
+        config.headers['X-CSRF-TOKEN'] = token.getAttribute('content');
+    }
+    return config;
 });
+
+// Handle 419 errors (CSRF token mismatch)
+window.axios.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response && error.response.status === 419) {
+            // Refresh the page to get a new CSRF token
+            console.error('CSRF token mismatch, refreshing page...');
+            window.location.reload();
+        }
+        return Promise.reject(error);
+    }
+);

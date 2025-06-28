@@ -117,12 +117,26 @@ class Category extends Model
     // Get count of all entries in this category and its children
     public function getTotalEntriesCountAttribute()
     {
-        $count = $this->directory_entries_count ?? 0;
+        $count = $this->directoryEntries()->count();
         
         foreach ($this->children as $child) {
             $count += $child->total_entries_count;
         }
         
         return $count;
+    }
+
+    // Get all entries including from subcategories
+    public function getAllDirectoryEntries()
+    {
+        $entryIds = collect([$this->id]);
+        
+        // Add all descendant category IDs
+        $descendants = $this->descendants();
+        foreach ($descendants as $descendant) {
+            $entryIds->push($descendant->id);
+        }
+        
+        return \App\Models\DirectoryEntry::whereIn('category_id', $entryIds);
     }
 }

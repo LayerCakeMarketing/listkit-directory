@@ -185,4 +185,23 @@ class DirectoryEntry extends Model
     {
         $this->increment('list_count');
     }
+
+    // Get the URL for this entry
+    public function getUrl()
+    {
+        if (!$this->category) {
+            $this->load('category');
+        }
+        
+        // If it's a subcategory, get parent category
+        if ($this->category && $this->category->parent_id) {
+            $this->category->load('parent');
+            $parentSlug = $this->category->parent->slug;
+            $childSlug = $this->category->slug;
+            return "/{$parentSlug}/{$childSlug}/{$this->slug}";
+        }
+        
+        // If it's a root category, use directory route as fallback
+        return "/directory/entry/{$this->slug}";
+    }
 }

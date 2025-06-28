@@ -1,0 +1,233 @@
+<template>
+    <Head :title="entry.title" />
+
+    <div class="min-h-screen bg-gray-50">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-6">
+                    <div class="flex items-center">
+                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
+                            ListKit Directory
+                        </Link>
+                    </div>
+                    
+                    <nav class="flex items-center space-x-4">
+                        <Link
+                            href="/directory"
+                            class="text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                            Browse Directory
+                        </Link>
+                        <Link
+                            v-if="$page.props.auth.user"
+                            href="/dashboard"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                            Dashboard
+                        </Link>
+                        <Link
+                            v-else
+                            href="/login"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                            Sign In
+                        </Link>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <!-- Breadcrumb -->
+        <nav class="bg-white border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center space-x-2 py-3 text-sm">
+                    <Link href="/" class="text-gray-500 hover:text-gray-700">Home</Link>
+                    <span class="text-gray-400">/</span>
+                    <Link href="/directory" class="text-gray-500 hover:text-gray-700">Directory</Link>
+                    <span class="text-gray-400">/</span>
+                    <Link 
+                        :href="`/directory/category/${parentCategory.slug}`" 
+                        class="text-gray-500 hover:text-gray-700"
+                    >
+                        {{ parentCategory.name }}
+                    </Link>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-500">{{ childCategory.name }}</span>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-900">{{ entry.title }}</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Main Entry Content -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <!-- Entry Header -->
+                        <div class="p-6 border-b border-gray-200">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-3 mb-3">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                            {{ entry.category.name }}
+                                        </span>
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+                                            {{ entry.type }}
+                                        </span>
+                                    </div>
+                                    <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ entry.title }}</h1>
+                                    <p v-if="entry.description" class="text-gray-600 text-lg">{{ entry.description }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Entry Details -->
+                        <div class="p-6 space-y-6">
+                            <!-- Contact Information -->
+                            <div v-if="entry.email || entry.phone || entry.website" class="border-b border-gray-200 pb-6">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
+                                <div class="space-y-3">
+                                    <div v-if="entry.email" class="flex items-center">
+                                        <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
+                                        <a :href="`mailto:${entry.email}`" class="text-blue-600 hover:text-blue-800">
+                                            {{ entry.email }}
+                                        </a>
+                                    </div>
+                                    <div v-if="entry.phone" class="flex items-center">
+                                        <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                        </svg>
+                                        <a :href="`tel:${entry.phone}`" class="text-blue-600 hover:text-blue-800">
+                                            {{ entry.phone }}
+                                        </a>
+                                    </div>
+                                    <div v-if="entry.website" class="flex items-center">
+                                        <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                        <a :href="entry.website" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">
+                                            {{ formatWebsite(entry.website) }}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Location Information -->
+                            <div v-if="entry.location" class="border-b border-gray-200 pb-6">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Location</h3>
+                                <div class="flex items-start">
+                                    <svg class="w-5 h-5 text-gray-400 mr-3 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <div>
+                                        <div v-if="entry.location.address" class="text-gray-900">{{ entry.location.address }}</div>
+                                        <div class="text-gray-600">
+                                            {{ entry.location.city }}<span v-if="entry.location.state">, {{ entry.location.state }}</span>
+                                            <span v-if="entry.location.zip_code"> {{ entry.location.zip_code }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Additional Information -->
+                            <div v-if="entry.additional_info">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
+                                <div class="prose prose-sm max-w-none">
+                                    {{ entry.additional_info }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar -->
+                <div class="lg:col-span-1">
+                    <!-- Quick Actions -->
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                        <div class="space-y-3">
+                            <button
+                                v-if="$page.props.auth.user"
+                                @click="addToList"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                                Add to My List
+                            </button>
+                            <button
+                                @click="shareEntry"
+                                class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
+                            >
+                                Share
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Related Entries -->
+                    <div v-if="relatedEntries?.length > 0" class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Related {{ entry.category.name }}</h3>
+                        <div class="space-y-4">
+                            <Link
+                                v-for="related in relatedEntries"
+                                :key="related.id"
+                                :href="getRelatedEntryUrl(related)"
+                                class="block hover:bg-gray-50 p-3 rounded-md transition-colors"
+                            >
+                                <h4 class="font-medium text-gray-900 mb-1">{{ related.title }}</h4>
+                                <p class="text-sm text-gray-600 line-clamp-2">{{ related.description }}</p>
+                                <div v-if="related.location" class="text-xs text-gray-500 mt-2">
+                                    {{ related.location.city }}, {{ related.location.state }}
+                                </div>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { Head, Link } from '@inertiajs/vue3'
+
+const props = defineProps({
+    entry: Object,
+    relatedEntries: Array,
+    parentCategory: Object,
+    childCategory: Object,
+})
+
+const formatWebsite = (url) => {
+    return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+const getRelatedEntryUrl = (entry) => {
+    // Use the same parent and child category as current entry
+    return `/${props.parentCategory.slug}/${props.childCategory.slug}/${entry.slug}`;
+}
+
+const addToList = () => {
+    // This would open a modal to select which list to add to
+    alert('Add to list functionality would go here')
+}
+
+const shareEntry = () => {
+    if (navigator.share) {
+        navigator.share({
+            title: props.entry.title,
+            text: props.entry.description,
+            url: window.location.href,
+        })
+    } else {
+        // Fallback to copying URL to clipboard
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Link copied to clipboard!')
+        })
+    }
+}
+</script>
