@@ -1,0 +1,22 @@
+Run local server.
+
+cd /Users/ericslarson/directory-app
+  php artisan serve
+
+cd /Users/ericslarson/directory-app
+ npm run dev
+
+
+
+
+Production Db
+ALTER USER listkit_user WITH PASSWORD 'qkcHS02rRlswbpoX6KZyigLJIkrpK+HRSgxFqKX5js8=';
+
+$user = new App\Models\User;
+  $user->name = 'Eric';
+  $user->email = 'eric@layercakemarketing.com';
+  $user->password = Hash::make('3TierPie!');
+  $user->role = 'admin';
+  $user->username = 'admin';
+  $user->email_verified_at = now();
+  $user->save();1

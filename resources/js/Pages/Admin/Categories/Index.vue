@@ -119,7 +119,7 @@
                             v-model="categoryForm.slug"
                             type="text"
                             required
-                            pattern="[a-z0-9-]+"
+                            pattern="[a-z0-9\-]+"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                             placeholder="auto-generated-from-name"
                         />
@@ -230,19 +230,8 @@ const fetchCategories = async () => {
     loading.value = true
     try {
         const response = await axios.get('/admin-data/categories')
-        categories.value = response.data.flat().map(cat => ({
-            ...cat,
-            children: cat.children || []
-        }))
-        // Flatten the structure for easier management
-        const allCategories = []
-        response.data.forEach(parent => {
-            allCategories.push(parent)
-            if (parent.children) {
-                allCategories.push(...parent.children)
-            }
-        })
-        categories.value = allCategories
+        // Store all categories in a flat array for easier management
+        categories.value = response.data
     } catch (error) {
         console.error('Error fetching categories:', error)
         alert('Error loading categories')
