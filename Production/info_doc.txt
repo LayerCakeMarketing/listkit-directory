@@ -8,6 +8,18 @@ cd /Users/ericslarson/directory-app
 
 
 
+Deploy:
+  Here's what we just accomplished:
+
+  1. ✅ Committed local changes - Bug fixes committed to Git
+  2. ✅ Pushed to GitHub - Changes available in repository
+  3. ✅ Pulled to production - Code updated without deleting anything
+  4. ✅ Ran migrations - Database updated with description column
+  5. ✅ Built assets - Frontend compiled with fixes
+  6. ✅ Cached & restarted - Production optimized and reloaded
+
+
+
 
 Production Db
 ALTER USER listkit_user WITH PASSWORD 'qkcHS02rRlswbpoX6KZyigLJIkrpK+HRSgxFqKX5js8=';

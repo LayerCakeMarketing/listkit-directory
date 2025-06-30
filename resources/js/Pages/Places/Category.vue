@@ -17,12 +17,21 @@ const getEntryUrl = (entry) => {
     // If we're viewing a parent category and the entry is in this category,
     // it doesn't have the hierarchical structure needed
     // Use the fallback URL instead
-    return `/directory/entry/${entry.slug}`;
+    return `/places/entry/${entry.slug}`;
+};
+
+const stripHtml = (html) => {
+    if (!html) return '';
+    // Create a temporary div element to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Return text content which strips all HTML tags
+    return temp.textContent || temp.innerText || '';
 };
 </script>
 
 <template>
-    <Head :title="`${category.name} Directory`" />
+    <Head :title="`${category.name} Places`" />
     
     <div class="min-h-screen bg-gray-50">
         <!-- Header -->
@@ -34,7 +43,7 @@ const getEntryUrl = (entry) => {
                             ListKit Directory
                         </Link>
                         <span class="text-gray-500">/</span>
-                        <Link href="/directory" class="text-gray-600 hover:text-blue-600">Directory</Link>
+                        <Link href="/places" class="text-gray-600 hover:text-blue-600">Places</Link>
                         <span class="text-gray-500">/</span>
                         <h1 class="text-xl text-gray-600">{{ category.name }}</h1>
                     </div>
@@ -76,7 +85,7 @@ const getEntryUrl = (entry) => {
                 
                 <div class="flex items-center space-x-4">
                     <Link
-                        href="/directory"
+                        href="/places"
                         class="text-blue-600 hover:text-blue-800 font-medium"
                     >
                         ← Back to All Categories
@@ -121,7 +130,7 @@ const getEntryUrl = (entry) => {
                             </div>
                             
                             <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ entry.title }}</h3>
-                            <p class="text-gray-600 text-sm mb-4 line-clamp-2">{{ entry.description }}</p>
+                            <div class="text-gray-600 text-sm mb-4 line-clamp-2" v-html="stripHtml(entry.description)"></div>
                             
                             <div v-if="entry.location" class="flex items-center text-gray-500 text-sm mb-3">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

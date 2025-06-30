@@ -32,12 +32,23 @@
                 <div class="bg-white p-6 rounded-lg shadow mb-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Manage Entries</h3>
-                        <button
-                            @click="showCreateModal = true"
-                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                        >
-                            Add New Entry
-                        </button>
+                        <div class="flex space-x-2">
+                            <Link
+                                href="/admin/bulk-import"
+                                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                            >
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                Bulk Import
+                            </Link>
+                            <Link
+                                href="/places/create"
+                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-block"
+                            >
+                                Add New Entry
+                            </Link>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -106,8 +117,7 @@
                             </div>
                         </div>
 
-                        <div v-if="loading" class="text-center py-4">Loading...</div>
-                        <div v-else-if="entries.data.length === 0" class="text-center py-4 text-gray-500">
+                        <div v-if="props.entries.data.length === 0" class="text-center py-4 text-gray-500">
                             No entries found
                         </div>
                         <div v-else class="overflow-x-auto">
@@ -168,18 +178,55 @@
                                             <div v-else class="text-gray-400">N/A</div>
                                         </td>
                                         <td class="px-6 py-4 text-sm font-medium">
-                                            <button
-                                                @click="editEntry(entry)"
-                                                class="text-indigo-600 hover:text-indigo-900 mr-3"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                @click="deleteEntry(entry)"
-                                                class="text-red-600 hover:text-red-900"
-                                            >
-                                                Delete
-                                            </button>
+                                            <div class="relative inline-block text-left">
+                                                <button
+                                                    @click="toggleDropdown(entry.id)"
+                                                    type="button"
+                                                    class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500"
+                                                >
+                                                    Actions
+                                                    <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                                    </svg>
+                                                </button>
+
+                                                <div
+                                                    v-if="openDropdownId === entry.id"
+                                                    class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+                                                >
+                                                    <div class="py-1">
+                                                        <a
+                                                            :href="getEntryViewUrl(entry)"
+                                                            target="_blank"
+                                                            class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                        >
+                                                            <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                            View Entry
+                                                        </a>
+                                                        <Link
+                                                            :href="`/places/${entry.id}/edit`"
+                                                            class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                        >
+                                                            <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                            Edit Entry
+                                                        </Link>
+                                                        <button
+                                                            @click="deleteEntry(entry)"
+                                                            class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-gray-100"
+                                                        >
+                                                            <svg class="mr-3 h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            Delete Entry
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -187,499 +234,147 @@
                         </div>
 
                         <!-- Pagination -->
-                        <div class="mt-4" v-if="entries.meta">
-                            <Pagination 
-                                :links="{
-                                    ...entries.meta,
-                                    links: entries.links,
-                                    from: entries.meta?.from || 0,
-                                    to: entries.meta?.to || 0,
-                                    total: entries.meta?.total || 0
-                                }" 
-                            />
+                        <div class="mt-4" v-if="props.entries.links">
+                            <Pagination :links="props.entries" />
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Create/Edit Modal -->
-        <Modal :show="showCreateModal || showEditModal" @close="closeModal" :max-width="'4xl'">
-            <div class="p-6">
-                <h3 class="text-lg font-medium text-gray-900 mb-4">
-                    {{ editingEntry ? 'Edit Entry' : 'Create New Entry' }}
-                </h3>
-
-                <form @submit.prevent="saveEntry">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Basic Information -->
-                        <div class="col-span-2">
-                            <h4 class="text-md font-semibold mb-2">Basic Information</h4>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Title *</label>
-                            <input
-                                v-model="form.title"
-                                type="text"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Type *</label>
-                            <select
-                                v-model="form.type"
-                                @change="onTypeChange"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                                required
-                            >
-                                <option value="">Select Type</option>
-                                <option value="physical_location">Physical Location</option>
-                                <option value="online_business">Online Business</option>
-                                <option value="service">Service</option>
-                                <option value="event">Event</option>
-                                <option value="resource">Resource</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Category *</label>
-                            <select
-                                v-model="form.category_id"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                                required
-                            >
-                                <option value="">Select Category</option>
-                                <optgroup v-for="parent in categories" :key="parent.id" :label="parent.name">
-                                    <option v-for="child in parent.children" :key="child.id" :value="child.id">
-                                        {{ child.name }}
-                                    </option>
-                                </optgroup>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Status</label>
-                            <select
-                                v-model="form.status"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                            >
-                                <option value="draft">Draft</option>
-                                <option value="pending_review">Pending Review</option>
-                                <option value="published">Published</option>
-                                <option value="archived">Archived</option>
-                            </select>
-                        </div>
-
-                        <div class="col-span-2">
-                            <label class="block text-sm font-medium text-gray-700">Description</label>
-                            <textarea
-                                v-model="form.description"
-                                rows="3"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                            ></textarea>
-                        </div>
-
-                        <!-- Contact Information -->
-                        <div class="col-span-2 mt-4">
-                            <h4 class="text-md font-semibold mb-2">Contact Information</h4>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Phone</label>
-                            <input
-                                v-model="form.phone"
-                                type="tel"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Email</label>
-                            <input
-                                v-model="form.email"
-                                type="email"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                            />
-                        </div>
-
-                        <div class="col-span-2">
-                            <label class="block text-sm font-medium text-gray-700">Website</label>
-                            <input
-                                v-model="form.website_url"
-                                type="url"
-                                class="mt-1 block w-full rounded-md border-gray-300"
-                            />
-                        </div>
-
-                        <!-- Location Information (for physical locations) -->
-                        <template v-if="showLocationFields">
-                            <div class="col-span-2 mt-4">
-                                <h4 class="text-md font-semibold mb-2">Location Information</h4>
-                            </div>
-
-                            <div class="col-span-2">
-                                <label class="block text-sm font-medium text-gray-700">Address *</label>
-                                <input
-                                    v-model="form.location.address_line1"
-                                    type="text"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">City *</label>
-                                <input
-                                    v-model="form.location.city"
-                                    type="text"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">State *</label>
-                                <input
-                                    v-model="form.location.state"
-                                    type="text"
-                                    maxlength="2"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">ZIP Code *</label>
-                                <input
-                                    v-model="form.location.zip_code"
-                                    type="text"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Country</label>
-                                <input
-                                    v-model="form.location.country"
-                                    type="text"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Latitude *</label>
-                                <input
-                                    v-model="form.location.latitude"
-                                    type="number"
-                                    step="any"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Longitude *</label>
-                                <input
-                                    v-model="form.location.longitude"
-                                    type="number"
-                                    step="any"
-                                    class="mt-1 block w-full rounded-md border-gray-300"
-                                    :required="showLocationFields"
-                                />
-                            </div>
-                        </template>
-                    </div>
-
-                    <div class="mt-6 flex justify-end space-x-3">
-                        <button
-                            type="button"
-                            @click="closeModal"
-                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="processing"
-                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                        >
-                            {{ processing ? 'Saving...' : 'Save' }}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </Modal>
     </AuthenticatedLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { Head } from '@inertiajs/vue3'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import Modal from '@/Components/Modal.vue'
 import Pagination from '@/Components/Pagination.vue'
 import { debounce } from 'lodash'
 
-const axios = window.axios
-
-// Data
-const entries = ref({ data: [], links: [], meta: {} })
-const categories = ref([])
-const stats = ref({
-    total_entries: 0,
-    published: 0,
-    pending_review: 0,
-    featured: 0,
-})
-const filters = reactive({
-    search: '',
-    type: '',
-    category_id: '',
-    status: '',
+const props = defineProps({
+    entries: Object,
+    stats: Object,
+    categories: Array,
+    filters: Object
 })
 
 // UI State
-const loading = ref(false)
-const processing = ref(false)
-const showCreateModal = ref(false)
-const showEditModal = ref(false)
 const selectedEntries = ref([])
-const editingEntry = ref(null)
+const openDropdownId = ref(null)
 
-// Forms
-const form = reactive({
-    title: '',
-    description: '',
-    type: '',
-    category_id: '',
-    status: 'draft',
-    phone: '',
-    email: '',
-    website_url: '',
-    tags: [],
-    social_links: {},
-    location: {
-        address_line1: '',
-        city: '',
-        state: '',
-        zip_code: '',
-        country: 'USA',
-        latitude: '',
-        longitude: '',
-        hours_of_operation: {},
-        amenities: [],
-    }
+// Local filters that sync with props
+const filters = ref({
+    search: props.filters?.search || '',
+    type: props.filters?.type || '',
+    category_id: props.filters?.category_id || '',
+    status: props.filters?.status || '',
 })
 
 // Computed
 const isAllSelected = computed(() => {
-    return entries.value.data.length > 0 && 
-           selectedEntries.value.length === entries.value.data.length
+    return props.entries.data.length > 0 && 
+           selectedEntries.value.length === props.entries.data.length
 })
 
-const showLocationFields = computed(() => {
-    return ['physical_location', 'event'].includes(form.type)
-})
 
 // Methods
-const fetchEntries = async () => {
-    loading.value = true
-    try {
-        const response = await axios.get('/admin-data/entries', { params: filters })
-        entries.value = {
-            data: response.data.data,
-            links: response.data.links,
-            meta: {
-                from: response.data.from,
-                to: response.data.to,
-                total: response.data.total,
-                current_page: response.data.current_page,
-                last_page: response.data.last_page,
-                per_page: response.data.per_page,
-            }
-        }
-    } catch (error) {
-        console.error('Error fetching entries:', error)
-    } finally {
-        loading.value = false
-    }
-}
-
-const fetchStats = async () => {
-    try {
-        const response = await axios.get('/admin-data/entries/stats')
-        stats.value = response.data
-    } catch (error) {
-        console.error('Error fetching stats:', error)
-    }
-}
-
-const fetchCategories = async () => {
-    try {
-        const response = await axios.get('/admin-data/categories')
-        console.log('Categories response:', response.data) // Debug line
-        categories.value = response.data
-    } catch (error) {
-        console.error('Error fetching categories:', error)
-        alert('Failed to load categories. Please refresh the page.')
-    }
-}
-
-const debouncedFetch = debounce(fetchEntries, 300)
-
-const editEntry = (entry) => {
-    editingEntry.value = entry
-    Object.assign(form, {
-        title: entry.title,
-        description: entry.description || '',
-        type: entry.type,
-        category_id: entry.category_id,
-        status: entry.status,
-        phone: entry.phone || '',
-        email: entry.email || '',
-        website_url: entry.website_url || '',
-        tags: entry.tags || [],
-        social_links: entry.social_links || {},
+const applyFilters = () => {
+    router.get('/admin/entries', filters.value, {
+        preserveState: true,
+        preserveScroll: true,
     })
-    
-    if (entry.location) {
-        Object.assign(form.location, {
-            address_line1: entry.location.address_line1 || '',
-            city: entry.location.city || '',
-            state: entry.location.state || '',
-            zip_code: entry.location.zip_code || '',
-            country: entry.location.country || 'USA',
-            latitude: entry.location.latitude || '',
-            longitude: entry.location.longitude || '',
-            hours_of_operation: entry.location.hours_of_operation || {},
-            amenities: entry.location.amenities || [],
-        })
-    }
-    
-    showEditModal.value = true
 }
 
-const saveEntry = async () => {
-    processing.value = true
-    try {
-        const data = { ...form }
-        
-        // Only include location if it's a physical location
-        if (!showLocationFields.value) {
-            delete data.location
-        }
-        
-        if (editingEntry.value) {
-            await axios.put(`/admin-data/entries/${editingEntry.value.id}`, data)
-            alert('Entry updated successfully')
-        } else {
-            await axios.post('/admin-data/entries', data)
-            alert('Entry created successfully')
-        }
-        
-        closeModal()
-        fetchEntries()
-        fetchStats()
-    } catch (error) {
-        if (error.response?.data?.errors) {
-            const errors = Object.values(error.response.data.errors).flat()
-            alert('Error: ' + errors.join(', '))
-        } else {
-            alert('Error saving entry: ' + (error.response?.data?.message || 'Unknown error'))
-        }
-    } finally {
-        processing.value = false
-    }
-}
+const debouncedFilter = debounce(applyFilters, 300)
 
-const deleteEntry = async (entry) => {
+// Watch for filter changes
+watch(() => filters.value.search, () => {
+    debouncedFilter()
+})
+
+watch([() => filters.value.type, () => filters.value.status, () => filters.value.category_id], () => {
+    applyFilters()
+})
+
+
+const deleteEntry = (entry) => {
     if (!confirm(`Are you sure you want to delete "${entry.title}"?`)) return
     
-    try {
-        await axios.delete(`/admin-data/entries/${entry.id}`)
-        fetchEntries()
-        fetchStats()
-        alert('Entry deleted successfully')
-    } catch (error) {
-        alert('Error deleting entry: ' + error.response?.data?.message)
-    }
+    router.delete(`/admin-data/entries/${entry.id}`, {
+        onSuccess: () => {
+            alert('Entry deleted successfully')
+        },
+        onError: (errors) => {
+            alert('Error deleting entry: ' + (errors.message || 'Unknown error'))
+        }
+    })
 }
 
 const bulkAction = async (action) => {
     if (!confirm(`Are you sure you want to ${action} ${selectedEntries.value.length} entries?`)) return
     
     try {
-        await axios.post('/admin-data/entries/bulk-update', {
+        await window.axios.post('/admin-data/entries/bulk-update', {
             entry_ids: selectedEntries.value,
             action: action
         })
         
         selectedEntries.value = []
-        fetchEntries()
-        fetchStats()
+        router.reload()
         alert(`Entries ${action}ed successfully`)
     } catch (error) {
         alert('Error performing bulk action: ' + error.response?.data?.message)
     }
 }
 
-const closeModal = () => {
-    showCreateModal.value = false
-    showEditModal.value = false
-    editingEntry.value = null
-    
-    // Reset form
-    Object.assign(form, {
-        title: '',
-        description: '',
-        type: '',
-        category_id: '',
-        status: 'draft',
-        phone: '',
-        email: '',
-        website_url: '',
-        tags: [],
-        social_links: {},
-        location: {
-            address_line1: '',
-            city: '',
-            state: '',
-            zip_code: '',
-            country: 'USA',
-            latitude: '',
-            longitude: '',
-            hours_of_operation: {},
-            amenities: [],
-        }
-    })
-}
 
 const toggleSelectAll = () => {
     if (isAllSelected.value) {
         selectedEntries.value = []
     } else {
-        selectedEntries.value = entries.value.data.map(e => e.id)
+        selectedEntries.value = props.entries.data.map(e => e.id)
     }
 }
 
-const onTypeChange = () => {
-    // Clear location data if switching to non-physical type
-    if (!showLocationFields.value) {
-        Object.keys(form.location).forEach(key => {
-            if (typeof form.location[key] === 'string') {
-                form.location[key] = ''
-            } else if (Array.isArray(form.location[key])) {
-                form.location[key] = []
-            } else {
-                form.location[key] = {}
-            }
-        })
+const toggleDropdown = (entryId) => {
+    if (openDropdownId.value === entryId) {
+        openDropdownId.value = null
+    } else {
+        openDropdownId.value = entryId
     }
 }
+
+const getEntryViewUrl = (entry) => {
+    // If entry has a custom URL, use it
+    if (entry.url) {
+        return entry.url
+    }
+    
+    // If entry has category with parent, build hierarchical URL
+    if (entry.category && entry.category.parent_id && entry.category.parent) {
+        const parentSlug = entry.category.parent.slug
+        const childSlug = entry.category.slug
+        return `/${parentSlug}/${childSlug}/${entry.slug}`
+    }
+    
+    // Default fallback
+    return `/places/entry/${entry.slug}`
+}
+
+// Close dropdown when clicking outside
+onMounted(() => {
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.relative.inline-block.text-left')) {
+            openDropdownId.value = null
+        }
+    })
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', () => {})
+})
+
 
 // Helper methods
 const getTypeBadgeClass = (type) => {
@@ -714,10 +409,4 @@ const truncate = (text, length) => {
     return text.length > length ? text.substring(0, length) + '...' : text
 }
 
-// Lifecycle
-onMounted(() => {
-    fetchEntries()
-    fetchStats()
-    fetchCategories()
-})
 </script>

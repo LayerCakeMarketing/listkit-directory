@@ -21,11 +21,11 @@ const getEntryUrl = (entry) => {
     if (entry.category && entry.category.parent_id) {
         // For featured entries, the category relationship might not include parent
         // We'll need to construct URL from available data or use fallback
-        const parentSlug = entry.category.parent?.slug || 'directory';
+        const parentSlug = entry.category.parent?.slug || 'places';
         const childSlug = entry.category.slug;
         return `/${parentSlug}/${childSlug}/${entry.slug}`;
     }
-    return `/directory/entry/${entry.slug}`;
+    return `/places/entry/${entry.slug}`;
 };
 </script>
 
@@ -120,7 +120,7 @@ const getEntryUrl = (entry) => {
                     <Link 
                         v-for="category in categories" 
                         :key="category.id"
-                        :href="`/directory/category/${category.slug}`"
+                        :href="`/places/category/${category.slug}`"
                         class="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow cursor-pointer group"
                     >
                         <div class="text-4xl mb-4">{{ category.icon || '📁' }}</div>
@@ -135,7 +135,7 @@ const getEntryUrl = (entry) => {
             </div>
         </section>
 
-        <!-- Featured Directory Entries -->
+        <!-- Featured Places -->
         <section v-if="featuredEntries?.length > 0" class="py-16 bg-gray-100">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center mb-12">

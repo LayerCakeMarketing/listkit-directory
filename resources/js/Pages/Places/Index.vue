@@ -2,27 +2,32 @@
 import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
-    category: Object,
     entries: Object,
+    categories: Array,
 });
 
 const getEntryUrl = (entry) => {
-    // If the entry's category has a parent, use hierarchical URL
-    if (entry.category && entry.category.parent_id && entry.category.parent) {
-        const parentSlug = entry.category.parent.slug;
+    // Check if entry has category with parent
+    if (entry.category && entry.category.parent_id) {
+        const parentSlug = entry.category.parent?.slug || 'places';
         const childSlug = entry.category.slug;
         return `/${parentSlug}/${childSlug}/${entry.slug}`;
     }
-    
-    // If we're viewing a parent category and the entry is in this category,
-    // it doesn't have the hierarchical structure needed
-    // Use the fallback URL instead
-    return `/directory/entry/${entry.slug}`;
+    return `/places/entry/${entry.slug}`;
+};
+
+const stripHtml = (html) => {
+    if (!html) return '';
+    // Create a temporary div element to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Return text content which strips all HTML tags
+    return temp.textContent || temp.innerText || '';
 };
 </script>
 
 <template>
-    <Head :title="`${category.name} Directory`" />
+    <Head title="Places" />
     
     <div class="min-h-screen bg-gray-50">
         <!-- Header -->
@@ -34,9 +39,7 @@ const getEntryUrl = (entry) => {
                             ListKit Directory
                         </Link>
                         <span class="text-gray-500">/</span>
-                        <Link href="/directory" class="text-gray-600 hover:text-blue-600">Directory</Link>
-                        <span class="text-gray-500">/</span>
-                        <h1 class="text-xl text-gray-600">{{ category.name }}</h1>
+                        <h1 class="text-xl text-gray-600">Browse Places</h1>
                     </div>
                     
                     <nav class="flex items-center space-x-4">
@@ -64,31 +67,37 @@ const getEntryUrl = (entry) => {
         </header>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Category Header -->
+            <!-- Categories Filter -->
             <div class="mb-8">
-                <div class="flex items-center mb-4">
-                    <div class="text-5xl mr-4">{{ category.icon || '📁' }}</div>
-                    <div>
-                        <h1 class="text-3xl font-bold text-gray-900">{{ category.name }}</h1>
-                        <p v-if="category.description" class="text-gray-600 mt-2">{{ category.description }}</p>
-                    </div>
-                </div>
-                
-                <div class="flex items-center space-x-4">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Browse by Category</h2>
+                <div class="flex flex-wrap gap-3">
                     <Link
-                        href="/directory"
-                        class="text-blue-600 hover:text-blue-800 font-medium"
+                        href="/places"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                        ← Back to All Categories
+                        All Categories
                     </Link>
-                    <span class="text-gray-500">
-                        {{ entries.total }} {{ entries.total === 1 ? 'entry' : 'entries' }} in this category
-                    </span>
+                    <Link
+                        v-for="category in categories"
+                        :key="category.id"
+                        :href="`/places/category/${category.slug}`"
+                        class="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                        {{ category.icon || '📁' }} {{ category.name }} 
+                        <span class="text-sm text-gray-500">({{ category.total_entries_count || category.directory_entries_count || 0 }})</span>
+                    </Link>
                 </div>
             </div>
 
             <!-- Directory Entries -->
             <div class="mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">
+                        All Places
+                        <span class="text-lg text-gray-500 font-normal">({{ entries.total }} total)</span>
+                    </h2>
+                </div>
+
                 <div v-if="entries.data.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <Link
                         v-for="entry in entries.data" 
@@ -96,22 +105,6 @@ const getEntryUrl = (entry) => {
                         :href="getEntryUrl(entry)"
                         class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
                     >
-                        <!-- Entry Image -->
-                        <div v-if="entry.cover_image_url || entry.logo_url" class="h-48 bg-gray-200 relative">
-                            <img
-                                :src="entry.cover_image_url || entry.logo_url"
-                                :alt="entry.title"
-                                class="w-full h-full object-cover"
-                            />
-                            <div v-if="entry.logo_url && entry.cover_image_url" class="absolute bottom-2 left-2">
-                                <img
-                                    :src="entry.logo_url"
-                                    :alt="entry.title + ' logo'"
-                                    class="w-12 h-12 rounded-lg object-cover border-2 border-white"
-                                />
-                            </div>
-                        </div>
-
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-3">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -121,7 +114,7 @@ const getEntryUrl = (entry) => {
                             </div>
                             
                             <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ entry.title }}</h3>
-                            <p class="text-gray-600 text-sm mb-4 line-clamp-2">{{ entry.description }}</p>
+                            <div class="text-gray-600 text-sm mb-4 line-clamp-2" v-html="stripHtml(entry.description)"></div>
                             
                             <div v-if="entry.location" class="flex items-center text-gray-500 text-sm mb-3">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,28 +144,37 @@ const getEntryUrl = (entry) => {
                 </div>
 
                 <div v-else class="text-center py-12">
-                    <div class="text-gray-500 text-lg">No entries found in {{ category.name }}.</div>
-                    <p class="text-gray-400 mt-2">Be the first to add a business in this category!</p>
+                    <div class="text-gray-500 text-lg">No places found.</div>
+                    <p class="text-gray-400 mt-2">Be the first to add a business or location!</p>
                 </div>
             </div>
 
             <!-- Pagination -->
             <div v-if="entries.links && entries.links.length > 3" class="flex justify-center">
                 <nav class="flex items-center space-x-2">
-                    <Link
-                        v-for="(link, index) in entries.links"
-                        :key="index"
-                        :href="link.url"
-                        v-html="link.label"
-                        :class="[
-                            'px-3 py-2 text-sm rounded-md transition-colors',
-                            link.active 
-                                ? 'bg-blue-600 text-white' 
-                                : link.url 
-                                    ? 'text-gray-700 hover:bg-gray-100' 
+                    <template v-for="(link, index) in entries.links" :key="index">
+                        <Link
+                            v-if="link.url"
+                            :href="link.url"
+                            v-html="link.label"
+                            :class="[
+                                'px-3 py-2 text-sm rounded-md transition-colors',
+                                link.active 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            ]"
+                        />
+                        <span
+                            v-else
+                            v-html="link.label"
+                            :class="[
+                                'px-3 py-2 text-sm rounded-md transition-colors',
+                                link.active 
+                                    ? 'bg-blue-600 text-white' 
                                     : 'text-gray-400 cursor-not-allowed'
-                        ]"
-                    />
+                            ]"
+                        />
+                    </template>
                 </nav>
             </div>
         </div>

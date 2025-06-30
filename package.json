@@ -22,6 +22,9 @@
     },
     "dependencies": {
         "@tailwindcss/typography": "^0.5.16",
+        "@tiptap/extension-placeholder": "^2.23.0",
+        "@tiptap/starter-kit": "^2.23.0",
+        "@tiptap/vue-3": "^2.23.0",
         "leaflet": "^1.9.4",
         "pinia": "^3.0.2",
         "vue-leaflet": "^0.1.0",

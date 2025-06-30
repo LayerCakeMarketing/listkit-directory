@@ -143,20 +143,29 @@ const getEntryUrl = (entry) => {
             <!-- Pagination -->
             <div v-if="entries.links && entries.links.length > 3" class="flex justify-center">
                 <nav class="flex items-center space-x-2">
-                    <Link
-                        v-for="(link, index) in entries.links"
-                        :key="index"
-                        :href="link.url"
-                        v-html="link.label"
-                        :class="[
-                            'px-3 py-2 text-sm rounded-md transition-colors',
-                            link.active 
-                                ? 'bg-blue-600 text-white' 
-                                : link.url 
-                                    ? 'text-gray-700 hover:bg-gray-100' 
+                    <template v-for="(link, index) in entries.links" :key="index">
+                        <Link
+                            v-if="link.url"
+                            :href="link.url"
+                            v-html="link.label"
+                            :class="[
+                                'px-3 py-2 text-sm rounded-md transition-colors',
+                                link.active 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            ]"
+                        />
+                        <span
+                            v-else
+                            v-html="link.label"
+                            :class="[
+                                'px-3 py-2 text-sm rounded-md transition-colors',
+                                link.active 
+                                    ? 'bg-blue-600 text-white' 
                                     : 'text-gray-400 cursor-not-allowed'
-                        ]"
-                    />
+                            ]"
+                        />
+                    </template>
                 </nav>
             </div>
         </div>

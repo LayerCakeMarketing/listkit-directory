@@ -13,7 +13,7 @@ class Location extends Model
         'directory_entry_id', 'address_line1', 'address_line2', 'city',
         'state', 'zip_code', 'country', 'latitude', 'longitude',
         'hours_of_operation', 'holiday_hours', 'is_wheelchair_accessible',
-        'has_parking', 'amenities', 'place_id'
+        'has_parking', 'amenities', 'place_id', 'cross_streets', 'neighborhood'
     ];
 
     protected $casts = [

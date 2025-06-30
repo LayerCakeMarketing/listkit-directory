@@ -14,9 +14,25 @@ class DirectoryEntry extends Model
         'title', 'slug', 'description', 'type', 'category_id', 'region_id',
         'tags', 'owner_user_id', 'created_by_user_id', 'updated_by_user_id',
         'phone', 'email', 'website_url', 'social_links', 'featured_image',
-        'gallery_images', 'status', 'is_featured', 'is_verified', 'is_claimed',
-        'meta_title', 'meta_description', 'structured_data', 'published_at',
-        'view_count', 'list_count'
+        'logo_url', 'cover_image_url', 'gallery_images', 'status', 'is_featured', 
+        'is_verified', 'is_claimed', 'meta_title', 'meta_description', 'structured_data', 
+        'published_at', 'view_count', 'list_count',
+        
+        // Social Media
+        'facebook_url', 'instagram_handle', 'twitter_handle', 'youtube_channel', 'messenger_contact',
+        
+        // Business Metadata
+        'price_range', 'takes_reservations', 'accepts_credit_cards', 'wifi_available', 
+        'pet_friendly', 'parking_options', 'wheelchair_accessible', 'outdoor_seating', 'kid_friendly',
+        
+        // Media
+        'video_urls', 'pdf_files',
+        
+        // Operational Info
+        'hours_of_operation', 'special_hours', 'temporarily_closed', 'open_24_7',
+        
+        // Location metadata
+        'cross_streets', 'neighborhood'
     ];
 
     protected $casts = [
@@ -30,6 +46,23 @@ class DirectoryEntry extends Model
         'published_at' => 'datetime',
         'view_count' => 'integer',
         'list_count' => 'integer',
+        
+        // New JSON fields
+        'video_urls' => 'array',
+        'pdf_files' => 'array',
+        'hours_of_operation' => 'array',
+        'special_hours' => 'array',
+        
+        // Boolean fields
+        'takes_reservations' => 'boolean',
+        'accepts_credit_cards' => 'boolean',
+        'wifi_available' => 'boolean',
+        'pet_friendly' => 'boolean',
+        'wheelchair_accessible' => 'boolean',
+        'outdoor_seating' => 'boolean',
+        'kid_friendly' => 'boolean',
+        'temporarily_closed' => 'boolean',
+        'open_24_7' => 'boolean',
     ];
 
     protected static function boot()
@@ -54,9 +87,16 @@ class DirectoryEntry extends Model
         });
         
         static::updating(function ($entry) {
-            // Track who made the update
-            if (auth()->check()) {
+            \Log::info('Model updating event triggered', [
+                'entry_id' => $entry->id,
+                'auth_check' => auth()->check(),
+                'auth_id' => auth()->id()
+            ]);
+            
+            // Track who made the update - only if user is authenticated
+            if (auth()->check() && auth()->id()) {
                 $entry->updated_by_user_id = auth()->id();
+                \Log::info('Set updated_by_user_id to:', ['user_id' => auth()->id()]);
             }
         });
     }
@@ -203,5 +243,11 @@ class DirectoryEntry extends Model
         
         // If it's a root category, use directory route as fallback
         return "/directory/entry/{$this->slug}";
+    }
+
+    // Add URL as an accessor attribute
+    public function getUrlAttribute()
+    {
+        return $this->getUrl();
     }
 }

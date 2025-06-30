@@ -20,8 +20,8 @@ Route::get('/entries', [DirectoryEntryController::class, 'index']);
 Route::get('/entries/nearby', [DirectoryEntryController::class, 'nearbyEntries']);
 Route::get('/entries/{entry:slug}', [DirectoryEntryController::class, 'show']);
 
-// Authenticated routes
-Route::middleware('auth:sanctum')->group(function () {
+// Authenticated routes (using web middleware for session auth)
+Route::middleware(['web', 'auth'])->group(function () {
     // Return authenticated user info
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -30,9 +30,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Create a new directory entry (any logged‑in user)
     Route::post('/entries', [DirectoryEntryController::class, 'store']);
 
+    // Image upload routes
+    Route::post('/entries/upload-image', [DirectoryEntryController::class, 'uploadImage']);
+    Route::delete('/entries/delete-image', [DirectoryEntryController::class, 'deleteImage']);
+
     // Update an entry (admin, manager, editor, or business_owner)
     Route::middleware('role:admin,manager,editor,business_owner')->group(function () {
-        Route::put('/entries/{entry}', [DirectoryEntryController::class, 'update']);
+        Route::put('/entries/{directoryEntry:id}', [DirectoryEntryController::class, 'update']);
     });
 
     // Delete or publish an entry, or view entries pending review (admin or manager)
@@ -41,7 +45,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/entries/{entry}/publish', [DirectoryEntryController::class, 'publish']);
         Route::get('/entries/pending-review', [DirectoryEntryController::class, 'pendingReview']);
     });
+});
 
+// Keep sanctum routes for API access
+Route::middleware('auth:sanctum')->group(function () {
     // Admin routes - Fixed to match what Vue components expect
     Route::prefix('admin')->middleware('role:admin,manager')->group(function () {
         // Dashboard
@@ -60,5 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/entries', function (Request $request) {
             return response()->json(['data' => []]);
         });
+        
+        // Bulk import routes
+        Route::post('/bulk-import/csv', [App\Http\Controllers\Api\Admin\BulkImportController::class, 'uploadCsv']);
+        Route::get('/bulk-import/template', [App\Http\Controllers\Api\Admin\BulkImportController::class, 'downloadTemplate']);
     });
 });

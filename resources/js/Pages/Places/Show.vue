@@ -14,10 +14,10 @@
                     
                     <nav class="flex items-center space-x-4">
                         <Link
-                            href="/directory"
+                            href="/places"
                             class="text-gray-600 hover:text-gray-900 transition-colors"
                         >
-                            Browse Directory
+                            Browse Places
                         </Link>
                         <Link
                             v-if="$page.props.auth.user"
@@ -44,11 +44,11 @@
                 <div class="flex items-center space-x-2 py-3 text-sm">
                     <Link href="/" class="text-gray-500 hover:text-gray-700">Home</Link>
                     <span class="text-gray-400">/</span>
-                    <Link href="/directory" class="text-gray-500 hover:text-gray-700">Directory</Link>
+                    <Link href="/places" class="text-gray-500 hover:text-gray-700">Places</Link>
                     <template v-if="parentCategory">
                         <span class="text-gray-400">/</span>
                         <Link 
-                            :href="`/directory/category/${parentCategory.slug}`" 
+                            :href="`/places/category/${parentCategory.slug}`" 
                             class="text-gray-500 hover:text-gray-700"
                         >
                             {{ parentCategory.name }}
@@ -102,7 +102,7 @@
                                         </div>
                                     </div>
                                     <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ entry.title }}</h1>
-                                    <p v-if="entry.description" class="text-gray-600 text-lg">{{ entry.description }}</p>
+                                    <div v-if="entry.description" class="entry-description text-gray-600 text-lg prose prose-lg max-w-none" v-html="entry.description"></div>
                                 </div>
                             </div>
                         </div>
@@ -199,7 +199,7 @@
                         <div class="space-y-3">
                             <Link
                                 v-if="canEditEntry"
-                                :href="`/directory/entries/${entry.id}/edit`"
+                                :href="`/places/${entry.id}/edit`"
                                 class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-center block"
                             >
                                 Edit Entry
@@ -300,7 +300,7 @@ const getRelatedEntryUrl = (entry) => {
         return `/${props.parentCategory.slug}/${props.childCategory.slug}/${entry.slug}`;
     }
     // Fallback to direct entry URL
-    return `/directory/entry/${entry.slug}`;
+    return `/places/entry/${entry.slug}`;
 }
 
 const addToList = () => {
@@ -323,3 +323,44 @@ const shareEntry = () => {
     }
 }
 </script>
+
+<style scoped>
+/* Ensure rich text content displays properly */
+.entry-description :deep(p) {
+    margin-bottom: 1rem;
+}
+
+.entry-description :deep(p:last-child) {
+    margin-bottom: 0;
+}
+
+.entry-description :deep(ul),
+.entry-description :deep(ol) {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.entry-description :deep(li) {
+    margin-bottom: 0.25rem;
+}
+
+.entry-description :deep(h2) {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.entry-description :deep(strong) {
+    font-weight: 600;
+}
+
+.entry-description :deep(em) {
+    font-style: italic;
+}
+
+.entry-description :deep(hr) {
+    margin: 1.5rem 0;
+    border-top: 1px solid #e5e7eb;
+}
+</style>

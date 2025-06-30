@@ -54,8 +54,8 @@ Route::get('/', function () {
     ]);
 })->name('welcome');
 
-// Public directory browsing routes
-Route::get('/directory', function () {
+// Public places browsing routes
+Route::get('/places', function () {
     $entries = \App\Models\DirectoryEntry::where('status', 'published')
         ->with(['category.parent', 'location'])
         ->latest()
@@ -66,13 +66,16 @@ Route::get('/directory', function () {
         ->orderBy('order_index')
         ->get();
     
-    return Inertia::render('Directory/Index', [
+    return Inertia::render('Places/Index', [
         'entries' => $entries,
         'categories' => $categories,
     ]);
-})->name('directory.index');
+})->name('places.index');
 
-Route::get('/directory/category/{category:slug}', function (\App\Models\Category $category) {
+Route::get('/places/category/{category:slug}', function (\App\Models\Category $category) {
+    // Load parent relationship for the category
+    $category->load('parent');
+    
     // Get entries from this category and all its subcategories
     $entries = $category->getAllDirectoryEntries()
         ->where('status', 'published')
@@ -80,65 +83,41 @@ Route::get('/directory/category/{category:slug}', function (\App\Models\Category
         ->latest()
         ->paginate(12);
     
-    return Inertia::render('Directory/Category', [
+    return Inertia::render('Places/Category', [
         'category' => $category,
         'entries' => $entries,
     ]);
-})->name('directory.category');
+})->name('places.category');
 
-// Fallback route for old directory entry URLs - redirect to new format
-Route::get('/directory/entry/{entry:slug}', function (\App\Models\DirectoryEntry $entry) {
+// Fallback route for old entry URLs - show or redirect
+Route::get('/places/entry/{entry:slug}', function (\App\Models\DirectoryEntry $entry) {
+    // If entry doesn't have a category or category doesn't have parent, show it directly
+    if (!$entry->category_id || !$entry->category || !$entry->category->parent_id) {
+        $entry->load(['category', 'location', 'owner', 'createdBy']);
+        
+        // Get related entries
+        $relatedEntries = \App\Models\DirectoryEntry::where('status', 'published')
+            ->where('id', '!=', $entry->id)
+            ->when($entry->category_id, function($query) use ($entry) {
+                return $query->where('category_id', $entry->category_id);
+            })
+            ->with(['category', 'location'])
+            ->limit(4)
+            ->get();
+        
+        return Inertia::render('Places/Show', [
+            'entry' => $entry,
+            'relatedEntries' => $relatedEntries,
+            'parentCategory' => null,
+            'childCategory' => $entry->category,
+        ]);
+    }
+    
+    // Otherwise redirect to proper URL
     return redirect($entry->getUrl(), 301);
 });
 
-// New category-based entry URLs: /{parent-category}/{child-category}/{entry-slug}
-Route::get('/{parentCategorySlug}/{childCategorySlug}/{entrySlug}', function ($parentCategorySlug, $childCategorySlug, $entrySlug) {
-    // Find the parent category
-    $parentCategory = \App\Models\Category::where('slug', $parentCategorySlug)
-        ->whereNull('parent_id')
-        ->first();
-    
-    if (!$parentCategory) {
-        abort(404);
-    }
-    
-    // Find the child category
-    $childCategory = \App\Models\Category::where('slug', $childCategorySlug)
-        ->where('parent_id', $parentCategory->id)
-        ->first();
-    
-    if (!$childCategory) {
-        abort(404);
-    }
-    
-    // Find the entry
-    $entry = \App\Models\DirectoryEntry::where('slug', $entrySlug)
-        ->where('category_id', $childCategory->id)
-        ->where('status', 'published')
-        ->first();
-    
-    if (!$entry) {
-        abort(404);
-    }
-    
-    // Load necessary relationships
-    $entry->load(['category', 'location', 'owner', 'createdBy']);
-    
-    // Get related entries from the same category
-    $relatedEntries = \App\Models\DirectoryEntry::where('status', 'published')
-        ->where('category_id', $entry->category_id)
-        ->where('id', '!=', $entry->id)
-        ->with(['category', 'location'])
-        ->limit(4)
-        ->get();
-    
-    return Inertia::render('Directory/Show', [
-        'entry' => $entry,
-        'relatedEntries' => $relatedEntries,
-        'parentCategory' => $parentCategory,
-        'childCategory' => $childCategory,
-    ]);
-})->name('directory.entry');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -165,6 +144,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('Lists/Create');
     })->name('lists.create');
 
+    // Directory entry management
+    Route::get('/places/create', function () {
+        $categories = \App\Models\Category::whereNotNull('parent_id')
+            ->with('parent')
+            ->orderBy('name')
+            ->get();
+        
+        return Inertia::render('Places/Create', [
+            'categories' => $categories
+        ]);
+    })->name('places.create');
+
+    Route::get('/places/{entry}/edit', function (\App\Models\DirectoryEntry $entry) {
+        // Check if user can edit this entry
+        if (!$entry->canBeEdited()) {
+            abort(403, 'You do not have permission to edit this entry');
+        }
+
+        $categories = \App\Models\Category::whereNotNull('parent_id')
+            ->with('parent')
+            ->orderBy('name')
+            ->get();
+
+        $entry->load(['category', 'location']);
+
+        return Inertia::render('Places/Edit', [
+            'entry' => $entry,
+            'categories' => $categories
+        ]);
+    })->name('places.edit');
+
     // User specific routes
     Route::prefix('user')->name('user.')->group(function () {
         Route::get('/lists', function () {
@@ -188,7 +198,44 @@ Route::middleware(['auth', 'verified', 'role:admin,manager'])->prefix('admin')->
     })->name('dashboard');
     
     Route::get('/users', function () {
-        return Inertia::render('Admin/Users/Index');
+        $filters = request()->only(['search', 'role', 'status']);
+        
+        $query = \App\Models\User::query();
+        
+        if (!empty($filters['search'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('name', 'like', '%' . $filters['search'] . '%')
+                  ->orWhere('email', 'like', '%' . $filters['search'] . '%');
+            });
+        }
+        
+        if (!empty($filters['role'])) {
+            $query->where('role', $filters['role']);
+        }
+        
+        if (!empty($filters['status'])) {
+            if ($filters['status'] === 'active') {
+                $query->whereNotNull('email_verified_at');
+            } else {
+                $query->whereNull('email_verified_at');
+            }
+        }
+        
+        $users = $query->latest()->paginate(20)->appends($filters);
+        
+        // Get stats
+        $stats = [
+            'total_users' => \App\Models\User::count(),
+            'active_users' => \App\Models\User::whereNotNull('email_verified_at')->count(),
+            'business_owners' => \App\Models\User::where('role', 'business_owner')->count(),
+            'admins' => \App\Models\User::whereIn('role', ['admin', 'manager'])->count(),
+        ];
+        
+        return Inertia::render('Admin/Users/Index', [
+            'users' => $users,
+            'stats' => $stats,
+            'filters' => $filters,
+        ]);
     })->name('users');
     
     Route::get('/users/{user}', function ($user) {
@@ -196,7 +243,51 @@ Route::middleware(['auth', 'verified', 'role:admin,manager'])->prefix('admin')->
     })->name('users.show');
     
     Route::get('/entries', function () {
-        return Inertia::render('Admin/Entries/Index');
+        $filters = request()->only(['search', 'type', 'status', 'category_id']);
+        
+        $query = \App\Models\DirectoryEntry::with(['category.parent', 'location']);
+        
+        if (!empty($filters['search'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('title', 'like', '%' . $filters['search'] . '%')
+                  ->orWhere('description', 'like', '%' . $filters['search'] . '%');
+            });
+        }
+        
+        if (!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
+        }
+        
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        
+        if (!empty($filters['category_id'])) {
+            $query->where('category_id', $filters['category_id']);
+        }
+        
+        $entries = $query->latest()->paginate(20)->appends($filters);
+        
+        // Get stats
+        $stats = [
+            'total_entries' => \App\Models\DirectoryEntry::count(),
+            'published' => \App\Models\DirectoryEntry::where('status', 'published')->count(),
+            'pending_review' => \App\Models\DirectoryEntry::where('status', 'pending_review')->count(),
+            'featured' => \App\Models\DirectoryEntry::where('is_featured', true)->count(),
+        ];
+        
+        // Get categories for filter
+        $categories = \App\Models\Category::whereNull('parent_id')
+            ->with('children')
+            ->orderBy('name')
+            ->get();
+        
+        return Inertia::render('Admin/Entries/Index', [
+            'entries' => $entries,
+            'stats' => $stats,
+            'categories' => $categories,
+            'filters' => $filters,
+        ]);
     })->name('entries');
     
     Route::get('/categories', function () {
@@ -210,6 +301,14 @@ Route::middleware(['auth', 'verified', 'role:admin,manager'])->prefix('admin')->
     Route::get('/settings', function () {
         return Inertia::render('Admin/Settings/Index');
     })->name('settings');
+    
+    Route::get('/bulk-import', function () {
+        return Inertia::render('Admin/BulkImport');
+    })->name('bulk-import');
+    
+    // Bulk import routes - accessible via web middleware
+    Route::get('/bulk-import/template', [App\Http\Controllers\Api\Admin\BulkImportController::class, 'downloadTemplate'])->name('bulk-import.template');
+    Route::post('/bulk-import/csv', [App\Http\Controllers\Api\Admin\BulkImportController::class, 'uploadCsv'])->name('bulk-import.upload');
 });
 
 /*
@@ -377,5 +476,54 @@ Route::get('/{userSlug}/{slug}', function ($userSlug, $slug) {
         ]);
     }
 })->name('lists.show');
+
+// New category-based entry URLs: /{parent-category}/{child-category}/{entry-slug}
+Route::get('/{parentCategorySlug}/{childCategorySlug}/{entrySlug}', function ($parentCategorySlug, $childCategorySlug, $entrySlug) {
+    // Find the parent category
+    $parentCategory = \App\Models\Category::where('slug', $parentCategorySlug)
+        ->whereNull('parent_id')
+        ->first();
+    
+    if (!$parentCategory) {
+        abort(404);
+    }
+    
+    // Find the child category
+    $childCategory = \App\Models\Category::where('slug', $childCategorySlug)
+        ->where('parent_id', $parentCategory->id)
+        ->first();
+    
+    if (!$childCategory) {
+        abort(404);
+    }
+    
+    // Find the entry
+    $entry = \App\Models\DirectoryEntry::where('slug', $entrySlug)
+        ->where('category_id', $childCategory->id)
+        ->where('status', 'published')
+        ->first();
+    
+    if (!$entry) {
+        abort(404);
+    }
+    
+    // Load necessary relationships
+    $entry->load(['category', 'location', 'owner', 'createdBy']);
+    
+    // Get related entries from the same category
+    $relatedEntries = \App\Models\DirectoryEntry::where('status', 'published')
+        ->where('category_id', $entry->category_id)
+        ->where('id', '!=', $entry->id)
+        ->with(['category', 'location'])
+        ->limit(4)
+        ->get();
+    
+    return Inertia::render('Places/Show', [
+        'entry' => $entry,
+        'relatedEntries' => $relatedEntries,
+        'parentCategory' => $parentCategory,
+        'childCategory' => $childCategory,
+    ]);
+})->name('places.entry');
 
 require __DIR__.'/auth.php';
