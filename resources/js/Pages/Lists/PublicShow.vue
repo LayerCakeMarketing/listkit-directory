@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import Logo from '@/Components/Logo.vue';
 import { computed } from 'vue';
 
 const props = defineProps({
@@ -27,9 +28,7 @@ const visibilityBadge = computed(() => {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-6">
                     <div class="flex items-center space-x-4">
-                        <Link href="/" class="text-3xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
+                        <Logo href="/" imgClassName="h-8 w-auto" />
                         <span class="text-gray-500">/</span>
                         <Link 
                             :href="`/${list.user?.custom_url || list.user?.username || list.user?.id}/lists`"
@@ -121,6 +120,15 @@ const visibilityBadge = computed(() => {
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-semibold">
                                 {{ index + 1 }}
+                            </div>
+                            
+                            <!-- Item Image -->
+                            <div v-if="item.item_image_url" class="flex-shrink-0">
+                                <img 
+                                    :src="item.item_image_url" 
+                                    :alt="item.title || 'List item image'"
+                                    class="w-20 h-20 rounded-lg object-cover"
+                                />
                             </div>
                             
                             <div class="flex-1">

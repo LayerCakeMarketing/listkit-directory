@@ -1,34 +1,7 @@
 <template>
     <Head :title="`Edit ${entry.title}`" />
 
-    <div class="min-h-screen bg-gray-50">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <div class="flex items-center">
-                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
-                    </div>
-                    
-                    <nav class="flex items-center space-x-4">
-                        <Link
-                            href="/places"
-                            class="text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            Browse Places
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Dashboard
-                        </Link>
-                    </nav>
-                </div>
-            </div>
-        </header>
+    <AuthenticatedLayout>
 
         <!-- Breadcrumb -->
         <nav class="bg-white border-b border-gray-200">
@@ -252,57 +225,69 @@
                         <!-- Logo Upload -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Logo (400x400px max, 2MB)
-                                <span v-if="form.logo_url" class="text-green-600 font-normal"> - Image uploaded ✓</span>
+                                Logo
+                                <span v-if="logoImages.length > 0" class="text-green-600 font-normal"> - {{ logoImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <ImageUpload
-                                type="logo"
-                                :current-image="form.logo_url"
-                                @uploaded="handleImageUpload"
-                                @removed="handleImageRemove"
+                            <CloudflareDragDropUploader
+                                :max-files="1"
+                                :max-file-size="2097152"
+                                context="logo"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="entry.id"
+                                @upload-success="handleLogoUpload"
+                                @upload-error="handleUploadError"
                             />
                         </div>
 
                         <!-- Cover Image Upload -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Cover Image (1920x1080px max, 5MB)
-                                <span v-if="form.cover_image_url" class="text-green-600 font-normal"> - Image uploaded ✓</span>
+                                Cover Image
+                                <span v-if="coverImages.length > 0" class="text-green-600 font-normal"> - {{ coverImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <ImageUpload
-                                type="cover"
-                                :current-image="form.cover_image_url"
-                                @uploaded="handleImageUpload"
-                                @removed="handleImageRemove"
+                            <CloudflareDragDropUploader
+                                :max-files="1"
+                                :max-file-size="5242880"
+                                context="cover"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="entry.id"
+                                @upload-success="handleCoverUpload"
+                                @upload-error="handleUploadError"
                             />
                         </div>
 
                         <!-- Gallery Images -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Gallery Images (1200x800px max, 3MB each)
-                                <span v-if="form.gallery_images.filter(img => img).length > 0" class="text-green-600 font-normal"> 
-                                    - {{ form.gallery_images.filter(img => img).length }} image(s) uploaded ✓
-                                </span>
+                                Gallery Images
+                                <span v-if="galleryImages.length > 0" class="text-green-600 font-normal"> - {{ galleryImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <div class="space-y-2">
-                                <ImageUpload
-                                    v-for="(image, index) in form.gallery_images"
-                                    :key="`gallery-${index}`"
-                                    type="gallery"
-                                    :current-image="image"
-                                    @uploaded="(data) => handleGalleryUpload(data, index)"
-                                    @removed="() => handleGalleryRemove(index)"
-                                />
-                                <button
-                                    v-if="form.gallery_images.length < 10"
-                                    type="button"
-                                    @click="addGallerySlot"
-                                    class="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
-                                >
-                                    + Add Gallery Image
-                                </button>
-                            </div>
+                            <CloudflareDragDropUploader
+                                :max-files="20"
+                                :max-file-size="14680064"
+                                context="gallery"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="entry.id"
+                                @upload-success="handleGalleryUpload"
+                                @upload-error="handleUploadError"
+                            />
+                            
+                            <!-- Upload Results for Gallery -->
+                            <DraggableImageGallery 
+                                v-model:images="galleryImages"
+                                title="New Gallery Images"
+                                @remove="handleNewGalleryRemove"
+                                @reorder="updateNewGalleryOrder"
+                            />
+                            
+                            <!-- Existing Gallery Images -->
+                            <DraggableImageGallery 
+                                v-if="existingGalleryImages.length > 0"
+                                v-model:images="existingGalleryImages"
+                                title="Current Gallery Images"
+                                @remove="handleExistingGalleryRemove"
+                                @reorder="updateExistingGalleryOrder"
+                            />
                         </div>
                         </div>
                     </AccordionSection>
@@ -341,14 +326,17 @@
 
                             <div>
                                 <label for="state" class="block text-sm font-medium text-gray-700">State *</label>
-                                <input
+                                <select
                                     v-model="form.location.state"
-                                    type="text"
                                     id="state"
-                                    maxlength="2"
                                     :required="form.type === 'physical_location' || form.type === 'event'"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
+                                >
+                                    <option value="">Select a state</option>
+                                    <option v-for="state in usStates" :key="state.code" :value="state.code">
+                                        {{ state.name }}
+                                    </option>
+                                </select>
                                 <div v-if="errors['location.state']" class="mt-1 text-sm text-red-600">{{ errors['location.state'] }}</div>
                             </div>
 
@@ -362,6 +350,18 @@
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
                                 <div v-if="errors['location.zip_code']" class="mt-1 text-sm text-red-600">{{ errors['location.zip_code'] }}</div>
+                            </div>
+
+                            <div>
+                                <label for="neighborhood" class="block text-sm font-medium text-gray-700">Neighborhood <span class="text-gray-500 text-xs">(optional)</span></label>
+                                <input
+                                    v-model="form.location.neighborhood"
+                                    type="text"
+                                    id="neighborhood"
+                                    placeholder="e.g., Downtown, Midtown, Financial District"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                                <div v-if="errors['location.neighborhood']" class="mt-1 text-sm text-red-600">{{ errors['location.neighborhood'] }}</div>
                             </div>
 
                             <div class="md:col-span-2">
@@ -424,15 +424,18 @@
                 </form>
             </div>
         </div>
-    </div>
+    </AuthenticatedLayout>
 </template>
 
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, reactive, onMounted } from 'vue'
-import ImageUpload from '@/Components/ImageUpload.vue'
+import CloudflareDragDropUploader from '@/Components/CloudflareDragDropUploader.vue'
 import AccordionSection from '@/Components/AccordionSection.vue'
 import RichTextEditor from '@/Components/RichTextEditor.vue'
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import DraggableImageGallery from '@/Components/DraggableImageGallery.vue'
+import { usStates } from '@/Data/usStates'
 
 const props = defineProps({
     entry: Object,
@@ -502,6 +505,12 @@ const processing = ref(false)
 const geocoding = ref(false)
 const showSuccessMessage = ref(false)
 
+// Image upload state
+const logoImages = ref([])
+const coverImages = ref([])
+const galleryImages = ref([])
+const existingGalleryImages = ref([])
+
 const groupedCategories = computed(() => {
     const groups = {}
     props.categories.forEach(category => {
@@ -553,6 +562,15 @@ onMounted(() => {
     form.cover_image_url = props.entry.cover_image_url || ''
     form.gallery_images = props.entry.gallery_images || []
     
+    // Initialize existing gallery images for drag-and-drop component
+    if (props.entry.gallery_images && props.entry.gallery_images.length > 0) {
+        existingGalleryImages.value = props.entry.gallery_images.map((url, index) => ({
+            id: `existing-${index}`,
+            url: url,
+            filename: `Gallery Image ${index + 1}`
+        }))
+    }
+    
     // Social Media
     form.facebook_url = props.entry.facebook_url || ''
     form.instagram_handle = props.entry.instagram_handle || ''
@@ -599,35 +617,58 @@ onMounted(() => {
     }
 })
 
-const handleImageUpload = (data) => {
-    console.log('Image upload received:', data)
-    if (data.type === 'logo') {
-        form.logo_url = data.url
-        console.log('Updated logo_url to:', form.logo_url)
-    } else if (data.type === 'cover') {
-        form.cover_image_url = data.url
-        console.log('Updated cover_image_url to:', form.cover_image_url)
+// Handle upload completions
+const handleLogoUpload = (uploadResult) => {
+    logoImages.value.push(uploadResult)
+    form.logo_url = uploadResult.url
+    console.log('Logo uploaded:', uploadResult)
+}
+
+const handleCoverUpload = (uploadResult) => {
+    coverImages.value.push(uploadResult)
+    form.cover_image_url = uploadResult.url
+    console.log('Cover image uploaded:', uploadResult)
+}
+
+const handleGalleryUpload = (uploadResult) => {
+    galleryImages.value.push(uploadResult)
+    form.gallery_images.push(uploadResult.url)
+    console.log('Gallery image uploaded:', uploadResult)
+}
+
+const handleNewGalleryRemove = (index, removedImage) => {
+    const urlIndex = form.gallery_images.indexOf(removedImage.url)
+    if (urlIndex > -1) {
+        form.gallery_images.splice(urlIndex, 1)
     }
 }
 
-const handleImageRemove = (type) => {
-    if (type === 'logo') {
-        form.logo_url = ''
-    } else if (type === 'cover') {
-        form.cover_image_url = ''
+const updateNewGalleryOrder = (reorderedImages) => {
+    // Update form data to match new order for newly uploaded images
+    const newUrls = reorderedImages.map(img => img.url)
+    const existingUrls = existingGalleryImages.value.map(img => img.url)
+    form.gallery_images = [...existingUrls, ...newUrls]
+    console.log('New gallery order updated:', form.gallery_images)
+}
+
+const handleExistingGalleryRemove = (index, removedImage) => {
+    const urlIndex = form.gallery_images.indexOf(removedImage.url)
+    if (urlIndex > -1) {
+        form.gallery_images.splice(urlIndex, 1)
     }
 }
 
-const handleGalleryUpload = (data, index) => {
-    form.gallery_images[index] = data.url
+const updateExistingGalleryOrder = (reorderedImages) => {
+    // Update form data to match new order for existing images
+    const existingUrls = reorderedImages.map(img => img.url)
+    const newUrls = galleryImages.value.map(img => img.url)
+    form.gallery_images = [...existingUrls, ...newUrls]
+    console.log('Existing gallery order updated:', form.gallery_images)
 }
 
-const handleGalleryRemove = (index) => {
-    form.gallery_images.splice(index, 1)
-}
-
-const addGallerySlot = () => {
-    form.gallery_images.push('')
+const handleUploadError = (error) => {
+    console.error('Upload error:', error)
+    // Could show a toast notification here
 }
 
 const geocodeAddress = async () => {

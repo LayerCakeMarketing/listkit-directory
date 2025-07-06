@@ -84,8 +84,20 @@
             <div
                 v-for="list in lists"
                 :key="list.id"
-                class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+                class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
             >
+                <!-- Cover Image -->
+                <div v-if="getListImage(list)" class="h-40 bg-gray-200 overflow-hidden">
+                    <img 
+                        :src="getListImage(list)" 
+                        :alt="list.name"
+                        class="w-full h-full object-cover"
+                    />
+                </div>
+                <div v-else class="h-40 bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center">
+                    <span class="text-4xl text-white opacity-80">{{ list.name.charAt(0).toUpperCase() }}</span>
+                </div>
+
                 <div class="p-4">
                     <!-- List Header -->
                     <div class="flex justify-between items-start mb-3">
@@ -93,7 +105,7 @@
                         <div class="flex space-x-1">
                             <Link
                                 :href="getEditUrl(list)"
-                                class="text-gray-400 hover:text-blue-600"
+                                class="text-gray-400 hover:text-purple-600"
                                 title="Edit"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,20 +124,14 @@
                         </div>
                     </div>
 
-                    <!-- List Description -->
-                    <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {{ list.description }}
-                    </p>
-
-                    <!-- List Stats -->
-                    <div class="flex justify-between items-center text-sm text-gray-500 mb-3">
-                        <span>{{ list.items?.length || 0 }} items</span>
-                        <span>{{ formatDate(list.updated_at) }}</span>
-                    </div>
-
                     <!-- Category and Privacy -->
-                    <div class="flex justify-between items-center">
-                        <span v-if="list.category" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <div class="flex justify-between items-center mb-3">
+                        <span v-if="list.category" 
+                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                              :style="{ 
+                                  backgroundColor: list.category.color + '20', 
+                                  color: list.category.color || '#8B5CF6' 
+                              }">
                             {{ list.category.name }}
                         </span>
                         <span v-else class="text-xs text-gray-400">No category</span>
@@ -138,11 +144,54 @@
                         </span>
                     </div>
 
+                    <!-- List Description -->
+                    <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
+                        {{ list.description }}
+                    </p>
+
+                    <!-- Tags -->
+                    <div v-if="list.tags && list.tags.length > 0" class="flex flex-wrap gap-1 mb-3">
+                        <span
+                            v-for="tag in list.tags.slice(0, 3)"
+                            :key="tag.id"
+                            class="inline-flex items-center px-2 py-1 rounded text-xs font-medium"
+                            :style="{ 
+                                backgroundColor: tag.color + '20', 
+                                color: tag.color 
+                            }"
+                        >
+                            {{ tag.name }}
+                        </span>
+                        <span v-if="list.tags.length > 3" class="text-xs text-gray-500">
+                            +{{ list.tags.length - 3 }}
+                        </span>
+                    </div>
+
+                    <!-- List Stats -->
+                    <div class="flex justify-between items-center text-sm text-gray-500 mb-4">
+                        <div class="flex items-center space-x-3">
+                            <span class="flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                {{ list.items_count || 0 }} items
+                            </span>
+                            <span v-if="list.views_count > 0" class="flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                {{ list.views_count }}
+                            </span>
+                        </div>
+                        <span>{{ formatDate(list.updated_at) }}</span>
+                    </div>
+
                     <!-- Action Button -->
                     <div class="mt-4">
                         <Link
                             :href="getListUrl(list)"
-                            class="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium py-2 px-4 rounded text-sm text-center block"
+                            class="w-full bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium py-2 px-4 rounded text-sm text-center block transition-colors"
                         >
                             View List
                         </Link>
@@ -303,6 +352,10 @@ const formatDate = (dateString) => {
     if (days < 7) return `${days} days ago`
     if (days < 30) return `${Math.floor(days / 7)} weeks ago`
     return date.toLocaleDateString()
+}
+
+const getListImage = (list) => {
+    return list.featured_image_url || list.featured_image || null
 }
 
 const getUserSlug = () => {

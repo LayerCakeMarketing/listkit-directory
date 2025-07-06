@@ -17,6 +17,7 @@ class ListItem extends Model
         'content',
         'data',
         'image',
+        'item_image_cloudflare_id',
         'order_index',
         'affiliate_url',
         'notes',
@@ -28,6 +29,8 @@ class ListItem extends Model
         'custom_data' => 'array',
         'order_index' => 'integer',
     ];
+
+    protected $appends = ['display_title', 'display_content', 'item_image_url'];
 
     // Relationships
     public function list()
@@ -47,6 +50,15 @@ class ListItem extends Model
             return $this->directoryEntry->title;
         }
         return $this->title;
+    }
+
+    public function getItemImageUrlAttribute()
+    {
+        if ($this->item_image_cloudflare_id) {
+            $imageService = app(\App\Services\CloudflareImageService::class);
+            return $imageService->getImageUrl($this->item_image_cloudflare_id);
+        }
+        return $this->image; // Fallback to old image field
     }
 
     public function getDisplayContentAttribute()

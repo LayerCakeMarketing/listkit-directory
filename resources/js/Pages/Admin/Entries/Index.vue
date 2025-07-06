@@ -1,7 +1,7 @@
 <template>
     <Head title="Directory Entries" />
 
-    <AuthenticatedLayout>
+    <AdminDashboardLayout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Directory Entries Management</h2>
         </template>
@@ -173,7 +173,10 @@
                                         </td>
                                         <td class="px-6 py-4 text-sm text-gray-500">
                                             <div v-if="entry.location">
-                                                {{ entry.location.city }}, {{ entry.location.state }}
+                                                <div>{{ entry.location.city }}, {{ entry.location.state }}</div>
+                                                <div v-if="entry.location.neighborhood" class="text-xs text-gray-400">
+                                                    {{ entry.location.neighborhood }}
+                                                </div>
                                             </div>
                                             <div v-else class="text-gray-400">N/A</div>
                                         </td>
@@ -242,13 +245,13 @@
             </div>
         </div>
 
-    </AuthenticatedLayout>
+    </AdminDashboardLayout>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import AdminDashboardLayout from '@/Layouts/AdminDashboardLayout.vue'
 import Pagination from '@/Components/Pagination.vue'
 import { debounce } from 'lodash'
 

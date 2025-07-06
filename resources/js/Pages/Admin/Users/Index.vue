@@ -1,7 +1,7 @@
 <template>
     <Head title="User Management" />
  
-        <AuthenticatedLayout>
+        <AdminDashboardLayout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">User Management</h2>
         </template>
@@ -506,14 +506,14 @@
                 </div>
             </div>
         </Modal>
-     </AuthenticatedLayout>
+     </AdminDashboardLayout>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Head, usePage } from '@inertiajs/vue3'
 const axios = window.axios
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import AdminDashboardLayout from '@/Layouts/AdminDashboardLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import Pagination from '@/Components/Pagination.vue'
 import { debounce } from 'lodash'

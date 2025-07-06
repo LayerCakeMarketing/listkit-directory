@@ -1,43 +1,7 @@
 <template>
     <Head :title="entry.title" />
 
-    <div class="min-h-screen bg-gray-50">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <div class="flex items-center">
-                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
-                    </div>
-                    
-                    <nav class="flex items-center space-x-4">
-                        <Link
-                            href="/places"
-                            class="text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            Browse Places
-                        </Link>
-                        <Link
-                            v-if="$page.props.auth.user"
-                            href="/dashboard"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Dashboard
-                        </Link>
-                        <Link
-                            v-else
-                            href="/login"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Sign In
-                        </Link>
-                    </nav>
-                </div>
-            </div>
-        </header>
-
+    <component :is="layoutComponent">
         <!-- Breadcrumb -->
         <nav class="bg-white border-b border-gray-200">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -65,7 +29,7 @@
         </nav>
 
         <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-16">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <!-- Main Entry Content -->
                 <div class="lg:col-span-2">
@@ -93,9 +57,12 @@
                                             />
                                         </div>
                                         <div class="flex flex-wrap gap-2">
-                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                            <Link 
+                                                :href="`/places/category/${entry.category.slug}`"
+                                                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer"
+                                            >
                                                 {{ entry.category.name }}
-                                            </span>
+                                            </Link>
                                             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                                                 {{ formatType(entry.type) }}
                                             </span>
@@ -152,10 +119,14 @@
                                         <div v-if="entry.location.address_line1" class="text-gray-900">{{ entry.location.address_line1 }}</div>
                                         <div v-if="entry.location.address_line2" class="text-gray-900">{{ entry.location.address_line2 }}</div>
                                         <div class="text-gray-600">
+                                            <template v-if="entry.location.neighborhood">{{ entry.location.neighborhood }}, </template>
                                             <template v-if="entry.location.city">{{ entry.location.city }}</template>
                                             <template v-if="entry.location.city && entry.location.state">, </template>
                                             <template v-if="entry.location.state">{{ entry.location.state }}</template>
                                             <template v-if="entry.location.zip_code"> {{ entry.location.zip_code }}</template>
+                                        </div>
+                                        <div v-if="entry.location.cross_streets" class="text-gray-500 text-sm mt-1">
+                                            Near {{ entry.location.cross_streets }}
                                         </div>
                                     </div>
                                 </div>
@@ -233,6 +204,7 @@
                                 <h4 class="font-medium text-gray-900 mb-1">{{ related.title }}</h4>
                                 <p class="text-sm text-gray-600 line-clamp-2">{{ related.description }}</p>
                                 <div v-if="related.location && (related.location.city || related.location.state)" class="text-xs text-gray-500 mt-2">
+                                    <template v-if="related.location.neighborhood">{{ related.location.neighborhood }}, </template>
                                     <template v-if="related.location.city">{{ related.location.city }}</template>
                                     <template v-if="related.location.city && related.location.state">, </template>
                                     <template v-if="related.location.state">{{ related.location.state }}</template>
@@ -243,12 +215,14 @@
                 </div>
             </div>
         </div>
-    </div>
+    </component>
 </template>
 
 <script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import PublicLayout from '@/Layouts/PublicLayout.vue'
 
 const props = defineProps({
     entry: Object,
@@ -258,6 +232,11 @@ const props = defineProps({
 })
 
 const { props: pageProps } = usePage()
+
+// Determine which layout to use based on authentication
+const layoutComponent = computed(() => {
+    return pageProps.auth?.user ? AuthenticatedLayout : PublicLayout;
+})
 
 const canEditEntry = computed(() => {
     const user = pageProps.auth?.user

@@ -15,13 +15,20 @@ class Category extends Model
         'slug',
         'parent_id',
         'icon',
+        'svg_icon',
+        'cover_image_cloudflare_id',
+        'cover_image_url',
+        'quotes',
         'description',
         'order_index',
     ];
 
     protected $casts = [
         'order_index' => 'integer',
+        'quotes' => 'array',
     ];
+
+    protected $appends = ['cover_image_url_computed', 'quotes_count'];
 
     protected static function boot()
     {
@@ -138,5 +145,50 @@ class Category extends Model
         }
         
         return \App\Models\DirectoryEntry::whereIn('category_id', $entryIds);
+    }
+
+    // Accessors
+    public function getCoverImageUrlComputedAttribute()
+    {
+        if ($this->cover_image_cloudflare_id) {
+            $imageService = app(\App\Services\CloudflareImageService::class);
+            return $imageService->getImageUrl($this->cover_image_cloudflare_id);
+        }
+        return $this->cover_image_url; // Fallback to URL field
+    }
+
+    public function getQuotesCountAttribute()
+    {
+        return $this->quotes ? count($this->quotes) : 0;
+    }
+
+    // Get a random quote from the category
+    public function getRandomQuote()
+    {
+        if (!$this->quotes || count($this->quotes) === 0) {
+            return null;
+        }
+        
+        return $this->quotes[array_rand($this->quotes)];
+    }
+
+    // Check if category has SVG icon
+    public function hasSvgIcon()
+    {
+        return !empty($this->svg_icon);
+    }
+
+    // Get sanitized SVG icon (basic sanitization)
+    public function getSanitizedSvgIcon()
+    {
+        if (!$this->svg_icon) {
+            return null;
+        }
+        
+        // Basic sanitization - remove script tags and event handlers
+        $svg = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $this->svg_icon);
+        $svg = preg_replace('/on\w+\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+        
+        return $svg;
     }
 }

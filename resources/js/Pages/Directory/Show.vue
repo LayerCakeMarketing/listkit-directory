@@ -7,9 +7,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-6">
                     <div class="flex items-center">
-                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
+                        <Logo href="/" imgClassName="h-8 w-auto" />
                     </div>
                     
                     <nav class="flex items-center space-x-4">
@@ -249,6 +247,7 @@
 <script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
+import Logo from '@/Components/Logo.vue'
 
 const props = defineProps({
     entry: Object,

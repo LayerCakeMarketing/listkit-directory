@@ -3,8 +3,9 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import DirectCloudflareUpload from '@/Components/ImageUpload/DirectCloudflareUpload.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 defineProps({
     mustVerifyEmail: {
@@ -21,7 +22,31 @@ const form = useForm({
     name: user.name,
     email: user.email,
     custom_url: user.custom_url || '',
+    avatar_image: null,
+    cover_image: null,
+    page_logo_image: null,
 });
+
+// Image state
+const avatarImage = ref(null);
+const coverImage = ref(null);
+const pageLogoImage = ref(null);
+
+// Handle image uploads
+const handleAvatarUpload = (image) => {
+    avatarImage.value = image;
+    form.avatar_image = image;
+};
+
+const handleCoverUpload = (image) => {
+    coverImage.value = image;
+    form.cover_image = image;
+};
+
+const handlePageLogoUpload = (image) => {
+    pageLogoImage.value = image;
+    form.page_logo_image = image;
+};
 
 const siteUrl = computed(() => {
     if (typeof window !== 'undefined') {
@@ -47,6 +72,54 @@ const siteUrl = computed(() => {
             @submit.prevent="form.patch(route('profile.update'))"
             class="mt-6 space-y-6"
         >
+            <!-- Profile Images Section -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <InputLabel value="Profile Picture" />
+                    <DirectCloudflareUpload
+                        v-model="avatarImage"
+                        label="Upload Profile Picture"
+                        upload-type="avatar"
+                        :entity-id="user.id"
+                        :max-size-m-b="14"
+                        :current-image-url="user.avatar_url"
+                        @upload-complete="handleAvatarUpload"
+                        class="mt-1"
+                    />
+                    <InputError class="mt-2" :message="form.errors.avatar_image" />
+                </div>
+
+                <div>
+                    <InputLabel value="Page Logo" />
+                    <DirectCloudflareUpload
+                        v-model="pageLogoImage"
+                        label="Upload Page Logo"
+                        upload-type="page_logo"
+                        :entity-id="user.id"
+                        :max-size-m-b="14"
+                        :current-image-url="user.page_logo_url"
+                        @upload-complete="handlePageLogoUpload"
+                        class="mt-1"
+                    />
+                    <InputError class="mt-2" :message="form.errors.page_logo_image" />
+                </div>
+
+                <div>
+                    <InputLabel value="Cover Image" />
+                    <DirectCloudflareUpload
+                        v-model="coverImage"
+                        label="Upload Cover Image"
+                        upload-type="cover"
+                        :entity-id="user.id"
+                        :max-size-m-b="14"
+                        :current-image-url="user.cover_url"
+                        @upload-complete="handleCoverUpload"
+                        class="mt-1"
+                    />
+                    <InputError class="mt-2" :message="form.errors.cover_image" />
+                </div>
+            </div>
+
             <div>
                 <InputLabel for="name" value="Name" />
 
@@ -135,9 +208,9 @@ const siteUrl = computed(() => {
                 >
                     <p
                         v-if="form.recentlySuccessful"
-                        class="text-sm text-gray-600"
+                        class="text-sm text-green-600"
                     >
-                        Saved.
+                        Profile updated successfully!
                     </p>
                 </Transition>
             </div>

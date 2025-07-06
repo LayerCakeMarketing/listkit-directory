@@ -1,7 +1,7 @@
 <template>
     <Head title="Categories" />
     
-    <AuthenticatedLayout>
+    <AdminDashboardLayout>
         <template #header>
             <div class="flex justify-between items-center">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Directory Categories</h2>
@@ -34,13 +34,20 @@
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1">
                                         <div class="flex items-center space-x-2">
-                                            <span class="text-2xl">{{ category.icon || '📁' }}</span>
+                                            <div v-if="category.svg_icon" v-html="category.svg_icon" class="w-6 h-6"></div>
+                                            <span v-else class="text-2xl">{{ category.icon || '📁' }}</span>
                                             <h4 class="font-medium text-lg">{{ category.name }}</h4>
                                         </div>
                                         <p class="text-gray-600 text-sm mt-1">{{ category.description }}</p>
-                                        <p class="text-xs text-gray-500 mt-2">
-                                            {{ category.children?.length || 0 }} subcategories
-                                        </p>
+                                        <div class="flex items-center space-x-3 text-xs text-gray-500 mt-2">
+                                            <span>{{ category.children?.length || 0 }} subcategories</span>
+                                            <span v-if="category.quotes_count > 0" class="flex items-center">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                                </svg>
+                                                {{ category.quotes_count }} quotes
+                                            </span>
+                                        </div>
                                     </div>
                                     <div class="flex space-x-2">
                                         <button 
@@ -137,6 +144,89 @@
                     </div>
                     
                     <div>
+                        <label class="block text-sm font-medium text-gray-700">SVG Icon</label>
+                        <div class="mt-1 space-y-2">
+                            <textarea 
+                                v-model="categoryForm.svg_icon"
+                                rows="4"
+                                class="block w-full rounded-md border-gray-300 shadow-sm font-mono text-xs"
+                                placeholder="<svg>...</svg>"
+                            ></textarea>
+                            <div v-if="categoryForm.svg_icon" class="p-4 bg-gray-50 rounded-md flex items-center justify-center">
+                                <div v-html="categoryForm.svg_icon" class="w-8 h-8"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Cover Image</label>
+                        <CloudflareDragDropUploader
+                            v-if="showModal"
+                            :max-files="1"
+                            :max-file-size="14680064"
+                            context="cover"
+                            entity-type="App\Models\Category"
+                            :entity-id="editingCategory?.id"
+                            @upload-success="handleCoverUpload"
+                            @upload-error="handleUploadError"
+                        />
+                        <div v-if="categoryForm.cover_image_cloudflare_id || categoryForm.cover_image_url" class="mt-2">
+                            <img 
+                                :src="getCoverImageUrl()" 
+                                alt="Cover"
+                                class="w-full h-32 object-cover rounded-md"
+                            />
+                            <button
+                                type="button"
+                                @click="removeCoverImage"
+                                class="mt-2 text-sm text-red-600 hover:text-red-800"
+                            >
+                                Remove cover image
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">
+                            Quotes ({{ categoryForm.quotes.length }})
+                        </label>
+                        <div class="mt-1 space-y-2">
+                            <div v-for="(quote, index) in categoryForm.quotes" :key="index" class="flex items-start space-x-2">
+                                <textarea 
+                                    v-model="categoryForm.quotes[index]"
+                                    rows="2"
+                                    class="flex-1 rounded-md border-gray-300 shadow-sm text-sm"
+                                ></textarea>
+                                <button
+                                    type="button"
+                                    @click="removeQuote(index)"
+                                    class="p-2 text-red-600 hover:text-red-800"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input
+                                    v-model="newQuote"
+                                    type="text"
+                                    placeholder="Add a new quote..."
+                                    class="flex-1 rounded-md border-gray-300 shadow-sm"
+                                    @keyup.enter="addQuote"
+                                />
+                                <button
+                                    type="button"
+                                    @click="addQuote"
+                                    class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">Description</label>
                         <textarea 
                             v-model="categoryForm.description"
@@ -182,13 +272,14 @@
                 </form>
             </div>
         </Modal>
-    </AuthenticatedLayout>
+    </AdminDashboardLayout>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import AdminDashboardLayout from '@/Layouts/AdminDashboardLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import CloudflareDragDropUploader from '@/Components/CloudflareDragDropUploader.vue'
 import { Head } from '@inertiajs/vue3'
 
 const axios = window.axios
@@ -204,9 +295,15 @@ const categoryForm = reactive({
     name: '',
     slug: '',
     icon: '',
+    svg_icon: '',
+    cover_image_cloudflare_id: null,
+    cover_image_url: null,
+    quotes: [],
     description: '',
     parent_id: null
 })
+
+const newQuote = ref('')
 
 // Computed
 const mainCategories = computed(() => {
@@ -246,9 +343,14 @@ const openCreateModal = (parentId = null) => {
         name: '',
         slug: '',
         icon: '',
+        svg_icon: '',
+        cover_image_cloudflare_id: null,
+        cover_image_url: null,
+        quotes: [],
         description: '',
         parent_id: parentId
     })
+    newQuote.value = ''
     showModal.value = true
 }
 
@@ -258,9 +360,14 @@ const editCategory = (category) => {
         name: category.name,
         slug: category.slug,
         icon: category.icon || '',
+        svg_icon: category.svg_icon || '',
+        cover_image_cloudflare_id: category.cover_image_cloudflare_id || null,
+        cover_image_url: category.cover_image_url || null,
+        quotes: category.quotes || [],
         description: category.description || '',
         parent_id: category.parent_id
     })
+    newQuote.value = ''
     showModal.value = true
 }
 
@@ -308,9 +415,52 @@ const closeModal = () => {
         name: '',
         slug: '',
         icon: '',
+        svg_icon: '',
+        cover_image_cloudflare_id: null,
+        cover_image_url: null,
+        quotes: [],
         description: '',
         parent_id: null
     })
+    newQuote.value = ''
+}
+
+// Cover image methods
+const handleCoverUpload = (response) => {
+    if (response.image) {
+        categoryForm.cover_image_cloudflare_id = response.image.cloudflare_id
+        categoryForm.cover_image_url = response.image.url
+    }
+}
+
+const handleUploadError = (error) => {
+    console.error('Upload error:', error)
+    alert('Error uploading cover image: ' + (error.message || 'Unknown error'))
+}
+
+const removeCoverImage = () => {
+    categoryForm.cover_image_cloudflare_id = null
+    categoryForm.cover_image_url = null
+}
+
+const getCoverImageUrl = () => {
+    if (categoryForm.cover_image_cloudflare_id) {
+        // Use Cloudflare URL with public variant
+        return `https://imagedelivery.net/${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH}/${categoryForm.cover_image_cloudflare_id}/public`
+    }
+    return categoryForm.cover_image_url || ''
+}
+
+// Quote methods
+const addQuote = () => {
+    if (newQuote.value.trim()) {
+        categoryForm.quotes.push(newQuote.value.trim())
+        newQuote.value = ''
+    }
+}
+
+const removeQuote = (index) => {
+    categoryForm.quotes.splice(index, 1)
 }
 
 // Lifecycle

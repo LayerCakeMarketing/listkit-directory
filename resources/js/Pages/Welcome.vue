@@ -1,6 +1,8 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import Logo from '@/Components/Logo.vue';
+import PublicLayout from '@/Layouts/PublicLayout.vue';
 
 const props = defineProps({
     canLogin: Boolean,
@@ -30,46 +32,10 @@ const getEntryUrl = (entry) => {
 </script>
 
 <template>
-    <Head title="Welcome to ListKit Directory" />
+    <Head title="Welcome to Listerino" />
     
-    <div class="min-h-screen bg-gray-50">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <div class="flex items-center">
-                        <h1 class="text-3xl font-bold text-gray-900">ListKit Directory</h1>
-                    </div>
-                    
-                    <nav v-if="canLogin" class="flex items-center space-x-4">
-                        <Link
-                            v-if="$page.props.auth.user"
-                            :href="route('dashboard')"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Dashboard
-                        </Link>
-                        
-                        <template v-else>
-                            <Link
-                                :href="route('login')"
-                                class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
-                            >
-                                Sign In
-                            </Link>
-                            
-                            <Link
-                                v-if="canRegister"
-                                :href="route('register')"
-                                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                            >
-                                Get Started
-                            </Link>
-                        </template>
-                    </nav>
-                </div>
-            </div>
-        </header>
+    <PublicLayout :can-register="canRegister"
+                  :show-footer="false">
 
         <!-- Hero Section -->
         <section class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-20">
@@ -257,7 +223,7 @@ const getEntryUrl = (entry) => {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div class="col-span-1 md:col-span-2">
-                        <h4 class="text-2xl font-bold mb-4">ListKit Directory</h4>
+                        <Logo href="/" imgClassName="h-12 w-auto mb-4" />
                         <p class="text-gray-300 max-w-md">
                             Discover and share amazing places through curated community lists.
                         </p>
@@ -287,7 +253,7 @@ const getEntryUrl = (entry) => {
                                 </Link>
                             </li>
                             <li v-if="$page.props.auth.user">
-                                <Link :href="route('dashboard')" class="hover:text-white transition-colors">
+                                <Link :href="route('home')" class="hover:text-white transition-colors">
                                     Dashboard
                                 </Link>
                             </li>
@@ -296,11 +262,11 @@ const getEntryUrl = (entry) => {
                 </div>
                 
                 <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                    <p>&copy; 2025 ListKit Directory. Built with Laravel v{{ laravelVersion }}.</p>
+                    <p>&copy; 2025 Listerino. Built with Laravel v{{ laravelVersion }}.</p>
                 </div>
             </div>
         </footer>
-    </div>
+    </PublicLayout>
 </template>
 
 <style scoped>

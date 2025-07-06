@@ -20,7 +20,7 @@ class DashboardController extends Controller
             'entries' => DirectoryEntry::count(),
             'pending_entries' => DirectoryEntry::where('status', 'pending_review')->count(),
             'lists' => UserList::count(),
-            'public_lists' => UserList::where('is_public', true)->count(),
+            'public_lists' => UserList::searchable()->count(),
             'comments' => Comment::count(),
             'comments_today' => Comment::whereDate('created_at', today())->count(),
         ];

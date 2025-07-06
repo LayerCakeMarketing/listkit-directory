@@ -1,39 +1,14 @@
 <template>
     <Head title="Create Directory Entry" />
-
-    <div class="min-h-screen bg-gray-50">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <div class="flex items-center">
-                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
-                    </div>
-                    
-                    <nav class="flex items-center space-x-4">
-                        <Link
-                            href="/places"
-                            class="text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            Browse Places
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Dashboard
-                        </Link>
-                    </nav>
+    
+    <AuthenticatedLayout>
+        <template #header>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="font-semibold text-xl text-gray-800 leading-tight">Create Directory Entry</h2>
+                    <p class="text-gray-600 text-sm mt-1">Add a new business, service, or location to the directory</p>
                 </div>
-            </div>
-        </header>
-
-        <!-- Breadcrumb -->
-        <nav class="bg-white border-b border-gray-200">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center space-x-2 py-3 text-sm">
+                <div class="flex items-center space-x-2 text-sm">
                     <Link href="/" class="text-gray-500 hover:text-gray-700">Home</Link>
                     <span class="text-gray-400">/</span>
                     <Link
@@ -54,15 +29,11 @@
                     <span class="text-gray-900">Create Entry</span>
                 </div>
             </div>
-        </nav>
+        </template>
 
-        <!-- Main Content -->
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="py-12">
+            <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white rounded-lg shadow-md">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h1 class="text-2xl font-bold text-gray-900">Create Directory Entry</h1>
-                    <p class="text-gray-600 mt-1">Add a new business, service, or location to the directory</p>
-                </div>
 
                 <form @submit.prevent="submitForm" class="p-6 space-y-6">
                     <!-- Basic Information -->
@@ -136,57 +107,60 @@
                         <!-- Logo Upload -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Logo (400x400px max, 2MB)
-                                <span v-if="form.logo_url" class="text-green-600 font-normal"> - Image uploaded ✓</span>
+                                Logo
+                                <span v-if="logoImages.length > 0" class="text-green-600 font-normal"> - {{ logoImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <ImageUpload
-                                type="logo"
-                                :current-image="form.logo_url"
-                                @uploaded="handleImageUpload"
-                                @removed="handleImageRemove"
+                            <CloudflareDragDropUploader
+                                :max-files="1"
+                                :max-file-size="2097152"
+                                context="logo"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="createdEntryId"
+                                @upload-success="handleLogoUpload"
+                                @upload-error="handleUploadError"
                             />
                         </div>
 
                         <!-- Cover Image Upload -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Cover Image (1920x1080px max, 5MB)
-                                <span v-if="form.cover_image_url" class="text-green-600 font-normal"> - Image uploaded ✓</span>
+                                Cover Image
+                                <span v-if="coverImages.length > 0" class="text-green-600 font-normal"> - {{ coverImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <ImageUpload
-                                type="cover"
-                                :current-image="form.cover_image_url"
-                                @uploaded="handleImageUpload"
-                                @removed="handleImageRemove"
+                            <CloudflareDragDropUploader
+                                :max-files="1"
+                                :max-file-size="5242880"
+                                context="cover"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="createdEntryId"
+                                @upload-success="handleCoverUpload"
+                                @upload-error="handleUploadError"
                             />
                         </div>
 
                         <!-- Gallery Images -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Gallery Images (1200x800px max, 3MB each)
-                                <span v-if="form.gallery_images.filter(img => img).length > 0" class="text-green-600 font-normal"> 
-                                    - {{ form.gallery_images.filter(img => img).length }} image(s) uploaded ✓
-                                </span>
+                                Gallery Images
+                                <span v-if="galleryImages.length > 0" class="text-green-600 font-normal"> - {{ galleryImages.length }} image(s) uploaded ✓</span>
                             </label>
-                            <div class="space-y-2">
-                                <ImageUpload
-                                    v-for="(image, index) in form.gallery_images"
-                                    :key="`gallery-${index}`"
-                                    type="gallery"
-                                    :current-image="image"
-                                    @uploaded="(data) => handleGalleryUpload(data, index)"
-                                    @removed="() => handleGalleryRemove(index)"
-                                />
-                                <button
-                                    v-if="form.gallery_images.length < 10"
-                                    type="button"
-                                    @click="addGallerySlot"
-                                    class="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
-                                >
-                                    + Add Gallery Image
-                                </button>
-                            </div>
+                            <CloudflareDragDropUploader
+                                :max-files="20"
+                                :max-file-size="14680064"
+                                context="gallery"
+                                entity-type="App\Models\DirectoryEntry"
+                                :entity-id="createdEntryId"
+                                @upload-success="handleGalleryUpload"
+                                @upload-error="handleUploadError"
+                            />
+                            
+                            <!-- Upload Results for Gallery -->
+                            <DraggableImageGallery 
+                                v-model:images="galleryImages"
+                                title="Uploaded Gallery Images"
+                                @remove="handleGalleryRemove"
+                                @reorder="updateGalleryOrder"
+                            />
                         </div>
                     </div>
 
@@ -261,14 +235,17 @@
 
                             <div>
                                 <label for="state" class="block text-sm font-medium text-gray-700">State *</label>
-                                <input
+                                <select
                                     v-model="form.location.state"
-                                    type="text"
                                     id="state"
-                                    maxlength="2"
                                     :required="form.type === 'physical_location' || form.type === 'event'"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
+                                >
+                                    <option value="">Select a state</option>
+                                    <option v-for="state in usStates" :key="state.code" :value="state.code">
+                                        {{ state.name }}
+                                    </option>
+                                </select>
                                 <div v-if="errors['location.state']" class="mt-1 text-sm text-red-600">{{ errors['location.state'] }}</div>
                             </div>
 
@@ -282,6 +259,18 @@
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
                                 <div v-if="errors['location.zip_code']" class="mt-1 text-sm text-red-600">{{ errors['location.zip_code'] }}</div>
+                            </div>
+
+                            <div>
+                                <label for="neighborhood" class="block text-sm font-medium text-gray-700">Neighborhood <span class="text-gray-500 text-xs">(optional)</span></label>
+                                <input
+                                    v-model="form.location.neighborhood"
+                                    type="text"
+                                    id="neighborhood"
+                                    placeholder="e.g., Downtown, Midtown, Financial District"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                                <div v-if="errors['location.neighborhood']" class="mt-1 text-sm text-red-600">{{ errors['location.neighborhood'] }}</div>
                             </div>
 
                             <div class="md:col-span-2">
@@ -342,15 +331,20 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
-    </div>
+    </AuthenticatedLayout>
 </template>
 
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, reactive } from 'vue'
-import ImageUpload from '@/Components/ImageUpload.vue'
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import CloudflareDragDropUploader from '@/Components/CloudflareDragDropUploader.vue'
+import AccordionSection from '@/Components/AccordionSection.vue'
 import RichTextEditor from '@/Components/RichTextEditor.vue'
+import DraggableImageGallery from '@/Components/DraggableImageGallery.vue'
+import { usStates } from '@/Data/usStates'
 
 const props = defineProps({
     categories: Array,
@@ -372,6 +366,7 @@ const form = reactive({
         city: '',
         state: '',
         zip_code: '',
+        neighborhood: '',
         latitude: '',
         longitude: '',
     }
@@ -380,6 +375,12 @@ const form = reactive({
 const errors = ref({})
 const processing = ref(false)
 const geocoding = ref(false)
+
+// Image upload state
+const logoImages = ref([])
+const coverImages = ref([])
+const galleryImages = ref([])
+const createdEntryId = ref(null)
 
 const groupedCategories = computed(() => {
     const groups = {}
@@ -400,32 +401,40 @@ const canGeocode = computed(() => {
     return form.location.address_line1 && form.location.city && form.location.state
 })
 
-const handleImageUpload = (data) => {
-    if (data.type === 'logo') {
-        form.logo_url = data.url
-    } else if (data.type === 'cover') {
-        form.cover_image_url = data.url
+// Handle upload completions
+const handleLogoUpload = (uploadResult) => {
+    logoImages.value.push(uploadResult)
+    form.logo_url = uploadResult.url
+    console.log('Logo uploaded:', uploadResult)
+}
+
+const handleCoverUpload = (uploadResult) => {
+    coverImages.value.push(uploadResult)
+    form.cover_image_url = uploadResult.url
+    console.log('Cover image uploaded:', uploadResult)
+}
+
+const handleGalleryUpload = (uploadResult) => {
+    galleryImages.value.push(uploadResult)
+    form.gallery_images.push(uploadResult.url)
+    console.log('Gallery image uploaded:', uploadResult)
+}
+
+const handleGalleryRemove = (index, removedImage) => {
+    const urlIndex = form.gallery_images.indexOf(removedImage.url)
+    if (urlIndex > -1) {
+        form.gallery_images.splice(urlIndex, 1)
     }
 }
 
-const handleImageRemove = (type) => {
-    if (type === 'logo') {
-        form.logo_url = ''
-    } else if (type === 'cover') {
-        form.cover_image_url = ''
-    }
+const updateGalleryOrder = (reorderedImages) => {
+    form.gallery_images = reorderedImages.map(img => img.url)
+    console.log('Gallery order updated:', form.gallery_images)
 }
 
-const handleGalleryUpload = (data, index) => {
-    form.gallery_images[index] = data.url
-}
-
-const handleGalleryRemove = (index) => {
-    form.gallery_images.splice(index, 1)
-}
-
-const addGallerySlot = () => {
-    form.gallery_images.push('')
+const handleUploadError = (error) => {
+    console.error('Upload error:', error)
+    // Could show a toast notification here
 }
 
 const geocodeAddress = async () => {
@@ -461,6 +470,12 @@ const submitForm = async () => {
         const response = await window.axios.post('/api/entries', form)
         
         if (response.data) {
+            // Store the created entry ID for image uploads
+            createdEntryId.value = response.data.id
+            
+            // Update image tracking with the new entry ID if there were uploaded images
+            await updateImageTracking()
+            
             // Success - redirect based on user role
             const user = usePage().props.auth?.user
             const redirectUrl = user?.role === 'admin' || user?.role === 'manager' 
@@ -484,6 +499,24 @@ const submitForm = async () => {
         }
     } finally {
         processing.value = false
+    }
+}
+
+const updateImageTracking = async () => {
+    if (!createdEntryId.value) return
+    
+    const allImages = [...logoImages.value, ...coverImages.value, ...galleryImages.value]
+    
+    for (const image of allImages) {
+        try {
+            await window.axios.post('/api/cloudflare/update-tracking', {
+                cloudflare_id: image.id,
+                entity_type: 'App\\Models\\DirectoryEntry',
+                entity_id: createdEntryId.value
+            })
+        } catch (error) {
+            console.warn('Failed to update image tracking:', error)
+        }
     }
 }
 </script>

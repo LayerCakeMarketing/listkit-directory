@@ -67,8 +67,8 @@
                         :key="list.id"
                         class="bg-white overflow-hidden shadow-sm rounded-lg hover:shadow-lg transition-shadow"
                     >
-                        <div v-if="list.featured_image" class="h-48 bg-gray-200">
-                            <img :src="list.featured_image" :alt="list.name" class="w-full h-full object-cover" />
+                        <div v-if="list.featured_image_url" class="h-48 bg-gray-200">
+                            <img :src="list.featured_image_url" :alt="list.name" class="w-full h-full object-cover" />
                         </div>
                         <div class="p-6">
                             <div class="flex justify-between items-start mb-2">

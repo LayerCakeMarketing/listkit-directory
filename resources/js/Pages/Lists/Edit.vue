@@ -48,24 +48,129 @@
                                 </div>
 
                                 <div>
-                                    <label class="flex items-center">
-                                        <input
-                                            v-model="listForm.is_public"
-                                            type="checkbox"
-                                            class="rounded border-gray-300"
-                                        />
-                                        <span class="ml-2 text-sm text-gray-700">Make this list public</span>
-                                    </label>
+                                    <CategorySelect
+                                        v-model="listForm.category_id"
+                                        label="Category *"
+                                        placeholder="Select a category..."
+                                        help-text="Choose the category that best describes your list"
+                                    />
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Featured Image URL</label>
-                                    <input
-                                        v-model="listForm.featured_image"
-                                        type="url"
-                                        class="mt-1 block w-full rounded-md border-gray-300"
-                                        placeholder="https://example.com/image.jpg"
+                                    <TagInput
+                                        v-model="listForm.tags"
+                                        label="Tags"
+                                        placeholder="Search or create tags..."
+                                        help-text="Add tags to help people discover your list"
+                                        :allow-create="true"
+                                        :max-tags="10"
                                     />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
+                                    <div class="space-y-2">
+                                        <label class="flex items-start">
+                                            <input
+                                                v-model="listForm.visibility"
+                                                value="public"
+                                                type="radio"
+                                                class="mt-0.5 rounded-full border-gray-300"
+                                            />
+                                            <div class="ml-3">
+                                                <span class="block text-sm font-medium text-gray-700">Public</span>
+                                                <span class="block text-xs text-gray-500">Visible to all logged-in users and appears in feeds</span>
+                                            </div>
+                                        </label>
+                                        
+                                        <label class="flex items-start">
+                                            <input
+                                                v-model="listForm.visibility"
+                                                value="unlisted"
+                                                type="radio"
+                                                class="mt-0.5 rounded-full border-gray-300"
+                                            />
+                                            <div class="ml-3">
+                                                <span class="block text-sm font-medium text-gray-700">Unlisted</span>
+                                                <span class="block text-xs text-gray-500">Only accessible via direct URL</span>
+                                            </div>
+                                        </label>
+                                        
+                                        <label class="flex items-start">
+                                            <input
+                                                v-model="listForm.visibility"
+                                                value="private"
+                                                type="radio"
+                                                class="mt-0.5 rounded-full border-gray-300"
+                                            />
+                                            <div class="ml-3">
+                                                <span class="block text-sm font-medium text-gray-700">Private</span>
+                                                <span class="block text-xs text-gray-500">Only visible to you and people you share with</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="border-t pt-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Publishing Options</label>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center">
+                                            <input
+                                                v-model="listForm.is_draft"
+                                                type="checkbox"
+                                                class="rounded border-gray-300"
+                                            />
+                                            <span class="ml-2 text-sm text-gray-700">Save as draft</span>
+                                        </label>
+                                        
+                                        <div v-if="!listForm.is_draft">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Schedule for later</label>
+                                            <input
+                                                v-model="listForm.scheduled_for"
+                                                type="datetime-local"
+                                                class="w-full rounded-md border-gray-300"
+                                                :min="new Date().toISOString().slice(0, 16)"
+                                            />
+                                            <p class="text-xs text-gray-500 mt-1">Leave empty to publish immediately</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Photos
+                                        <span v-if="photos.length > 0" class="text-green-600 font-normal"> - {{ photos.length }} photo(s) uploaded ✓</span>
+                                    </label>
+                                    <CloudflareDragDropUploader
+                                        :max-files="10"
+                                        :max-file-size="14680064"
+                                        context="cover"
+                                        entity-type="App\Models\UserList"
+                                        :entity-id="listId"
+                                        @upload-success="handlePhotoUpload"
+                                        @upload-error="handleUploadError"
+                                    />
+                                    
+                                    <!-- Upload Results with Drag & Drop Reordering -->
+                                    <DraggableImageGallery 
+                                        v-model:images="photos"
+                                        title="Uploaded Photos"
+                                        :show-primary="true"
+                                        @remove="handleGalleryRemove"
+                                        @reorder="updateImageOrder"
+                                    />
+                                    
+                                    <!-- Existing Gallery Images -->
+                                    <DraggableImageGallery 
+                                        v-if="existingPhotos.length > 0"
+                                        v-model:images="existingPhotos"
+                                        title="Current Photos"
+                                        :show-primary="true"
+                                        @remove="handleExistingGalleryRemove"
+                                        @reorder="updateExistingImageOrder"
+                                    />
+                                    
+                                    <p class="text-xs text-gray-500 mt-1">Add photos for your list. The first photo will be used as the featured image. Drag to reorder them.</p>
                                 </div>
 
                                 <button
@@ -76,6 +181,118 @@
                                     {{ savingList ? 'Saving...' : 'Save Settings' }}
                                 </button>
                             </form>
+                        </div>
+
+                        <!-- List Sharing (Private Lists Only) -->
+                        <div v-if="listForm.visibility === 'private'" class="bg-white p-6 rounded-lg shadow mt-6">
+                            <h3 class="text-lg font-semibold mb-4">Share List</h3>
+                            
+                            <!-- Add New Share -->
+                            <div class="space-y-4 mb-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Share with user</label>
+                                    <input
+                                        v-model="shareSearch"
+                                        @input="debouncedSearchUsers"
+                                        type="text"
+                                        placeholder="Search by name, username, or email..."
+                                        class="w-full rounded-md border-gray-300"
+                                    />
+                                    <div v-if="userSearchResults.length > 0" class="mt-2 max-h-40 overflow-y-auto border rounded">
+                                        <button
+                                            v-for="user in userSearchResults"
+                                            :key="user.id"
+                                            @click="selectUserToShare(user)"
+                                            class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0 flex items-center space-x-2"
+                                        >
+                                            <div>
+                                                <div class="font-medium">{{ user.name }}</div>
+                                                <div class="text-sm text-gray-500">@{{ user.username || user.email }}</div>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div v-if="selectedUser" class="p-3 bg-gray-50 rounded border">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div>
+                                            <div class="font-medium">{{ selectedUser.name }}</div>
+                                            <div class="text-sm text-gray-500">@{{ selectedUser.username || selectedUser.email }}</div>
+                                        </div>
+                                        <button @click="clearSelectedUser" class="text-gray-400 hover:text-gray-600">
+                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Permission</label>
+                                            <select v-model="shareForm.permission" class="w-full rounded-md border-gray-300">
+                                                <option value="view">View only</option>
+                                                <option value="edit">Can edit</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Expires (optional)</label>
+                                            <input
+                                                v-model="shareForm.expires_at"
+                                                type="datetime-local"
+                                                class="w-full rounded-md border-gray-300"
+                                                :min="new Date().toISOString().slice(0, 16)"
+                                            />
+                                        </div>
+                                        
+                                        <button
+                                            @click="shareList"
+                                            :disabled="sharing"
+                                            class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                                        >
+                                            {{ sharing ? 'Sharing...' : 'Share List' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Current Shares -->
+                            <div v-if="shares.length > 0">
+                                <h4 class="font-medium text-gray-900 mb-3">Current Shares</h4>
+                                <div class="space-y-2">
+                                    <div
+                                        v-for="share in shares"
+                                        :key="share.id"
+                                        class="flex items-center justify-between p-3 bg-gray-50 rounded border"
+                                    >
+                                        <div>
+                                            <div class="font-medium">{{ share.user.name }}</div>
+                                            <div class="text-sm text-gray-500">
+                                                {{ share.permission }} access
+                                                <span v-if="share.expires_at"> • Expires {{ formatDate(share.expires_at) }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <button
+                                                @click="editShare(share)"
+                                                class="text-blue-600 hover:text-blue-800 text-sm"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                @click="removeShare(share)"
+                                                class="text-red-600 hover:text-red-800 text-sm"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div v-else class="text-sm text-gray-500 text-center py-4">
+                                No one has access to this private list yet.
+                            </div>
                         </div>
 
                         <!-- Add New Item -->
@@ -339,6 +556,20 @@
                         ></textarea>
                     </div>
 
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Item Image</label>
+                        <DirectCloudflareUpload
+                            v-model="itemImage"
+                            label="Upload Image for this Item"
+                            upload-type="list_image"
+                            :entity-id="editingItem?.id || 1"
+                            :max-size-m-b="14"
+                            :current-image-url="editForm.item_image_url"
+                            @upload-complete="handleItemImageUpload"
+                        />
+                        <p class="text-xs text-gray-500 mt-1">Add an image to make this list item more visually appealing</p>
+                    </div>
+
                     <div class="flex justify-end space-x-3">
                         <button
                             type="button"
@@ -362,10 +593,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { Head, Link } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import CloudflareDragDropUploader from '@/Components/CloudflareDragDropUploader.vue'
+import DraggableImageGallery from '@/Components/DraggableImageGallery.vue'
+import CategorySelect from '@/Components/UI/CategorySelect.vue'
+import TagInput from '@/Components/UI/TagInput.vue'
 import draggable from 'vuedraggable'
 import { debounce } from 'lodash'
 
@@ -387,11 +622,29 @@ const selectedItemType = ref('directory_entry')
 const entrySearch = ref('')
 const searchResults = ref([])
 
+// Sharing state
+const shares = ref([])
+const shareSearch = ref('')
+const userSearchResults = ref([])
+const selectedUser = ref(null)
+const sharing = ref(false)
+
+// Image upload state
+const itemImage = ref(null)
+const photos = ref([])
+const existingPhotos = ref([])
+
 const listForm = reactive({
     name: '',
     description: '',
-    is_public: true,
-    featured_image: ''
+    visibility: 'public',
+    is_draft: false,
+    scheduled_for: '',
+    featured_image: '',
+    featured_image_cloudflare_id: null,
+    gallery_images: [],
+    category_id: '',
+    tags: []
 })
 
 const newItem = reactive({
@@ -407,7 +660,15 @@ const editForm = reactive({
     content: '',
     data: {},
     affiliate_url: '',
-    notes: ''
+    notes: '',
+    item_image: null,
+    item_image_url: null
+})
+
+const shareForm = reactive({
+    user_id: null,
+    permission: 'view',
+    expires_at: ''
 })
 
 const itemTypes = [
@@ -429,9 +690,29 @@ const fetchList = async () => {
         Object.assign(listForm, {
             name: response.data.name,
             description: response.data.description || '',
-            is_public: response.data.is_public,
-            featured_image: response.data.featured_image || ''
+            visibility: response.data.visibility || 'public',
+            is_draft: response.data.is_draft || false,
+            scheduled_for: response.data.scheduled_for ? new Date(response.data.scheduled_for).toISOString().slice(0, 16) : '',
+            featured_image: response.data.featured_image || '',
+            featured_image_cloudflare_id: response.data.featured_image_cloudflare_id || null,
+            gallery_images: response.data.gallery_images || [],
+            category_id: response.data.category_id || '',
+            tags: response.data.tags || []
         })
+        
+        // Populate existing photos for display
+        if (response.data.gallery_images && response.data.gallery_images.length > 0) {
+            existingPhotos.value = response.data.gallery_images.map((image, index) => ({
+                id: image.id || `existing-${index}`,
+                url: image.url,
+                filename: image.filename || `Photo ${index + 1}`
+            }))
+        }
+        
+        // Fetch shares if private list
+        if (response.data.visibility === 'private') {
+            fetchShares()
+        }
     } catch (error) {
         console.error('Error fetching list:', error)
         alert('Error loading list')
@@ -441,6 +722,12 @@ const fetchList = async () => {
 }
 
 const updateList = async () => {
+    // Validate required fields
+    if (!listForm.category_id) {
+        alert('Please select a category for your list.')
+        return
+    }
+
     savingList.value = true
     try {
         await axios.put(`/data/lists/${props.listId}`, listForm)
@@ -561,7 +848,9 @@ const editItem = (item) => {
         content: item.content || '',
         data: item.data || {},
         affiliate_url: item.affiliate_url || '',
-        notes: item.notes || ''
+        notes: item.notes || '',
+        item_image: item.item_image_cloudflare_id || null,
+        item_image_url: item.item_image_url || null
     })
     showEditModal.value = true
 }
@@ -623,9 +912,71 @@ const handleReorder = async () => {
 const closeEditModal = () => {
     showEditModal.value = false
     editingItem.value = null
+    itemImage.value = null
     Object.keys(editForm).forEach(key => {
         editForm[key] = key === 'data' ? {} : ''
     })
+}
+
+// Handle item image upload
+const handleItemImageUpload = (image) => {
+    itemImage.value = image
+    editForm.item_image = image.cloudflare_id
+    editForm.item_image_url = image.urls.original
+}
+
+// Handle photo upload
+const handlePhotoUpload = (uploadResult) => {
+    photos.value.push(uploadResult)
+    updateGalleryImages()
+    console.log('Photo uploaded:', uploadResult)
+}
+
+const handleGalleryRemove = (index, removedImage) => {
+    updateGalleryImages()
+}
+
+const updateImageOrder = () => {
+    updateGalleryImages()
+}
+
+const handleExistingGalleryRemove = (index, removedImage) => {
+    updateCombinedGalleryImages()
+}
+
+const updateExistingImageOrder = () => {
+    updateCombinedGalleryImages()
+}
+
+const updateGalleryImages = () => {
+    // Update gallery_images array with all photos (existing + new)
+    const combinedImages = [...existingPhotos.value, ...photos.value]
+    
+    listForm.gallery_images = combinedImages.map(photo => ({
+        id: photo.id,
+        url: photo.url,
+        filename: photo.filename
+    }))
+    
+    // Set first image as featured_image for backward compatibility
+    if (combinedImages.length > 0) {
+        listForm.featured_image = combinedImages[0].url
+        listForm.featured_image_cloudflare_id = combinedImages[0].id
+    } else {
+        listForm.featured_image = null
+        listForm.featured_image_cloudflare_id = null
+    }
+    
+    console.log('Gallery images updated:', listForm.gallery_images)
+}
+
+const updateCombinedGalleryImages = () => {
+    updateGalleryImages()
+}
+
+const handleUploadError = (error) => {
+    console.error('Upload error:', error)
+    alert('Error uploading image: ' + (error.message || 'Unknown error'))
 }
 
 const truncate = (text, length) => {
@@ -637,6 +988,94 @@ const formatDate = (date) => {
     if (!date) return ''
     return new Date(date).toLocaleString()
 }
+
+// Sharing methods
+const fetchShares = async () => {
+    if (listForm.visibility !== 'private') return
+    
+    try {
+        const response = await axios.get(`/data/lists/${props.listId}/shares`)
+        shares.value = response.data
+    } catch (error) {
+        console.error('Error fetching shares:', error)
+    }
+}
+
+const searchUsers = async () => {
+    if (!shareSearch.value || shareSearch.value.length < 2) {
+        userSearchResults.value = []
+        return
+    }
+    
+    try {
+        const response = await axios.get('/data/users/search', {
+            params: { q: shareSearch.value }
+        })
+        userSearchResults.value = response.data
+    } catch (error) {
+        console.error('Error searching users:', error)
+    }
+}
+
+const debouncedSearchUsers = debounce(searchUsers, 300)
+
+const selectUserToShare = (user) => {
+    selectedUser.value = user
+    shareForm.user_id = user.id
+    shareSearch.value = ''
+    userSearchResults.value = []
+}
+
+const clearSelectedUser = () => {
+    selectedUser.value = null
+    shareForm.user_id = null
+    shareForm.permission = 'view'
+    shareForm.expires_at = ''
+}
+
+const shareList = async () => {
+    if (!selectedUser.value) return
+    
+    sharing.value = true
+    try {
+        const response = await axios.post(`/data/lists/${props.listId}/shares`, shareForm)
+        shares.value.push(response.data.share)
+        clearSelectedUser()
+        alert('List shared successfully!')
+    } catch (error) {
+        alert('Error sharing list: ' + (error.response?.data?.error || error.message))
+    } finally {
+        sharing.value = false
+    }
+}
+
+const editShare = (share) => {
+    // For now, just allow removing and re-adding
+    // Could implement inline editing later
+    if (confirm(`Edit sharing permissions for ${share.user.name}?\n\nCurrent: ${share.permission} access`)) {
+        removeShare(share)
+    }
+}
+
+const removeShare = async (share) => {
+    if (!confirm(`Remove ${share.user.name}'s access to this list?`)) return
+    
+    try {
+        await axios.delete(`/data/lists/${props.listId}/shares/${share.id}`)
+        shares.value = shares.value.filter(s => s.id !== share.id)
+    } catch (error) {
+        alert('Error removing share: ' + (error.response?.data?.message || error.message))
+    }
+}
+
+// Watch for visibility changes
+watch(() => listForm.visibility, (newValue, oldValue) => {
+    if (newValue === 'private' && oldValue !== 'private') {
+        fetchShares()
+    } else if (newValue !== 'private') {
+        shares.value = []
+    }
+})
 
 // Lifecycle
 onMounted(() => {

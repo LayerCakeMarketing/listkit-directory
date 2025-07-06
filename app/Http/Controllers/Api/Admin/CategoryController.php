@@ -27,6 +27,11 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'slug' => 'required|string|max:255|unique:categories,slug',
             'icon' => 'nullable|string|max:10',
+            'svg_icon' => 'nullable|string',
+            'cover_image_cloudflare_id' => 'nullable|string|max:255',
+            'cover_image_url' => 'nullable|url|max:500',
+            'quotes' => 'nullable|array',
+            'quotes.*' => 'string',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id',
         ]);
@@ -59,6 +64,11 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'slug' => 'required|string|max:255|unique:categories,slug,' . $id,
             'icon' => 'nullable|string|max:10',
+            'svg_icon' => 'nullable|string',
+            'cover_image_cloudflare_id' => 'nullable|string|max:255',
+            'cover_image_url' => 'nullable|url|max:500',
+            'quotes' => 'nullable|array',
+            'quotes.*' => 'string',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id|not_in:' . $id,
         ]);

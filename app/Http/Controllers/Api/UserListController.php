@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\UserList;
 use App\Models\ListItem;
 use App\Models\DirectoryEntry;
+use App\Models\Tag;
+use App\Models\ListCategory;
+use App\Services\ProfanityFilterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,7 +36,7 @@ class UserListController extends Controller
 
         // Filter by visibility
         if ($request->filled('visibility')) {
-            $query->where('is_public', $request->visibility === 'public');
+            $query->where('visibility', $request->visibility);
         }
 
         $lists = $query->orderBy('created_at', 'desc')->paginate(12);
@@ -46,20 +49,78 @@ class UserListController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'is_public' => 'boolean',
+            'visibility' => 'required|in:public,unlisted,private',
+            'is_draft' => 'boolean',
+            'scheduled_for' => 'nullable|date|after:now',
             'featured_image' => 'nullable|string', // Base64 or URL
+            'featured_image_cloudflare_id' => 'nullable|string',
+            'gallery_images' => 'nullable|array',
+            'gallery_images.*.id' => 'nullable|string',
+            'gallery_images.*.url' => 'nullable|string',
+            'gallery_images.*.filename' => 'nullable|string',
+            'category_id' => 'required|exists:list_categories,id',
+            'tags' => 'nullable|array',
+            'tags.*.name' => 'string|max:255',
+            'tags.*.is_new' => 'boolean',
         ]);
 
-        $list = UserList::create([
-            'user_id' => auth()->id(),
-            'name' => $validated['name'],
-            'slug' => Str::slug($validated['name']),
-            'description' => $validated['description'] ?? null,
-            'is_public' => $validated['is_public'] ?? true,
-            'featured_image' => $validated['featured_image'] ?? null,
-        ]);
+        DB::transaction(function() use ($validated, &$list) {
+            $list = UserList::create([
+                'user_id' => auth()->id(),
+                'name' => $validated['name'],
+                'slug' => Str::slug($validated['name']),
+                'description' => $validated['description'] ?? null,
+                'visibility' => $validated['visibility'],
+                'is_draft' => $validated['is_draft'] ?? false,
+                'published_at' => (!($validated['is_draft'] ?? false) && empty($validated['scheduled_for'])) ? now() : null,
+                'scheduled_for' => $validated['scheduled_for'] ?? null,
+                'featured_image' => $validated['featured_image'] ?? null,
+                'featured_image_cloudflare_id' => $validated['featured_image_cloudflare_id'] ?? null,
+                'gallery_images' => $validated['gallery_images'] ?? null,
+                'category_id' => $validated['category_id'],
+            ]);
 
-        $list->load('user');
+            // Handle tags
+            if (!empty($validated['tags'])) {
+                $tagIds = [];
+                
+                foreach ($validated['tags'] as $tagData) {
+                    if (isset($tagData['is_new']) && $tagData['is_new']) {
+                        // Validate profanity for new tags
+                        if (!ProfanityFilterService::validateTag($tagData['name'])) {
+                            throw new \Exception('Tag "' . $tagData['name'] . '" contains inappropriate content');
+                        }
+                        
+                        // Check if tag already exists by name/slug
+                        $slug = Str::slug($tagData['name']);
+                        $existingTag = Tag::where('slug', $slug)->first();
+                        
+                        if ($existingTag) {
+                            $tagIds[] = $existingTag->id;
+                        } else {
+                            // Create new tag
+                            $tag = Tag::create([
+                                'name' => $tagData['name'],
+                                'slug' => $slug,
+                                'color' => '#6B7280',
+                                'is_active' => true,
+                            ]);
+                            $tagIds[] = $tag->id;
+                        }
+                    } else {
+                        // Use existing tag - handle both object and array formats
+                        $tagId = isset($tagData['id']) ? $tagData['id'] : $tagData;
+                        if (is_numeric($tagId)) {
+                            $tagIds[] = $tagId;
+                        }
+                    }
+                }
+                
+                $list->tags()->sync($tagIds);
+            }
+        });
+
+        $list->load('user', 'category', 'tags');
         
         return response()->json([
             'message' => 'List created successfully',
@@ -69,17 +130,18 @@ class UserListController extends Controller
 
     public function show($id)
     {
-        $list = UserList::with(['user', 'items' => function($query) {
-            $query->orderBy('order_index');
+        $list = UserList::with(['user', 'category', 'tags', 'items' => function($query) {
+            $query->orderBy('order_index')
+                  ->with(['directoryEntry.location', 'directoryEntry.category']);
         }])->findOrFail($id);
 
         // Check if user can view this list
-        if (!$list->is_public && !$list->canEdit(auth()->user())) {
-            abort(403, 'This list is private');
+        if (!$list->canView(auth()->user())) {
+            abort(403, 'You do not have permission to view this list');
         }
 
-        // Increment view count if not owner
-        if (!$list->isOwnedBy(auth()->user())) {
+        // Increment view count if not owner and list is viewable
+        if (!$list->isOwnedBy(auth()->user()) && $list->isPublished()) {
             $list->incrementViewCount();
         }
 
@@ -97,22 +159,81 @@ class UserListController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'is_public' => 'sometimes|boolean',
             'visibility' => 'sometimes|in:public,unlisted,private',
+            'is_draft' => 'sometimes|boolean',
+            'scheduled_for' => 'nullable|date|after:now',
             'featured_image' => 'nullable|string',
+            'featured_image_cloudflare_id' => 'nullable|string',
+            'gallery_images' => 'nullable|array',
+            'gallery_images.*.id' => 'nullable|string',
+            'gallery_images.*.url' => 'nullable|string',
+            'gallery_images.*.filename' => 'nullable|string',
+            'category_id' => 'sometimes|required|exists:list_categories,id',
+            'tags' => 'nullable|array',
+            'tags.*.name' => 'string|max:255',
+            'tags.*.is_new' => 'boolean',
         ]);
 
-        if (isset($validated['name']) && $validated['name'] !== $list->name) {
-            $validated['slug'] = Str::slug($validated['name']);
-        }
+        DB::transaction(function() use ($validated, $list) {
+            if (isset($validated['name']) && $validated['name'] !== $list->name) {
+                $validated['slug'] = Str::slug($validated['name']);
+            }
 
-        // Handle visibility transition - convert is_public to visibility if present
-        if (isset($validated['is_public'])) {
-            $validated['visibility'] = $validated['is_public'] ? 'public' : 'private';
-            unset($validated['is_public']);
-        }
+            // Handle publishing logic
+            if (isset($validated['is_draft']) && !$validated['is_draft'] && $list->is_draft) {
+                // Publishing from draft
+                if (empty($validated['scheduled_for'])) {
+                    $validated['published_at'] = now();
+                }
+            }
 
-        $list->update($validated);
+            // Handle tags separately
+            $tags = $validated['tags'] ?? null;
+            unset($validated['tags']);
+
+            $list->update($validated);
+
+            // Update tags if provided
+            if ($tags !== null) {
+                $tagIds = [];
+                
+                foreach ($tags as $tagData) {
+                    if (isset($tagData['is_new']) && $tagData['is_new']) {
+                        // Validate profanity for new tags
+                        if (!ProfanityFilterService::validateTag($tagData['name'])) {
+                            throw new \Exception('Tag "' . $tagData['name'] . '" contains inappropriate content');
+                        }
+                        
+                        // Check if tag already exists by name/slug
+                        $slug = Str::slug($tagData['name']);
+                        $existingTag = Tag::where('slug', $slug)->first();
+                        
+                        if ($existingTag) {
+                            $tagIds[] = $existingTag->id;
+                        } else {
+                            // Create new tag
+                            $tag = Tag::create([
+                                'name' => $tagData['name'],
+                                'slug' => $slug,
+                                'color' => '#6B7280',
+                                'is_active' => true,
+                            ]);
+                            $tagIds[] = $tag->id;
+                        }
+                    } else {
+                        // Use existing tag - handle both object and array formats
+                        $tagId = isset($tagData['id']) ? $tagData['id'] : $tagData;
+                        if (is_numeric($tagId)) {
+                            $tagIds[] = $tagId;
+                        }
+                    }
+                }
+                
+                $list->tags()->sync($tagIds);
+            }
+        });
+
+        $list->load('category', 'tags');
 
         return response()->json([
             'message' => 'List updated successfully',
@@ -202,9 +323,16 @@ class UserListController extends Controller
             'content' => 'nullable|string',
             'data' => 'nullable|array',
             'image' => 'nullable|string',
+            'item_image' => 'nullable|string',
             'affiliate_url' => 'nullable|url',
             'notes' => 'nullable|string',
         ]);
+
+        // Handle Cloudflare image ID
+        if (isset($validated['item_image'])) {
+            $validated['item_image_cloudflare_id'] = $validated['item_image'];
+            unset($validated['item_image']);
+        }
 
         $item->update($validated);
 
@@ -285,11 +413,19 @@ public function myLists(Request $request)
 {
     $user = auth()->user();
     
-    $query = $user->lists()->with(['items']);
+    $query = $user->lists()->with(['items', 'category', 'tags']);
     
     // Apply filters
     if ($request->has('search') && $request->search) {
         $query->where('name', 'like', '%' . $request->search . '%');
+    }
+    
+    if ($request->has('visibility') && $request->visibility) {
+        $query->where('visibility', $request->visibility);
+    }
+    
+    if ($request->has('is_draft')) {
+        $query->where('is_draft', $request->boolean('is_draft'));
     }
     
     // Apply sorting
@@ -307,7 +443,7 @@ public function myLists(Request $request)
  */
 public function publicLists(Request $request)
 {
-    $query = \App\Models\UserList::where('is_public', true)
+    $query = \App\Models\UserList::searchable()
         ->with(['user', 'items'])
         ->withCount('items');
     
@@ -364,9 +500,9 @@ public function categories()
 public function popularCreators()
 {
     $users = \App\Models\User::whereHas('lists', function($query) {
-        $query->where('is_public', true);
+        $query->searchable();
     })->withCount(['lists' => function($query) {
-        $query->where('is_public', true);
+        $query->searchable();
     }])->orderBy('lists_count', 'desc')
     ->limit(20)
     ->get(['id', 'name', 'lists_count']);
@@ -380,14 +516,14 @@ public function popularCreators()
 public function publicListsStats()
 {
     $stats = [
-        'total_lists' => \App\Models\UserList::where('is_public', true)->count(),
+        'total_lists' => \App\Models\UserList::searchable()->count(),
         'total_users' => \App\Models\User::whereHas('lists', function($query) {
-            $query->where('is_public', true);
+            $query->searchable();
         })->count(),
         'total_items' => \App\Models\ListItem::whereHas('list', function($query) {
-            $query->where('is_public', true);
+            $query->searchable();
         })->count(),
-        'total_categories' => 0 // Categories not implemented for lists yet
+        'total_categories' => \App\Models\ListCategory::where('is_active', true)->count()
     ];
     
     return response()->json($stats);
@@ -446,6 +582,57 @@ public function userPublicLists(\App\Models\User $user)
         ->paginate(12);
         
     return response()->json($lists);
+}
+
+/**
+ * Get all active list categories
+ */
+public function getAllCategories()
+{
+    $categories = ListCategory::where('is_active', true)
+        ->orderBy('sort_order')
+        ->get(['id', 'name', 'slug', 'description']);
+        
+    return response()->json($categories);
+}
+
+/**
+ * Search tags for autocomplete
+ */
+public function searchTags(Request $request)
+{
+    $query = $request->get('q', '');
+    
+    if (strlen($query) < 2) {
+        return response()->json([]);
+    }
+    
+    $tags = Tag::where('is_active', true)
+        ->where(function($q) use ($query) {
+            $q->where('name', 'like', "%{$query}%")
+              ->orWhere('slug', 'like', "%{$query}%");
+        })
+        ->limit(20)
+        ->get(['id', 'name', 'slug', 'color']);
+        
+    return response()->json($tags);
+}
+
+/**
+ * Validate tag name for profanity
+ */
+public function validateTag(Request $request)
+{
+    $request->validate([
+        'name' => 'required|string|max:255'
+    ]);
+    
+    $isValid = ProfanityFilterService::validateTag($request->name);
+    
+    return response()->json([
+        'valid' => $isValid,
+        'message' => $isValid ? 'Tag is valid' : 'Tag contains inappropriate content'
+    ]);
 }
 
 

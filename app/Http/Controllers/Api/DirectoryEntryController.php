@@ -82,6 +82,7 @@ class DirectoryEntryController extends Controller
             'location.city' => 'required_with:location|string|max:255',
             'location.state' => 'required_with:location|string|max:2',
             'location.zip_code' => 'required_with:location|string|max:10',
+            'location.neighborhood' => 'nullable|string|max:255',
             'location.latitude' => 'required_with:location|numeric|between:-90,90',
             'location.longitude' => 'required_with:location|numeric|between:-180,180',
         ]);
@@ -146,6 +147,7 @@ class DirectoryEntryController extends Controller
             'location.city' => 'nullable|string|max:255',
             'location.state' => 'nullable|string|max:2',
             'location.zip_code' => 'nullable|string|max:10',
+            'location.neighborhood' => 'nullable|string|max:255',
             'location.latitude' => 'nullable|numeric|between:-90,90',
             'location.longitude' => 'nullable|numeric|between:-180,180',
             ]);

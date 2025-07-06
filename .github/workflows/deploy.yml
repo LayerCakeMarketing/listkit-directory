@@ -1,0 +1,68 @@
+name: Deploy to Listerino Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          # Navigate to application directory
+          cd /var/www/listerino
+          
+          # Pull latest code
+          git pull origin main
+          
+          # Install/update composer dependencies
+          composer install --optimize-autoloader --no-dev
+          
+          # Install/update npm dependencies
+          npm ci
+          
+          # Build production assets
+          npm run build
+          
+          # Run database migrations
+          php artisan migrate --force
+          
+          # Clear and rebuild all caches
+          php artisan optimize:clear
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          php artisan optimize
+          
+          # Ensure storage link exists
+          php artisan storage:link --force
+          
+          # Set proper permissions
+          chmod -R 755 storage bootstrap/cache
+          chown -R www-data:www-data storage bootstrap/cache public/storage
+          
+          # Restart PHP-FPM
+          sudo systemctl restart php8.3-fpm
+          
+          # Reload Nginx
+          sudo nginx -s reload
+          
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: 'Deployment to listerino.com ${{ job.status }}'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      continue-on-error: true

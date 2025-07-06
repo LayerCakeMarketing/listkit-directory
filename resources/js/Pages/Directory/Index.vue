@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import Logo from '@/Components/Logo.vue';
 
 const props = defineProps({
     entries: Object,
@@ -26,9 +27,7 @@ const getEntryUrl = (entry) => {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-6">
                     <div class="flex items-center space-x-4">
-                        <Link href="/" class="text-3xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
+                        <Logo href="/" imgClassName="h-8 w-auto" />
                         <span class="text-gray-500">/</span>
                         <h1 class="text-xl text-gray-600">Browse Directory</h1>
                     </div>

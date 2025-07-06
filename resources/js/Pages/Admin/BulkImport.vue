@@ -7,9 +7,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-6">
                     <div class="flex items-center">
-                        <Link href="/" class="text-2xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory Admin
-                        </Link>
+                        <Logo href="/" imgClassName="h-8 w-auto" />
                     </div>
                     
                     <nav class="flex items-center space-x-4">
@@ -193,6 +191,7 @@
 import { Head, Link } from '@inertiajs/vue3'
 import { ref, reactive } from 'vue'
 import axios from 'axios'
+import Logo from '@/Components/Logo.vue'
 
 const form = reactive({
     image_folder: ''

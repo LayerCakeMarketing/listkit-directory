@@ -32,6 +32,10 @@ class ProfileUpdateRequest extends FormRequest
                 'regex:/^[a-zA-Z0-9\-]+$/',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            'avatar_image' => 'nullable|array',
+            'avatar_image.cloudflare_id' => 'required_with:avatar_image|string',
+            'cover_image' => 'nullable|array',
+            'cover_image.cloudflare_id' => 'required_with:cover_image|string',
         ];
     }
 

@@ -1,5 +1,8 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PublicLayout from '@/Layouts/PublicLayout.vue';
 
 const props = defineProps({
     category: Object,
@@ -28,49 +31,31 @@ const stripHtml = (html) => {
     // Return text content which strips all HTML tags
     return temp.textContent || temp.innerText || '';
 };
+
+const page = usePage();
+
+// Determine which layout to use based on authentication
+const layoutComponent = computed(() => {
+    return page.props.auth.user ? AuthenticatedLayout : PublicLayout;
+});
 </script>
 
 <template>
     <Head :title="`${category.name} Places`" />
     
-    <div class="min-h-screen bg-gray-50">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
+    <component :is="layoutComponent">
+        <!-- Breadcrumb for authenticated users -->
+        <nav v-if="$page.props.auth.user" class="bg-white border-b border-gray-200">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <div class="flex items-center space-x-4">
-                        <Link href="/" class="text-3xl font-bold text-gray-900 hover:text-blue-600">
-                            ListKit Directory
-                        </Link>
-                        <span class="text-gray-500">/</span>
-                        <Link href="/places" class="text-gray-600 hover:text-blue-600">Places</Link>
-                        <span class="text-gray-500">/</span>
-                        <h1 class="text-xl text-gray-600">{{ category.name }}</h1>
-                    </div>
-                    
-                    <nav class="flex items-center space-x-4">
-                        <Link
-                            href="/"
-                            class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
-                        >
-                            Home
-                        </Link>
-                        <Link
-                            href="/login"
-                            class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
-                        >
-                            Sign In
-                        </Link>
-                        <Link
-                            href="/register"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Get Started
-                        </Link>
-                    </nav>
+                <div class="flex items-center space-x-2 py-3 text-sm">
+                    <Link href="/" class="text-gray-500 hover:text-gray-700">Home</Link>
+                    <span class="text-gray-400">/</span>
+                    <Link href="/places" class="text-gray-500 hover:text-gray-700">Places</Link>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-900">{{ category.name }}</span>
                 </div>
             </div>
-        </header>
+        </nav>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Category Header -->
@@ -185,7 +170,7 @@ const stripHtml = (html) => {
                 </nav>
             </div>
         </div>
-    </div>
+    </component>
 </template>
 
 <style scoped>

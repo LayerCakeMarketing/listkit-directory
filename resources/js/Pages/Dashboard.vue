@@ -21,7 +21,12 @@ import { Head } from '@inertiajs/vue3';
                     class="overflow-hidden bg-white shadow-sm sm:rounded-lg"
                 >
                     <div class="p-6 text-gray-900">
-                        You're logged in!
+                        <p>You're logged in!</p>
+                        <p class="mt-2">
+                            <a href="/radiant-demo" class="text-blue-600 hover:text-blue-800">
+                                Visit Radiant Demo →
+                            </a>
+                        </p>
                     </div>
                 </div>
             </div>

@@ -27,12 +27,49 @@ Route::middleware(['web', 'auth'])->group(function () {
         return $request->user();
     });
 
+    // Tag validation
+    Route::post('/validate-tag', function (Request $request) {
+        $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+        
+        $isValid = \App\Services\ProfanityFilterService::validateTag($request->name);
+        
+        return response()->json([
+            'valid' => $isValid,
+            'message' => $isValid ? 'Tag is valid' : 'Tag contains inappropriate content'
+        ]);
+    });
+
     // Create a new directory entry (any logged‑in user)
     Route::post('/entries', [DirectoryEntryController::class, 'store']);
 
-    // Image upload routes
+    // Image upload routes (old entries)
     Route::post('/entries/upload-image', [DirectoryEntryController::class, 'uploadImage']);
     Route::delete('/entries/delete-image', [DirectoryEntryController::class, 'deleteImage']);
+
+    // New Cloudflare Images routes
+    Route::prefix('images')->group(function () {
+        Route::post('/generate-upload-url', [\App\Http\Controllers\ImageUploadController::class, 'generateUploadUrl']);
+        Route::post('/confirm-upload', [\App\Http\Controllers\ImageUploadController::class, 'confirmUpload']);
+        Route::get('/test-cloudflare-connection', [\App\Http\Controllers\ImageUploadController::class, 'testCloudflareConnection']);
+        Route::post('/upload', [\App\Http\Controllers\ImageUploadController::class, 'upload']);
+        Route::post('/upload-async', [\App\Http\Controllers\ImageUploadController::class, 'uploadAsync']);
+        Route::get('/status/{uploadId}', [\App\Http\Controllers\ImageUploadController::class, 'status']);
+        Route::get('/', [\App\Http\Controllers\ImageUploadController::class, 'index']);
+        Route::get('/{imageId}', [\App\Http\Controllers\ImageUploadController::class, 'show']);
+        Route::delete('/{imageId}', [\App\Http\Controllers\ImageUploadController::class, 'delete']);
+    });
+
+    // Cloudflare Images routes for web session auth
+    Route::prefix('cloudflare')->group(function () {
+        Route::post('/upload-url', [App\Http\Controllers\Api\CloudflareImageController::class, 'generateUploadUrl']);
+        Route::post('/confirm-upload', [App\Http\Controllers\Api\CloudflareImageController::class, 'confirmUpload']);
+        Route::post('/update-tracking', [App\Http\Controllers\Api\CloudflareImageController::class, 'updateTracking']);
+        Route::get('/image/{imageId}', [App\Http\Controllers\Api\CloudflareImageController::class, 'getImageInfo']);
+        Route::delete('/image/{imageId}', [App\Http\Controllers\Api\CloudflareImageController::class, 'deleteImage']);
+        Route::get('/stats', [App\Http\Controllers\Api\CloudflareImageController::class, 'getStats']);
+    });
 
     // Update an entry (admin, manager, editor, or business_owner)
     Route::middleware('role:admin,manager,editor,business_owner')->group(function () {
