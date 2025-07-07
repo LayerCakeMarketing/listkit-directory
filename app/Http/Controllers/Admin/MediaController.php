@@ -23,6 +23,29 @@ class MediaController extends Controller
     ) {}
 
     /**
+     * Get authentication headers based on the token type
+     */
+    private function getCloudflareAuthHeaders(): array
+    {
+        $apiToken = config('services.cloudflare.images_token');
+        $email = config('services.cloudflare.email', '');
+        
+        // Detect auth method: API tokens are longer (40+ chars) and contain underscores
+        $useBearer = strlen($apiToken) > 37 || str_contains($apiToken, '_');
+        
+        if ($useBearer) {
+            return [
+                'Authorization' => 'Bearer ' . $apiToken,
+            ];
+        } else {
+            return [
+                'X-Auth-Email' => $email,
+                'X-Auth-Key' => $apiToken,
+            ];
+        }
+    }
+
+    /**
      * Display the media management dashboard
      */
     public function index(Request $request): Response
@@ -422,10 +445,9 @@ class MediaController extends Controller
                 throw new Exception('Cloudflare credentials not configured properly. Check .env file.');
             }
 
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $email,
-                'X-Auth-Key' => $apiToken,
-            ])->timeout(30)->get("https://api.cloudflare.com/client/v4/accounts/{$accountId}/images/v1", [
+            $response = Http::withHeaders(
+                $this->getCloudflareAuthHeaders()
+            )->timeout(30)->get("https://api.cloudflare.com/client/v4/accounts/{$accountId}/images/v1", [
                 'page' => $page,
                 'per_page' => $perPage
             ]);
@@ -619,10 +641,9 @@ class MediaController extends Controller
             $apiToken = config('services.cloudflare.images_token');
             $email = config('services.cloudflare.email');
             
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $email,
-                'X-Auth-Key' => $apiToken,
-            ])->get("https://api.cloudflare.com/client/v4/accounts/{$accountId}/images/v1/{$imageId}");
+            $response = Http::withHeaders(
+                $this->getCloudflareAuthHeaders()
+            )->get("https://api.cloudflare.com/client/v4/accounts/{$accountId}/images/v1/{$imageId}");
 
             if (!$response->successful()) {
                 return response()->json([

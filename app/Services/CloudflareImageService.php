@@ -13,16 +13,49 @@ class CloudflareImageService
     private string $apiToken;
     private string $email;
     private string $baseUrl;
+    private bool $useBearer;
 
     public function __construct()
     {
         $this->accountId = config('services.cloudflare.account_id');
         $this->apiToken = config('services.cloudflare.images_token');
-        $this->email = config('services.cloudflare.email');
+        $this->email = config('services.cloudflare.email', '');
         $this->baseUrl = "https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1";
         
-        if (empty($this->accountId) || empty($this->apiToken) || empty($this->email)) {
+        // Detect auth method: API tokens are longer (40+ chars) and contain underscores
+        // Global API keys are 32-37 chars hex
+        $this->useBearer = strlen($this->apiToken) > 37 || str_contains($this->apiToken, '_');
+        
+        Log::info('Cloudflare auth method', [
+            'token_length' => strlen($this->apiToken),
+            'has_underscore' => str_contains($this->apiToken, '_'),
+            'use_bearer' => $this->useBearer,
+            'has_email' => !empty($this->email)
+        ]);
+        
+        if (empty($this->accountId) || empty($this->apiToken)) {
             throw new Exception('Cloudflare Images credentials not configured');
+        }
+        
+        if (!$this->useBearer && empty($this->email)) {
+            throw new Exception('Cloudflare email is required when using Global API Key');
+        }
+    }
+
+    /**
+     * Get authentication headers based on the token type
+     */
+    private function getAuthHeaders(): array
+    {
+        if ($this->useBearer) {
+            return [
+                'Authorization' => 'Bearer ' . $this->apiToken,
+            ];
+        } else {
+            return [
+                'X-Auth-Email' => $this->email,
+                'X-Auth-Key' => $this->apiToken,
+            ];
         }
     }
 
@@ -32,11 +65,10 @@ class CloudflareImageService
     public function generateSignedUploadUrl(array $metadata = []): array
     {
         try {
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-                'Content-Type' => 'application/json',
-            ])->post("{$this->baseUrl}/direct_upload", [
+            $response = Http::withHeaders(array_merge(
+                $this->getAuthHeaders(),
+                ['Content-Type' => 'application/json']
+            ))->post("{$this->baseUrl}/direct_upload", [
                 'expiry' => now()->addMinutes(30)->toISOString(), // 30 minute expiry
                 'metadata' => $metadata,
                 'requireSignedURLs' => false, // Make images publicly accessible
@@ -78,10 +110,9 @@ class CloudflareImageService
             $this->validateFile($file);
 
             // Prepare the request
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-            ])->attach(
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->attach(
                 'file', 
                 file_get_contents($file->getRealPath()), 
                 $file->getClientOriginalName()
@@ -120,10 +151,9 @@ class CloudflareImageService
     public function deleteImage(string $imageId): bool
     {
         try {
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-            ])->delete("{$this->baseUrl}/{$imageId}");
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->delete("{$this->baseUrl}/{$imageId}");
 
             return $response->successful();
         } catch (Exception $e) {
@@ -208,10 +238,9 @@ class CloudflareImageService
     public function getImageDetails(string $imageId): array
     {
         try {
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-            ])->get("{$this->baseUrl}/{$imageId}");
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->get("{$this->baseUrl}/{$imageId}");
 
             if (!$response->successful()) {
                 throw new Exception('Failed to get image details from Cloudflare');
@@ -232,10 +261,9 @@ class CloudflareImageService
     public function getStats(): array
     {
         try {
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-            ])->get("{$this->baseUrl}/stats");
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->get("{$this->baseUrl}/stats");
 
             if ($response->successful()) {
                 return $response->json()['result'];
@@ -254,10 +282,9 @@ class CloudflareImageService
     public function listVariants(): array
     {
         try {
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-            ])->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1/variants");
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->get("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1/variants");
 
             if (!$response->successful()) {
                 Log::error('Failed to list Cloudflare variants', [
@@ -281,11 +308,10 @@ class CloudflareImageService
     {
         try {
             // Note: Cloudflare uses PATCH to create/update variants
-            $response = Http::withHeaders([
-                'X-Auth-Email' => $this->email,
-                'X-Auth-Key' => $this->apiToken,
-                'Content-Type' => 'application/json',
-            ])->patch("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1/variants/{$id}", [
+            $response = Http::withHeaders(array_merge(
+                $this->getAuthHeaders(),
+                ['Content-Type' => 'application/json']
+            ))->patch("https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1/variants/{$id}", [
                 'id' => $id,
                 'options' => $options,
                 'neverRequireSignedURLs' => true

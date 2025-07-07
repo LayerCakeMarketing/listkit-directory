@@ -37,6 +37,12 @@ export const navigationConfig = {
             roles: ['admin', 'manager']
         },
         {
+            name: 'Media',
+            href: 'admin.media',
+            icon: 'photograph',
+            roles: ['admin', 'manager']
+        },
+        {
             name: 'Reports',
             href: 'admin.reports',
             icon: 'document-report',

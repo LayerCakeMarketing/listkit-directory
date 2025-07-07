@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\MediaController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\Admin\DirectoryEntryController;
@@ -576,6 +577,10 @@ Route::middleware(['auth', 'verified', 'role:admin,manager'])->prefix('admin')->
     
     Route::get('/media', [App\Http\Controllers\Admin\MediaController::class, 'index'])->name('media');
     
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::put('/settings/{key}', [SettingsController::class, 'updateSingle'])->name('settings.update.single');
+    
     Route::get('/lists', function () {
         return Inertia::render('Admin/Lists/Index');
     })->name('lists');
@@ -689,9 +694,6 @@ Route::middleware(['auth', 'verified', 'role:admin,manager'])->prefix('admin')->
         return Inertia::render('Admin/Reports/Index');
     })->name('reports');
     
-    Route::get('/settings', function () {
-        return Inertia::render('Admin/Settings/Index');
-    })->name('settings');
     
     Route::get('/bulk-import', function () {
         return Inertia::render('Admin/BulkImport');
