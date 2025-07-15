@@ -58,9 +58,21 @@ class Category extends Model
         return $this->hasMany(Category::class, 'parent_id')->orderBy('order_index');
     }
 
+    public function places()
+    {
+        return $this->hasMany(\App\Models\Place::class);
+    }
+    
+    // Backward compatibility
     public function directoryEntries()
     {
-        return $this->hasMany(DirectoryEntry::class);
+        return $this->places();
+    }
+    
+    // Curated lists relationship
+    public function lists()
+    {
+        return $this->hasMany(\App\Models\CuratedList::class);
     }
 
     // Scopes
@@ -133,18 +145,24 @@ class Category extends Model
         return $count;
     }
 
-    // Get all entries including from subcategories
-    public function getAllDirectoryEntries()
+    // Get all places including from subcategories
+    public function getAllPlaces()
     {
-        $entryIds = collect([$this->id]);
+        $categoryIds = collect([$this->id]);
         
         // Add all descendant category IDs
         $descendants = $this->descendants();
         foreach ($descendants as $descendant) {
-            $entryIds->push($descendant->id);
+            $categoryIds->push($descendant->id);
         }
         
-        return \App\Models\DirectoryEntry::whereIn('category_id', $entryIds);
+        return \App\Models\Place::whereIn('category_id', $categoryIds);
+    }
+    
+    // Backward compatibility
+    public function getAllDirectoryEntries()
+    {
+        return $this->getAllPlaces();
     }
 
     // Accessors

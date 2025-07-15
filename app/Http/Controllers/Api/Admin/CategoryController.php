@@ -12,9 +12,48 @@ class CategoryController extends Controller
     /**
      * Display a listing of categories
      */
-    public function index()
+    public function index(Request $request)
     {
-        $categories = Category::with('children')->orderBy('order_index')->get();
+        $query = Category::with('parent')->withCount('places');
+
+        // Search
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        // Filter by parent
+        if ($request->has('parent_id')) {
+            if ($request->parent_id === '0' || $request->parent_id === '') {
+                $query->whereNull('parent_id');
+            } else {
+                $query->where('parent_id', $request->parent_id);
+            }
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('is_active', $request->status === 'active');
+        }
+
+        // Sorting
+        $sortBy = $request->get('sort_by', 'name');
+        $sortOrder = $request->get('sort_order', 'asc');
+        
+        if ($sortBy === 'places_count') {
+            $query->orderBy('places_count', $sortOrder);
+        } elseif ($sortBy === 'display_order') {
+            $query->orderBy('order_index', $sortOrder);
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
+
+        // Return all if no pagination
+        if (!$request->has('page') && !$request->has('limit')) {
+            return response()->json($query->get());
+        }
+
+        // Paginate
+        $categories = $query->paginate($request->get('limit', 20));
         return response()->json($categories);
     }
 
@@ -34,6 +73,8 @@ class CategoryController extends Controller
             'quotes.*' => 'string',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id',
+            'is_active' => 'nullable|boolean',
+            'display_order' => 'nullable|integer',
         ]);
 
         $category = Category::create($validated);
@@ -71,6 +112,8 @@ class CategoryController extends Controller
             'quotes.*' => 'string',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id|not_in:' . $id,
+            'is_active' => 'nullable|boolean',
+            'display_order' => 'nullable|integer',
         ]);
 
         // Prevent circular parent relationships
@@ -105,10 +148,10 @@ class CategoryController extends Controller
             ], 422);
         }
 
-        // Check if category has directory entries
-        if ($category->directoryEntries()->exists()) {
+        // Check if category has places
+        if ($category->places()->exists()) {
             return response()->json([
-                'message' => 'Cannot delete category with directory entries'
+                'message' => 'Cannot delete category with places'
             ], 422);
         }
 
@@ -117,6 +160,27 @@ class CategoryController extends Controller
         return response()->json([
             'message' => 'Category deleted successfully'
         ]);
+    }
+
+    /**
+     * Get category statistics
+     */
+    public function stats()
+    {
+        $stats = [
+            'total' => Category::count(),
+            'active' => Category::where('is_active', true)->count(),
+            'inactive' => Category::where('is_active', false)->count(),
+            'with_places' => Category::has('places')->count(),
+            'root_categories' => Category::whereNull('parent_id')->count(),
+            'subcategories' => Category::whereNotNull('parent_id')->count(),
+            'with_svg_icons' => Category::whereNotNull('svg_icon')->where('svg_icon', '!=', '')->count(),
+            'with_cover_images' => Category::where(function($q) {
+                $q->whereNotNull('cover_image_cloudflare_id')->orWhereNotNull('cover_image_url');
+            })->count(),
+        ];
+
+        return response()->json($stats);
     }
 
     /**

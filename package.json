@@ -3,18 +3,17 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite"
+        "build": "vite build && rm -f public/hot",
+        "dev": "vite",
+        "postbuild": "rm -f public/hot"
     },
     "devDependencies": {
-        "@inertiajs/vue3": "^2.0.0",
         "@tailwindcss/forms": "^0.5.10",
         "@tailwindcss/vite": "^4.0.0",
         "@vitejs/plugin-vue": "^5.0.0",
         "autoprefixer": "^10.4.12",
         "axios": "^1.9.0",
         "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^1.2.0",
         "postcss": "^8.4.31",
         "tailwindcss": "^3.2.1",
         "vite": "^6.2.4",
@@ -29,7 +28,9 @@
         "@tiptap/vue-3": "^2.23.0",
         "leaflet": "^1.9.4",
         "pinia": "^3.0.2",
+        "vue-draggable-next": "^2.2.1",
         "vue-leaflet": "^0.1.0",
+        "vue-router": "^4.5.1",
         "vuedraggable": "^4.1.0"
     }
 }

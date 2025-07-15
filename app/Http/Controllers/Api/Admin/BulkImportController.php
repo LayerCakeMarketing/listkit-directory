@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
 use App\Models\Location;
 use App\Models\Category;
 use Illuminate\Http\Request;
@@ -262,7 +262,7 @@ class BulkImportController extends Controller
             'published_at' => now(),
         ];
 
-        $entry = DirectoryEntry::create($entryData);
+        $entry = Place::create($entryData);
 
         // Create location if address provided
         if (!empty($row['address_line1']) && in_array($entry->type, ['physical_location', 'event'])) {

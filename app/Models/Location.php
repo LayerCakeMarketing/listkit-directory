@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Place;
 
 class Location extends Model
 {
@@ -25,9 +26,15 @@ class Location extends Model
     ];
 
     // Relationships
+    public function place()
+    {
+        return $this->belongsTo(Place::class, 'directory_entry_id');
+    }
+    
+    // Backward compatibility
     public function directoryEntry()
     {
-        return $this->belongsTo(DirectoryEntry::class);
+        return $this->place();
     }
 
     // Scopes for geospatial queries

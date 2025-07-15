@@ -24,3 +24,9 @@ Homestead.yaml
 npm-debug.log
 Thumbs.db
 yarn-error.log
+
+# Frontend build files
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/.env.local

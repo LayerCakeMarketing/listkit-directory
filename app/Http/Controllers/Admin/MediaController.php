@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CloudflareImage;
 use App\Models\UserList;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
 use App\Models\User;
 use App\Services\CloudflareImageService;
 use Illuminate\Http\JsonResponse;
@@ -407,7 +407,7 @@ class MediaController extends Controller
                     ->pluck('entity_type')
                     ->sort()
                     ->values(),
-                'places' => CloudflareImage::where('entity_type', 'App\\Models\\DirectoryEntry')
+                'places' => CloudflareImage::where('entity_type', 'App\\Models\\Place')
                     ->with('entity')
                     ->get()
                     ->map(function ($image) {
@@ -864,12 +864,14 @@ class MediaController extends Controller
 
         // Handle different entity types
         switch (get_class($entity)) {
-            case 'App\\Models\\DirectoryEntry':
+            case 'App\\Models\\Place':
                 return $entity->title ?? 'Unnamed Entry';
             case 'App\\Models\\UserList':
                 return $entity->name ?? 'Unnamed List';
             case 'App\\Models\\User':
                 return $entity->name ?? 'User';
+            case 'App\\Models\\Region':
+                return $entity->name ?? 'Unnamed Region';
             default:
                 return class_basename($entity) . ' #' . $entity->id;
         }

@@ -12,7 +12,16 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        //
+        // Get all categories with their parent relationship
+        $allCategories = \App\Models\Category::with('parent')
+            ->orderBy('parent_id')
+            ->orderBy('order_index')
+            ->orderBy('name')
+            ->get();
+            
+        return response()->json([
+            'categories' => $allCategories
+        ]);
     }
 
     /**

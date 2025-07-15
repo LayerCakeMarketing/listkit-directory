@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
 use App\Models\UserList;
 use App\Models\Comment;
 use Illuminate\Http\Request;
@@ -17,8 +17,8 @@ class DashboardController extends Controller
         $stats = [
             'users' => User::count(),
             'new_users_this_week' => User::where('created_at', '>=', now()->subWeek())->count(),
-            'entries' => DirectoryEntry::count(),
-            'pending_entries' => DirectoryEntry::where('status', 'pending_review')->count(),
+            'entries' => Place::count(),
+            'pending_entries' => Place::where('status', 'pending_review')->count(),
             'lists' => UserList::count(),
             'public_lists' => UserList::searchable()->count(),
             'comments' => Comment::count(),

@@ -1,0 +1,38 @@
+-- Import locations data
+INSERT INTO locations (id, directory_entry_id, address_line1, address_line2, city, state, zip_code, country, latitude, longitude, hours_of_operation, holiday_hours, is_wheelchair_accessible, has_parking, amenities, place_id, created_at, updated_at) VALUES
+(2, 2, '456 Technology Blvd', NULL, 'San Francisco', 'CA', '94105', 'USA', 37.7749000, -122.4194000, '{"monday":"10:00-20:00","tuesday":"10:00-20:00","wednesday":"10:00-20:00","thursday":"10:00-20:00","friday":"10:00-21:00","saturday":"10:00-21:00","sunday":"11:00-18:00"}', NULL, true, true, '["parking","delivery","takeout"]', NULL, '2025-06-01 20:18:34', '2025-06-01 20:18:34'),
+(3, 3, '789 Wellness Way', NULL, 'Miami', 'FL', '33101', 'USA', 25.7617000, -80.1918000, '{"monday":"09:00-19:00","tuesday":"09:00-19:00","wednesday":"09:00-19:00","thursday":"09:00-19:00","friday":"09:00-20:00","saturday":"09:00-20:00","sunday":"10:00-17:00"}', NULL, true, true, '["wifi","parking","reservations"]', NULL, '2025-06-01 20:18:34', '2025-06-01 20:18:34'),
+(43, 98, '400 Trono Ln', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 37.6357900, -118.9628900, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:21:25'),
+(15, 70, '1002 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(16, 71, '1039 Forest Trail', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(17, 72, '114 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(18, 73, '678 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(19, 74, '2763 Main St', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(20, 75, '18 Lakeview Blvd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(21, 76, '120 Canyon Blvd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(23, 78, '3150 Main St', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(22, 77, '1111 Forest Trail Road #201', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 37.6514400, -118.9857300, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-07-04 23:16:57'),
+(14, 69, '1528 Tavern Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 37.6454400, -118.9668700, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-07-05 21:40:03'),
+(24, 79, '331 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(25, 80, '150 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(26, 81, '10001 Minaret Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(27, 82, '150 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(28, 83, '339 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(29, 84, '331 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(30, 85, '1021 Forest Trail', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(31, 86, '2001 Meridian Blvd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(32, 87, '451 Old Mammoth Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(33, 88, '3151 Main St', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(34, 89, '10001 Minaret Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(35, 90, '2510 Main St', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(36, 91, '100 College Pkwy', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(37, 92, '10601 Minaret Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(38, 93, 'Sierra Star Dr', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(39, 94, '100 College Pkwy', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(41, 96, '10001 Minaret Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(42, 97, '10001 Minaret Rd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 0.0000000, 0.0000000, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-29 03:06:50'),
+(40, 95, '18 Lakeview Blvd', NULL, 'Mammoth Lakes', 'CA', '93546', 'US', 37.6490700, -118.8936900, NULL, NULL, false, false, NULL, NULL, '2025-06-29 03:06:50', '2025-06-30 06:13:54'),
+(44, 99, '361 Old Mammoth Road', NULL, 'Mammoth Lakes', 'CA', '93546', 'USA', 37.6534500, -118.9693300, NULL, NULL, false, false, NULL, NULL, '2025-07-05 19:03:22', '2025-07-05 19:03:22');
+
+-- Update sequence
+SELECT setval('locations_id_seq', (SELECT MAX(id) FROM locations));

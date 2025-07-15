@@ -40,6 +40,13 @@ class HandleInertiaRequests extends Middleware
                 'warning' => $request->session()->get('warning'),
                 'info' => $request->session()->get('info'),
             ],
+            'site' => [
+                'name' => site_setting('site_name', 'Listerino'),
+                'tagline' => site_setting('site_tagline', 'Your Local Directory'),
+                'logo_url' => site_setting('logo_url', '/images/listerino_logo.svg'),
+                'primary_color' => site_setting('primary_color', '#3B82F6'),
+                'allow_registration' => site_setting('allow_registration', true),
+            ],
         ];
     }
 }

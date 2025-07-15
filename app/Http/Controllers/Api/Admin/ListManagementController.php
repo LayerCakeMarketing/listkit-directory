@@ -11,7 +11,7 @@ class ListManagementController extends Controller
 {
     public function index(Request $request)
     {
-        $query = UserList::with(['user', 'items']);
+        $query = UserList::with(['user', 'items', 'category']);
 
         // Search functionality
         if ($request->filled('search')) {
@@ -25,6 +25,16 @@ class ListManagementController extends Controller
                   });
             });
         }
+        
+        // Search by user
+        if ($request->filled('user_search')) {
+            $userSearch = $request->user_search;
+            $query->whereHas('user', function ($userQuery) use ($userSearch) {
+                $userQuery->where('name', 'like', "%{$userSearch}%")
+                          ->orWhere('email', 'like', "%{$userSearch}%")
+                          ->orWhere('username', 'like', "%{$userSearch}%");
+            });
+        }
 
         // Filter by visibility
         if ($request->filled('visibility')) {
@@ -34,6 +44,20 @@ class ListManagementController extends Controller
         // Filter by user
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            if ($request->status === 'active') {
+                $query->active();
+            } else {
+                $query->where('status', $request->status);
+            }
+        }
+        
+        // Filter by category
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
         }
 
         // Sorting
@@ -58,19 +82,34 @@ class ListManagementController extends Controller
                 'slug' => $list->slug,
                 'description' => $list->description,
                 'visibility' => $list->visibility,
+                'status' => $list->status ?: 'active',
+                'status_reason' => $list->status_reason,
+                'status_changed_at' => $list->status_changed_at,
                 'view_count' => $list->view_count,
                 'items_count' => $list->items->count(),
                 'is_featured' => $list->is_featured,
                 'created_at' => $list->created_at,
                 'updated_at' => $list->updated_at,
-                'user' => [
+                'featured_image_url' => $list->featured_image_url,
+                'image_url' => $list->featured_image_url,
+                'is_public' => $list->visibility === 'public',
+                'has_content' => !empty($list->description),
+                'views' => $list->view_count,
+                'likes' => 0,
+                'category' => $list->category ? [
+                    'id' => $list->category->id,
+                    'name' => $list->category->name,
+                ] : null,
+                'user' => $list->user ? [
                     'id' => $list->user->id,
                     'name' => $list->user->name,
                     'username' => $list->user->username,
                     'custom_url' => $list->user->custom_url,
+                    'email' => $list->user->email,
+                    'avatar' => $list->user->avatar_url,
                     'profile_url' => '/' . ($list->user->custom_url ?? $list->user->username),
-                ],
-                'list_url' => '/' . ($list->user->custom_url ?? $list->user->username) . '/' . $list->slug,
+                ] : null,
+                'list_url' => $list->user ? ('/' . ($list->user->custom_url ?? $list->user->username) . '/' . $list->slug) : null,
             ];
         });
 
@@ -80,12 +119,13 @@ class ListManagementController extends Controller
     public function stats()
     {
         return response()->json([
-            'total_lists' => UserList::count(),
-            'public_lists' => UserList::where('visibility', 'public')->count(),
-            'private_lists' => UserList::where('visibility', 'private')->count(),
-            'unlisted_lists' => UserList::where('visibility', 'unlisted')->count(),
-            'featured_lists' => UserList::where('is_featured', true)->count(),
-            'total_views' => UserList::sum('view_count'),
+            'total' => UserList::count(),
+            'public' => UserList::where('visibility', 'public')->count(),
+            'private' => UserList::where('visibility', 'private')->count(),
+            'featured' => UserList::where('is_featured', true)->count(),
+            'avg_items' => round(UserList::withCount('items')->get()->avg('items_count'), 1),
+            'total_items' => \App\Models\ListItem::count(),
+            'on_hold' => UserList::whereNotNull('status')->where('status', 'on_hold')->count(),
         ]);
     }
 
@@ -99,6 +139,9 @@ class ListManagementController extends Controller
             'slug' => $list->slug,
             'description' => $list->description,
             'visibility' => $list->visibility,
+            'status' => $list->status ?: 'active',
+            'status_reason' => $list->status_reason,
+            'status_changed_at' => $list->status_changed_at,
             'view_count' => $list->view_count,
             'is_featured' => $list->is_featured,
             'created_at' => $list->created_at,
@@ -166,9 +209,11 @@ class ListManagementController extends Controller
         $validated = $request->validate([
             'list_ids' => 'required|array',
             'list_ids.*' => 'exists:lists,id',
-            'action' => 'required|string|in:delete,update_visibility,toggle_featured',
+            'action' => 'required|string|in:delete,update_visibility,toggle_featured,update_status',
             'visibility' => 'required_if:action,update_visibility|in:public,private,unlisted',
             'is_featured' => 'required_if:action,toggle_featured|boolean',
+            'status' => 'required_if:action,update_status|in:active,on_hold,draft',
+            'reason' => 'required_if:status,on_hold|nullable|string',
         ]);
 
         $lists = UserList::whereIn('id', $validated['list_ids'])->get();
@@ -194,10 +239,56 @@ class ListManagementController extends Controller
                 $message = 'Featured status updated successfully';
                 break;
 
+            case 'update_status':
+                $updateData = [
+                    'status' => $validated['status'],
+                    'status_changed_at' => now(),
+                    'status_changed_by' => auth()->id()
+                ];
+                
+                if ($validated['status'] === 'on_hold') {
+                    $updateData['status_reason'] = $validated['reason'] ?? 'TOS violation';
+                } else {
+                    $updateData['status_reason'] = null;
+                }
+                
+                UserList::whereIn('id', $validated['list_ids'])->update($updateData);
+                $message = 'Status updated successfully';
+                break;
+
             default:
                 return response()->json(['error' => 'Invalid action'], 400);
         }
 
         return response()->json(['message' => $message]);
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $list = UserList::findOrFail($id);
+        
+        $validated = $request->validate([
+            'status' => 'required|in:active,on_hold,draft',
+            'reason' => 'required_if:status,on_hold|nullable|string|max:500',
+        ]);
+        
+        $updateData = [
+            'status' => $validated['status'],
+            'status_changed_at' => now(),
+            'status_changed_by' => auth()->id()
+        ];
+        
+        if ($validated['status'] === 'on_hold') {
+            $updateData['status_reason'] = $validated['reason'];
+        } else {
+            $updateData['status_reason'] = null;
+        }
+        
+        $list->update($updateData);
+        
+        return response()->json([
+            'message' => 'List status updated successfully',
+            'list' => $list
+        ]);
     }
 }

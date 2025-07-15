@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Models\Place;
 
 class UserList extends Model
 {
@@ -27,7 +28,17 @@ class UserList extends Model
         'scheduled_for',
         'view_count',
         'is_featured',
-        'settings'
+        'settings',
+        'status',
+        'status_reason',
+        'status_changed_at',
+        'status_changed_by',
+        'type',
+        'region_id',
+        'place_ids',
+        'is_region_specific',
+        'is_category_specific',
+        'order_index'
     ];
 
     protected $casts = [
@@ -38,6 +49,11 @@ class UserList extends Model
         'is_featured' => 'boolean',
         'settings' => 'array',
         'gallery_images' => 'array',
+        'status_changed_at' => 'datetime',
+        'place_ids' => 'array',
+        'is_region_specific' => 'boolean',
+        'is_category_specific' => 'boolean',
+        'order_index' => 'integer',
     ];
     
     protected $appends = ['featured_image_url', 'gallery_images_with_urls'];
@@ -72,12 +88,18 @@ class UserList extends Model
         return $this->hasMany(ListItem::class, 'list_id')->orderBy('order_index');
     }
 
-    public function directoryEntries()
+    public function places()
     {
-        return $this->belongsToMany(DirectoryEntry::class, 'list_items')
+        return $this->belongsToMany(Place::class, 'list_items', 'list_id', 'directory_entry_id')
                     ->withPivot('order_index', 'affiliate_url', 'notes')
                     ->orderBy('pivot_order_index')
                     ->withTimestamps();
+    }
+    
+    // Backward compatibility
+    public function directoryEntries()
+    {
+        return $this->places();
     }
 
     public function comments()
@@ -88,6 +110,11 @@ class UserList extends Model
     public function category()
     {
         return $this->belongsTo(ListCategory::class, 'category_id');
+    }
+    
+    public function region()
+    {
+        return $this->belongsTo(Region::class);
     }
 
     public function tags()
@@ -105,6 +132,11 @@ class UserList extends Model
         return $this->belongsToMany(User::class, 'user_list_shares', 'list_id', 'user_id')
                     ->withPivot('permission', 'expires_at', 'shared_by')
                     ->withTimestamps();
+    }
+
+    public function statusChangedBy()
+    {
+        return $this->belongsTo(User::class, 'status_changed_by');
     }
 
     // public function media()
@@ -137,6 +169,44 @@ class UserList extends Model
     {
         return $query->where('visibility', 'public')
                      ->published();
+        // Note: Removed ->active() call since status column doesn't exist yet
+    }
+
+    // Status scopes (gracefully handle missing status column)
+    public function scopeActive($query)
+    {
+        // Check if status column exists before using it
+        if (\Schema::hasColumn('lists', 'status')) {
+            return $query->where(function($q) {
+                $q->whereNull('status')
+                  ->orWhere('status', 'active');
+            });
+        }
+        // If status column doesn't exist, consider all records as active
+        return $query;
+    }
+
+    public function scopeOnHold($query)
+    {
+        // Check if status column exists before using it
+        if (\Schema::hasColumn('lists', 'status')) {
+            return $query->where('status', 'on_hold');
+        }
+        // If status column doesn't exist, return empty result
+        return $query->where('id', '<', 0); // Ensures no results
+    }
+
+    public function scopeNotOnHold($query)
+    {
+        // Check if status column exists before using it
+        if (\Schema::hasColumn('lists', 'status')) {
+            return $query->where(function($q) {
+                $q->whereNull('status')
+                  ->orWhere('status', '!=', 'on_hold');
+            });
+        }
+        // If status column doesn't exist, consider all records as not on hold
+        return $query;
     }
 
     // Publishing scopes
@@ -241,6 +311,12 @@ class UserList extends Model
     public function canView($user = null)
     {
         $user = $user ?? auth()->user();
+        
+        // Lists on hold cannot be viewed except by owner and admins
+        if ($this->isOnHold()) {
+            if (!$user) return false;
+            return $this->isOwnedBy($user) || in_array($user->role, ['admin', 'manager']);
+        }
         
         // Public lists can be viewed by anyone (if published)
         if ($this->isPublic() && $this->isPublished()) {
@@ -370,5 +446,81 @@ class UserList extends Model
             }
             return $image;
         })->toArray();
+    }
+
+    // URL generation
+    public function getPublicUrl()
+    {
+        return '/u/' . $this->user->getUrlSlug() . '/' . $this->slug;
+    }
+
+    public function getUrlAttribute()
+    {
+        return $this->getPublicUrl();
+    }
+
+    // Status helpers
+    public function isActive()
+    {
+        // Check if status column exists and has a value
+        if (\Schema::hasColumn('lists', 'status') && isset($this->status)) {
+            return !$this->status || $this->status === 'active';
+        }
+        // If no status column, consider all records as active
+        return true;
+    }
+
+    public function isOnHold()
+    {
+        // Check if status column exists and has a value
+        if (\Schema::hasColumn('lists', 'status') && isset($this->status)) {
+            return $this->status === 'on_hold';
+        }
+        // If no status column, consider no records as on hold
+        return false;
+    }
+
+    public function putOnHold($reason, $adminId = null)
+    {
+        // Only update status if the column exists
+        $updateData = [];
+        if (\Schema::hasColumn('lists', 'status')) {
+            $updateData['status'] = 'on_hold';
+        }
+        if (\Schema::hasColumn('lists', 'status_reason')) {
+            $updateData['status_reason'] = $reason;
+        }
+        if (\Schema::hasColumn('lists', 'status_changed_at')) {
+            $updateData['status_changed_at'] = now();
+        }
+        if (\Schema::hasColumn('lists', 'status_changed_by')) {
+            $updateData['status_changed_by'] = $adminId ?? auth()->id();
+        }
+        
+        if (!empty($updateData)) {
+            $this->update($updateData);
+        }
+    }
+
+    public function reactivate($adminId = null)
+    {
+        // Only update status if the column exists
+        $updateData = [];
+        if (\Schema::hasColumn('lists', 'status')) {
+            $updateData['status'] = 'active';
+        }
+        if (\Schema::hasColumn('lists', 'status_reason')) {
+            $updateData['status_reason'] = null;
+        }
+        if (\Schema::hasColumn('lists', 'status_changed_at')) {
+            $updateData['status_changed_at'] = now();
+        }
+        if (\Schema::hasColumn('lists', 'status_changed_by')) {
+            $updateData['status_changed_by'] = $adminId ?? auth()->id();
+        }
+        
+        if (!empty($updateData)) {
+            $this->update($updateData);
+        }
     }
 }

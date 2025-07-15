@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Gate;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,7 +12,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Register SiteSettingsService as singleton
+        $this->app->singleton(\App\Services\SiteSettingsService::class, function ($app) {
+            return new \App\Services\SiteSettingsService();
+        });
     }
 
     /**
@@ -19,6 +23,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Register Region policy
+        Gate::policy(\App\Models\Region::class, \App\Policies\RegionPolicy::class);
+        
+        // Register custom gates
+        Gate::define('manage-regions', function ($user) {
+            return in_array($user->role, ['admin', 'manager']);
+        });
     }
 }

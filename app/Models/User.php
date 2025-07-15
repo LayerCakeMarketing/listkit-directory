@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Place;
 
 class User extends Authenticatable
 {
@@ -18,7 +19,8 @@ class User extends Authenticatable
         'location', 'website', 'birth_date', 'profile_settings',
         'show_activity', 'show_followers', 'show_following', 'page_title',
         'profile_color', 'custom_css', 'show_join_date', 'show_location', 'show_website',
-        'avatar_cloudflare_id', 'cover_cloudflare_id', 'page_logo_cloudflare_id', 'page_logo_option'
+        'avatar_cloudflare_id', 'cover_cloudflare_id', 'page_logo_cloudflare_id', 'page_logo_option',
+        'avatar_updated_at', 'cover_updated_at'
     ];
 
     protected $hidden = [
@@ -39,7 +41,11 @@ class User extends Authenticatable
         'show_following' => 'boolean',
         'birth_date' => 'date',
         'last_active_at' => 'datetime',
+        'avatar_updated_at' => 'datetime',
+        'cover_updated_at' => 'datetime',
     ];
+    
+    protected $appends = ['avatar_url'];
 
 
     // Role-based permissions
@@ -77,16 +83,48 @@ class User extends Authenticatable
     {
         return in_array($this->role, ['admin', 'manager', 'business_owner', 'user']);
     }
-
-    // Relationships
-    public function createdEntries()
+    
+    // Accessors
+    public function getAvatarUrlAttribute()
     {
-        return $this->hasMany(DirectoryEntry::class, 'created_by_user_id');
+        if ($this->avatar_cloudflare_id) {
+            $deliveryUrl = config('services.cloudflare.delivery_url', 'https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A');
+            return rtrim($deliveryUrl, '/') . '/' . $this->avatar_cloudflare_id . '/public';
+        }
+        return $this->avatar;
     }
 
+    // Relationships
+    public function posts()
+    {
+        return $this->hasMany(Post::class);
+    }
+
+    public function tackedPost()
+    {
+        return $this->hasOne(Post::class)->where('is_tacked', true);
+    }
+
+    public function createdPlaces()
+    {
+        return $this->hasMany(Place::class, 'created_by_user_id');
+    }
+    
+    // Backward compatibility
+    public function createdEntries()
+    {
+        return $this->createdPlaces();
+    }
+
+    public function ownedPlaces()
+    {
+        return $this->hasMany(Place::class, 'owner_user_id');
+    }
+    
+    // Backward compatibility
     public function ownedEntries()
     {
-        return $this->hasMany(DirectoryEntry::class, 'owner_user_id');
+        return $this->ownedPlaces();
     }
 
     public function lists()
@@ -117,10 +155,16 @@ class User extends Authenticatable
                     ->withTimestamps();
     }
 
+    public function followedPlaces()
+    {
+        return $this->belongsToMany(Place::class, 'directory_entry_follows')
+                    ->withTimestamps();
+    }
+    
+    // Backward compatibility
     public function followedEntries()
     {
-        return $this->belongsToMany(DirectoryEntry::class, 'directory_entry_follows')
-                    ->withTimestamps();
+        return $this->followedPlaces();
     }
 
     public function pinnedLists()
@@ -144,7 +188,7 @@ class User extends Authenticatable
     // Helper methods
     public function getProfileUrlAttribute()
     {
-        return route('user.profile', ['username' => $this->username]);
+        return '/@' . $this->getUrlSlug();
     }
 
     public function getUrlSlug()
@@ -154,14 +198,12 @@ class User extends Authenticatable
 
     public function getPublicListsUrl()
     {
-        $slug = $this->getUrlSlug();
-        return $slug ? "/{$slug}/lists" : "/user/{$this->id}/lists";
+        return '/@' . $this->getUrlSlug() . '/lists';
     }
 
     public function getListUrl($listSlug)
     {
-        $userSlug = $this->getUrlSlug();
-        return $userSlug ? "/{$userSlug}/{$listSlug}" : "/user/{$this->id}/{$listSlug}";
+        return '/@' . $this->getUrlSlug() . '/' . $listSlug;
     }
 
     public static function findByUrlSlug($slug)
@@ -224,24 +266,42 @@ class User extends Authenticatable
         return false;
     }
 
-    public function followEntry(DirectoryEntry $entry)
+    public function followPlace(Place $place)
     {
-        if (!$this->followedEntries()->where('directory_entry_id', $entry->id)->exists()) {
-            $this->followedEntries()->attach($entry->id);
-            $this->recordActivity('followed_entry', $entry);
+        if (!$this->followedPlaces()->where('directory_entry_id', $place->id)->exists()) {
+            $this->followedPlaces()->attach($place->id);
+            $this->recordActivity('followed_place', $place);
             return true;
         }
         return false;
     }
-
-    public function unfollowEntry(DirectoryEntry $entry)
+    
+    // Backward compatibility
+    public function followEntry($entry)
     {
-        return $this->followedEntries()->detach($entry->id) > 0;
+        return $this->followPlace($entry);
     }
 
-    public function isFollowingEntry(DirectoryEntry $entry)
+    public function unfollowPlace(Place $place)
     {
-        return $this->followedEntries()->where('directory_entry_id', $entry->id)->exists();
+        return $this->followedPlaces()->detach($place->id) > 0;
+    }
+    
+    // Backward compatibility
+    public function unfollowEntry($entry)
+    {
+        return $this->unfollowPlace($entry);
+    }
+
+    public function isFollowingPlace(Place $place)
+    {
+        return $this->followedPlaces()->where('directory_entry_id', $place->id)->exists();
+    }
+    
+    // Backward compatibility
+    public function isFollowingEntry($entry)
+    {
+        return $this->isFollowingPlace($entry);
     }
 
     public function pinList(UserList $list, $sortOrder = null)
@@ -299,7 +359,7 @@ class User extends Authenticatable
             'lists_count' => $this->lists()->searchable()->count(),
             'followers_count' => $this->followers()->count(),
             'following_count' => $this->following()->count(),
-            'entries_count' => $this->createdEntries()->where('status', 'published')->count(),
+            'entries_count' => $this->createdPlaces()->where('status', 'published')->count(),
             'profile_views' => $this->profile_views,
         ];
     }
@@ -315,9 +375,8 @@ class User extends Authenticatable
     {
         // If user has Cloudflare avatar, use it
         if ($this->avatar_cloudflare_id) {
-            $imageService = app(\App\Services\CloudflareImageService::class);
-            // Use 'public' variant which always works
-            return $imageService->getImageUrl($this->avatar_cloudflare_id, ['variant' => 'public']);
+            $deliveryUrl = config('services.cloudflare.delivery_url', 'https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A');
+            return rtrim($deliveryUrl, '/') . '/' . $this->avatar_cloudflare_id . '/public';
         }
         
         // If user has uploaded avatar locally, use it
@@ -393,11 +452,6 @@ class User extends Authenticatable
     }
 
     // Attribute accessors for API responses
-    public function getAvatarUrlAttribute()
-    {
-        return $this->getAvatarUrl();
-    }
-
     public function getCoverImageUrlAttribute()
     {
         return $this->getCoverImageUrl();

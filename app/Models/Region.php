@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use App\Models\Place;
 
 class Region extends Model
 {
@@ -11,9 +14,85 @@ class Region extends Model
 
     protected $fillable = [
         'name',
+        'full_name',
+        'slug',
+        'abbreviation',
         'type',
+        'level',
         'parent_id',
+        'metadata',
+        'cached_place_count',
+        'boundaries',
+        'boundaries_simplified',
+        'centroid',
+        'cover_image',
+        'cloudflare_image_id',
+        'intro_text',
+        'data_points',
+        'is_featured',
+        'meta_title',
+        'meta_description',
+        'custom_fields',
+        'display_priority',
+        'facts',
+        'state_symbols',
+        'geojson',
+        'polygon_coordinates',
+        'alternate_names',
+        'is_user_defined',
+        'created_by_user_id',
+        'boundary',
+        'center_point',
+        'area_sq_km',
+        'cache_updated_at'
     ];
+    
+    /**
+     * Get the cloudflare_image_id attribute, handling missing column
+     */
+    public function getCloudflareImageIdAttribute($value)
+    {
+        // If the column doesn't exist in this database, return null
+        if (!array_key_exists('cloudflare_image_id', $this->attributes)) {
+            return null;
+        }
+        return $value;
+    }
+
+    protected $casts = [
+        'metadata' => 'array',
+        'level' => 'integer',
+        'cached_place_count' => 'integer',
+        'data_points' => 'array',
+        'is_featured' => 'boolean',
+        'custom_fields' => 'array',
+        'display_priority' => 'integer',
+        'facts' => 'array',
+        'state_symbols' => 'array',
+        'geojson' => 'array'
+    ];
+
+    protected $appends = ['cover_image_url'];
+
+    // Boot method for model events
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::creating(function ($region) {
+            if (empty($region->slug)) {
+                $region->slug = Str::slug($region->name);
+                
+                // Handle duplicate slugs
+                $count = static::where('slug', 'like', $region->slug . '%')
+                    ->where('level', $region->level)
+                    ->count();
+                if ($count > 0) {
+                    $region->slug = $region->slug . '-' . ($count + 1);
+                }
+            }
+        });
+    }
 
     // Relationships
     public function parent()
@@ -21,14 +100,86 @@ class Region extends Model
         return $this->belongsTo(Region::class, 'parent_id');
     }
 
+    public function coverImage()
+    {
+        return $this->morphMany(CloudflareImage::class, 'entity');
+    }
+
     public function children()
     {
         return $this->hasMany(Region::class, 'parent_id');
     }
 
+    public function places()
+    {
+        return $this->hasMany(Place::class);
+    }
+
+    // Alias for backward compatibility
     public function directoryEntries()
     {
-        return $this->hasMany(DirectoryEntry::class);
+        return $this->places();
+    }
+    
+    // Alias for directoryEntries to match controller expectations
+    public function entries()
+    {
+        return $this->places();
+    }
+
+    // New relationships for hierarchical regions
+    public function stateEntries()
+    {
+        return $this->hasMany(Place::class, 'state_region_id');
+    }
+
+    public function cityEntries()
+    {
+        return $this->hasMany(Place::class, 'city_region_id');
+    }
+
+    public function neighborhoodEntries()
+    {
+        return $this->hasMany(Place::class, 'neighborhood_region_id');
+    }
+
+    // Curated lists relationship
+    public function lists()
+    {
+        return $this->hasMany(CuratedList::class);
+    }
+
+    // Featured entries relationship
+    public function featuredEntries()
+    {
+        return $this->belongsToMany(Place::class, 'region_featured_entries', 'region_id', 'directory_entry_id')
+            ->withPivot('priority', 'label', 'tagline', 'custom_data', 'featured_until', 'is_active')
+            ->withTimestamps()
+            ->wherePivot('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('region_featured_entries.featured_until')
+                    ->orWhere('region_featured_entries.featured_until', '>=', now());
+            })
+            ->orderByPivot('priority', 'asc');
+    }
+
+    // Featured lists relationship
+    public function featuredLists()
+    {
+        return $this->belongsToMany(\App\Models\UserList::class, 'region_featured_lists', 'region_id', 'list_id')
+            ->withPivot('priority', 'is_active')
+            ->withTimestamps()
+            ->wherePivot('is_active', true)
+            ->orderByPivot('priority', 'asc');
+    }
+
+    // All featured entries (including inactive)
+    public function allFeaturedEntries()
+    {
+        return $this->belongsToMany(Place::class, 'region_featured_entries', 'region_id', 'directory_entry_id')
+            ->withPivot('priority', 'label', 'tagline', 'custom_data', 'featured_until', 'is_active')
+            ->withTimestamps()
+            ->orderByPivot('priority', 'asc');
     }
 
     // Scopes
@@ -65,10 +216,22 @@ class Region extends Model
 
     public function getFullNameAttribute()
     {
+        // If full_name is set in the database, use it
+        if (!empty($this->attributes['full_name'])) {
+            return $this->attributes['full_name'];
+        }
+        
+        // Otherwise fall back to concatenating with parent
         if ($this->parent) {
             return $this->name . ', ' . $this->parent->name;
         }
         return $this->name;
+    }
+
+    // Get display name (prioritizes full_name over name)
+    public function getDisplayNameAttribute()
+    {
+        return $this->full_name ?: $this->name;
     }
 
     // Get hierarchical path
@@ -96,5 +259,362 @@ class Region extends Model
         }
         
         return $descendants;
+    }
+
+    // Spatial Query Methods
+    public function scopeContainingPoint($query, $latitude, $longitude)
+    {
+        if (config('database.default') !== 'pgsql') {
+            return $query;
+        }
+
+        return $query->whereRaw(
+            'ST_Contains(boundaries, ST_SetSRID(ST_MakePoint(?, ?), 4326))',
+            [$longitude, $latitude]
+        );
+    }
+
+    public function scopeIntersectingBounds($query, $bounds)
+    {
+        if (config('database.default') !== 'pgsql') {
+            return $query;
+        }
+
+        // $bounds should be [minLng, minLat, maxLng, maxLat]
+        return $query->whereRaw(
+            'ST_Intersects(boundaries, ST_MakeEnvelope(?, ?, ?, ?, 4326))',
+            $bounds
+        );
+    }
+
+    public function scopeWithinDistance($query, $latitude, $longitude, $distanceInMeters)
+    {
+        if (config('database.default') !== 'pgsql') {
+            return $query;
+        }
+
+        return $query->whereRaw(
+            'ST_DWithin(centroid, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+            [$longitude, $latitude, $distanceInMeters]
+        );
+    }
+
+    // Helper methods for spatial operations
+    public function containsLocation($latitude, $longitude)
+    {
+        if (config('database.default') !== 'pgsql' || !$this->boundaries) {
+            return false;
+        }
+
+        $result = DB::selectOne(
+            'SELECT ST_Contains(boundaries, ST_SetSRID(ST_MakePoint(?, ?), 4326)) as contains FROM regions WHERE id = ?',
+            [$longitude, $latitude, $this->id]
+        );
+
+        return $result->contains;
+    }
+
+    public function getBoundsArray()
+    {
+        if (config('database.default') !== 'pgsql' || !$this->boundaries) {
+            return null;
+        }
+
+        $result = DB::selectOne(
+            'SELECT ST_Extent(boundaries)::text as bounds FROM regions WHERE id = ?',
+            [$this->id]
+        );
+
+        if (!$result->bounds) {
+            return null;
+        }
+
+        // Parse BOX(minx miny, maxx maxy)
+        preg_match('/BOX\(([\d\.\-]+) ([\d\.\-]+),([\d\.\-]+) ([\d\.\-]+)\)/', $result->bounds, $matches);
+        
+        return [
+            'min_lng' => floatval($matches[1]),
+            'min_lat' => floatval($matches[2]),
+            'max_lng' => floatval($matches[3]),
+            'max_lat' => floatval($matches[4])
+        ];
+    }
+
+    public function getGeoJson($simplified = false)
+    {
+        if (config('database.default') !== 'pgsql') {
+            return null;
+        }
+
+        $column = $simplified ? 'boundaries_simplified' : 'boundaries';
+        
+        $result = DB::selectOne(
+            "SELECT ST_AsGeoJSON({$column}) as geojson FROM regions WHERE id = ?",
+            [$this->id]
+        );
+
+        return $result->geojson ? json_decode($result->geojson) : null;
+    }
+
+    // Update cached place count
+    public function updatePlaceCount()
+    {
+        $count = $this->places()
+            ->where('status', 'published')
+            ->count();
+
+        // Also count places that have this region at any level
+        if ($this->level == 1) { // State
+            $count = Place::where('state_region_id', $this->id)
+                ->where('status', 'published')
+                ->count();
+        } elseif ($this->level == 2) { // City
+            $count = Place::where('city_region_id', $this->id)
+                ->where('status', 'published')
+                ->count();
+        } elseif ($this->level == 3) { // Neighborhood
+            $count = Place::where('neighborhood_region_id', $this->id)
+                ->where('status', 'published')
+                ->count();
+        }
+
+        $this->update(['cached_place_count' => $count]);
+    }
+
+    // Get URL path for this region
+    public function getUrlPath()
+    {
+        $path = collect([$this->slug]);
+        $parent = $this->parent;
+        
+        while ($parent && $parent->level > 0) {
+            $path->prepend($parent->slug);
+            $parent = $parent->parent;
+        }
+        
+        return $path->implode('/');
+    }
+
+    // Scope for efficient hierarchy loading
+    public function scopeWithHierarchy($query)
+    {
+        return $query->with(['parent.parent.parent']);
+    }
+
+    // Level-specific scopes
+    public function scopeNeighborhoods($query)
+    {
+        return $query->where('level', 3);
+    }
+
+    public function scopeByLevel($query, $level)
+    {
+        return $query->where('level', $level);
+    }
+
+    // Featured regions scope
+    public function scopeFeatured($query)
+    {
+        return $query->where('is_featured', true)
+            ->orderBy('display_priority', 'desc')
+            ->orderBy('cached_place_count', 'desc');
+    }
+
+    // Check if region has content
+    public function hasContent()
+    {
+        return $this->intro_text || $this->cover_image || $this->data_points || $this->featuredEntries()->exists();
+    }
+
+    // Get formatted data points
+    public function getFormattedDataPoints()
+    {
+        if (!$this->data_points) {
+            return collect();
+        }
+
+        return collect($this->data_points)->map(function ($value, $key) {
+            return [
+                'label' => ucwords(str_replace('_', ' ', $key)),
+                'value' => $value,
+                'key' => $key
+            ];
+        });
+    }
+
+    // Get cover image URL with fallback
+    public function getCoverImageUrl($default = null)
+    {
+        // First check if cover_image already contains a Cloudflare URL
+        if ($this->cover_image && strpos($this->cover_image, 'imagedelivery.net') !== false) {
+            return $this->cover_image;
+        }
+        
+        // Then check if we have a Cloudflare image ID
+        if ($this->cloudflare_image_id) {
+            // Use the Cloudflare image delivery URL from config
+            $deliveryUrl = config('services.cloudflare.delivery_url', 'https://imagedelivery.net');
+            
+            // If deliveryUrl already contains the account hash, use it directly
+            if (strpos($deliveryUrl, 'imagedelivery.net/') !== false) {
+                return "{$deliveryUrl}/{$this->cloudflare_image_id}/public";
+            }
+            
+            // Otherwise, extract the account hash from the URL
+            if (preg_match('/imagedelivery\.net\/([^\/]+)/', $deliveryUrl, $matches)) {
+                $accountHash = $matches[1];
+                return "https://imagedelivery.net/{$accountHash}/{$this->cloudflare_image_id}/public";
+            }
+        }
+        
+        if ($this->cover_image) {
+            // If it's a full URL, return as is
+            if (filter_var($this->cover_image, FILTER_VALIDATE_URL)) {
+                return $this->cover_image;
+            }
+            // Otherwise assume it's a storage path
+            return asset('storage/' . $this->cover_image);
+        }
+
+        return $default ?: asset('images/default-region-cover.jpg');
+    }
+
+    // Accessor for cover_image_url attribute
+    public function getCoverImageUrlAttribute()
+    {
+        return $this->getCoverImageUrl();
+    }
+
+    // Cache key helpers
+    public function getCacheKey($suffix = '')
+    {
+        $key = "region_{$this->id}";
+        return $suffix ? "{$key}_{$suffix}" : $key;
+    }
+
+    public function clearCache()
+    {
+        $cacheKeys = [
+            $this->getCacheKey(),
+            $this->getCacheKey('featured'),
+            $this->getCacheKey('metadata'),
+            $this->getCacheKey('entries'),
+            $this->getCacheKey('children'),
+            $this->getCacheKey('path')
+        ];
+
+        foreach ($cacheKeys as $key) {
+            cache()->forget($key);
+        }
+    }
+
+    // Override update to clear cache
+    public function update(array $attributes = [], array $options = [])
+    {
+        $result = parent::update($attributes, $options);
+        
+        if ($result) {
+            $this->clearCache();
+        }
+
+        return $result;
+    }
+
+    // Get region data for frontend
+    public function toFrontend()
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'display_name' => $this->display_name,
+            'full_name' => $this->full_name,
+            'slug' => $this->slug,
+            'type' => $this->type,
+            'level' => $this->level,
+            'url' => '/local/' . $this->getUrlPath(),
+            'cover_image' => $this->getCoverImageUrl(),
+            'cover_image_url' => $this->getCoverImageUrl(),
+            'cloudflare_image_id' => $this->cloudflare_image_id,
+            'intro_text' => $this->intro_text,
+            'data_points' => $this->getFormattedDataPoints()->values()->toArray(),
+            'is_featured' => $this->is_featured,
+            'place_count' => $this->cached_place_count,
+            'meta' => [
+                'title' => $this->meta_title ?: $this->display_name . ' Directory',
+                'description' => $this->meta_description ?: "Explore {$this->display_name} - Find the best places, businesses, and services in {$this->display_name}."
+            ],
+            'has_content' => $this->hasContent(),
+            'parent' => $this->parent ? [
+                'id' => $this->parent->id,
+                'name' => $this->parent->name,
+                'display_name' => $this->parent->display_name,
+                'slug' => $this->parent->slug,
+                'url' => '/local/' . $this->parent->getUrlPath()
+            ] : null
+        ];
+    }
+    
+    // Helper methods for facts
+    public function getFact($key, $default = null)
+    {
+        return data_get($this->facts, $key, $default);
+    }
+    
+    public function setFact($key, $value)
+    {
+        $facts = $this->facts ?: [];
+        data_set($facts, $key, $value);
+        $this->facts = $facts;
+        return $this;
+    }
+    
+    // Helper methods for state symbols
+    public function getStateSymbol($key, $default = null)
+    {
+        return data_get($this->state_symbols, $key, $default);
+    }
+    
+    public function setStateSymbol($key, $value)
+    {
+        $symbols = $this->state_symbols ?: [];
+        data_set($symbols, $key, $value);
+        $this->state_symbols = $symbols;
+        return $this;
+    }
+    
+    // Check if region has valid geodata
+    public function hasGeodata()
+    {
+        return !empty($this->geojson) || !empty($this->polygon_coordinates);
+    }
+    
+    // Convert polygon coordinates to GeoJSON
+    public function polygonToGeojson()
+    {
+        if (empty($this->polygon_coordinates)) {
+            return null;
+        }
+        
+        // Parse PostgreSQL polygon format: ((x1,y1),(x2,y2),...)
+        preg_match_all('/\(([^,]+),([^)]+)\)/', $this->polygon_coordinates, $matches);
+        
+        if (empty($matches[1])) {
+            return null;
+        }
+        
+        $coordinates = [];
+        for ($i = 0; $i < count($matches[1]); $i++) {
+            $coordinates[] = [(float)$matches[1][$i], (float)$matches[2][$i]];
+        }
+        
+        // Close the polygon if not already closed
+        if ($coordinates[0] !== $coordinates[count($coordinates) - 1]) {
+            $coordinates[] = $coordinates[0];
+        }
+        
+        return [
+            'type' => 'Polygon',
+            'coordinates' => [$coordinates]
+        ];
     }
 }

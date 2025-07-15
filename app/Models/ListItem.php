@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Place;
 
 class ListItem extends Model
 {
@@ -38,16 +39,22 @@ class ListItem extends Model
         return $this->belongsTo(UserList::class, 'list_id');
     }
 
+    public function place()
+    {
+        return $this->belongsTo(Place::class, 'directory_entry_id');
+    }
+    
+    // Backward compatibility
     public function directoryEntry()
     {
-        return $this->belongsTo(DirectoryEntry::class);
+        return $this->place();
     }
 
     // Accessors
     public function getDisplayTitleAttribute()
     {
-        if ($this->type === 'directory_entry' && $this->directoryEntry) {
-            return $this->directoryEntry->title;
+        if ($this->type === 'directory_entry' && $this->place) {
+            return $this->place->title;
         }
         return $this->title;
     }
@@ -63,8 +70,8 @@ class ListItem extends Model
 
     public function getDisplayContentAttribute()
     {
-        if ($this->type === 'directory_entry' && $this->directoryEntry) {
-            return $this->directoryEntry->description;
+        if ($this->type === 'directory_entry' && $this->place) {
+            return $this->place->description;
         }
         return $this->content;
     }
@@ -74,11 +81,11 @@ class ListItem extends Model
         if ($this->type === 'location' && $this->data) {
             return (object) $this->data;
         }
-        if ($this->type === 'directory_entry' && $this->directoryEntry && $this->directoryEntry->location) {
+        if ($this->type === 'directory_entry' && $this->place && $this->place->location) {
             return (object) [
-                'latitude' => $this->directoryEntry->location->latitude,
-                'longitude' => $this->directoryEntry->location->longitude,
-                'address' => $this->directoryEntry->location->full_address,
+                'latitude' => $this->place->location->latitude,
+                'longitude' => $this->place->location->longitude,
+                'address' => $this->place->location->full_address,
             ];
         }
         return null;
@@ -106,10 +113,12 @@ class ListItem extends Model
         $array['display_content'] = $this->display_content;
         
         // Include related data for directory entries
-        if ($this->type === 'directory_entry' && $this->directoryEntry) {
-            $array['directory_entry'] = $this->directoryEntry->toArray();
-            if ($this->directoryEntry->location) {
-                $array['directory_entry']['location'] = $this->directoryEntry->location->toArray();
+        if ($this->type === 'directory_entry' && $this->place) {
+            $array['directory_entry'] = $this->place->toArray();
+            $array['place'] = $this->place->toArray();
+            if ($this->place->location) {
+                $array['directory_entry']['location'] = $this->place->location->toArray();
+                $array['place']['location'] = $this->place->location->toArray();
             }
         }
         

@@ -123,9 +123,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
     
-
-
-
-
+    /*
+    |--------------------------------------------------------------------------
+    | Post Expiration Days
+    |--------------------------------------------------------------------------
+    |
+    | This value determines the default number of days until posts expire.
+    | This can be overridden by admin settings or per-post configuration.
+    |
+    */
+    
+    'post_expiration_days' => env('POST_EXPIRATION_DAYS', 30),
 
 ];

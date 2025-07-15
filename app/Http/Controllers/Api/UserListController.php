@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\UserList;
 use App\Models\ListItem;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
 use App\Models\Tag;
 use App\Models\ListCategory;
 use App\Services\ProfanityFilterService;
@@ -18,12 +18,8 @@ class UserListController extends Controller
     public function index(Request $request)
     {
         $query = UserList::with(['user', 'items'])
-                        ->withCount('items');
-
-        // Filter by user if not admin
-        if (!auth()->user()->hasAnyRole(['admin', 'manager'])) {
-            $query->where('user_id', auth()->id());
-        }
+                        ->withCount('items')
+                        ->where('user_id', auth()->id());
 
         // Search
         if ($request->filled('search')) {
@@ -132,7 +128,7 @@ class UserListController extends Controller
     {
         $list = UserList::with(['user', 'category', 'tags', 'items' => function($query) {
             $query->orderBy('order_index')
-                  ->with(['directoryEntry.location', 'directoryEntry.category']);
+                  ->with(['place.location', 'place.category']);
         }])->findOrFail($id);
 
         // Check if user can view this list
@@ -304,7 +300,7 @@ class UserListController extends Controller
 
         return response()->json([
             'message' => 'Item added successfully',
-            'item' => $item->load('directoryEntry')
+            'item' => $item->load('place')
         ], 201);
     }
 
@@ -389,7 +385,7 @@ class UserListController extends Controller
     // Search directory entries to add to list
     public function searchEntries(Request $request)
     {
-        $query = DirectoryEntry::with(['category', 'location'])
+        $query = Place::with(['category', 'location'])
                               ->published();
 
         if ($request->filled('q')) {
@@ -444,7 +440,7 @@ public function myLists(Request $request)
 public function publicLists(Request $request)
 {
     $query = \App\Models\UserList::searchable()
-        ->with(['user', 'items'])
+        ->with(['user', 'items', 'category'])
         ->withCount('items');
     
     // Apply filters
@@ -455,6 +451,11 @@ public function publicLists(Request $request)
     
     if ($request->has('user') && $request->user) {
         $query->where('user_id', $request->user);
+    }
+    
+    // Filter by category
+    if ($request->has('category_id') && $request->category_id) {
+        $query->where('category_id', $request->category_id);
     }
     
     // Apply sorting
@@ -478,7 +479,8 @@ public function publicLists(Request $request)
             $query->orderBy('updated_at', $sortOrder);
     }
     
-    $lists = $query->paginate(12);
+    $perPage = $request->get('per_page', 12);
+    $lists = $query->paginate($perPage);
     
     return response()->json($lists);
 }
@@ -633,6 +635,94 @@ public function validateTag(Request $request)
         'valid' => $isValid,
         'message' => $isValid ? 'Tag is valid' : 'Tag contains inappropriate content'
     ]);
+}
+
+/**
+ * Get lists for a specific user by username or custom URL
+ */
+public function userLists($username)
+{
+    // Find user by custom URL or username
+    $user = \App\Models\User::where('custom_url', $username)
+        ->orWhere('username', $username)
+        ->first();
+    
+    if (!$user) {
+        return response()->json([
+            'message' => 'User not found'
+        ], 404);
+    }
+    
+    // Get user's public lists with optimized loading
+    $lists = $user->lists()
+        ->where('visibility', 'public')
+        ->where('is_draft', false)
+        ->with(['category:id,name,slug', 'tags:id,name,slug,color'])
+        ->withCount('items')
+        ->select('id', 'user_id', 'name', 'slug', 'description', 'featured_image', 'featured_image_cloudflare_id', 'is_pinned', 'pinned_at', 'view_count', 'created_at', 'updated_at')
+        ->orderBy('is_pinned', 'desc')
+        ->orderBy('pinned_at', 'desc')
+        ->orderBy('created_at', 'desc')
+        ->get();
+    
+    return response()->json([
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'username' => $user->username,
+            'custom_url' => $user->custom_url,
+            'avatar_url' => $user->avatar_url,
+            'page_title' => $user->page_title,
+        ],
+        'lists' => $lists,
+        'total' => $lists->count()
+    ]);
+}
+
+/**
+ * Show a specific list by user and slug
+ */
+public function showBySlug($username, $slug)
+{
+    // Find user by custom URL or username
+    $user = \App\Models\User::where('custom_url', $username)
+        ->orWhere('username', $username)
+        ->first();
+    
+    if (!$user) {
+        return response()->json([
+            'message' => 'User not found'
+        ], 404);
+    }
+    
+    // Find the list
+    $list = $user->lists()
+        ->where('slug', $slug)
+        ->with(['user', 'category', 'tags', 'items' => function($query) {
+            $query->orderBy('order_index')
+                  ->with(['place.location', 'place.category']);
+        }])
+        ->first();
+    
+    if (!$list) {
+        return response()->json([
+            'message' => 'List not found'
+        ], 404);
+    }
+    
+    // Check if user can view this list
+    if (!$list->canView(auth()->user())) {
+        return response()->json([
+            'message' => 'You do not have permission to view this list'
+        ], 403);
+    }
+    
+    // Increment view count if not owner and list is viewable
+    if (!$list->isOwnedBy(auth()->user()) && $list->isPublished()) {
+        $list->incrementViewCount();
+    }
+    
+    return response()->json($list);
 }
 
 

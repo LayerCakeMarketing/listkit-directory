@@ -4,37 +4,87 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\UserList;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
+use App\Services\UserProfileCacheService;
+use App\Rules\UniqueUrlSlug;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
 
 class UserProfileController extends Controller
 {
+    protected $cacheService;
+
+    public function __construct(UserProfileCacheService $cacheService)
+    {
+        $this->cacheService = $cacheService;
+    }
+
     public function show(Request $request, $username)
     {
-        // Find user by custom URL, username, or ID
-        $user = User::findByUrlSlug($username);
-        
-        if (!$user) {
-            abort(404, 'User not found');
+        try {
+            // Try to get cached profile data first
+            $profileData = $this->cacheService->getProfile($username);
+            
+            // Extract user from cached data
+            $user = User::find($profileData['user']['id']);
+            
+            if (!$user) {
+                abort(404, 'User not found');
+            }
+            
+            // Check if profile is public or user has permission to view
+            $currentUser = Auth::user();
+            if (!$user->is_public && (!$currentUser || $currentUser->id !== $user->id)) {
+                abort(403, 'This profile is private');
+            }
+            
+            // Increment profile views (not for own profile)
+            if (!$currentUser || $currentUser->id !== $user->id) {
+                $user->incrementProfileViews();
+            }
+            
+            // Add current user permissions to cached data
+            $profileData['user']['permissions'] = [
+                'can_edit' => $currentUser && $currentUser->id === $user->id,
+                'can_follow' => $currentUser && $currentUser->id !== $user->id,
+                'is_following' => $currentUser ? $currentUser->isFollowing($user) : false,
+                'show_activity' => $user->show_activity || ($currentUser && $currentUser->id === $user->id),
+                'show_followers' => $user->show_followers || ($currentUser && $currentUser->id === $user->id),
+                'show_following' => $user->show_following || ($currentUser && $currentUser->id === $user->id),
+            ];
+            
+            return Inertia::render('User/Profile', [
+                'profile_user' => $profileData['user'],
+                'pinned_lists' => $profileData['pinnedLists'],
+                'recent_lists' => $profileData['recentLists'],
+                'current_user' => $currentUser ? $currentUser->only(['id', 'name', 'username']) : null,
+            ]);
+            
+        } catch (\Exception $e) {
+            // Fallback to direct query if cache fails
+            $user = User::findByUrlSlug($username);
+            
+            if (!$user) {
+                abort(404, 'User not found');
+            }
+            
+            // Check if profile is public or user has permission to view
+            $currentUser = Auth::user();
+            if (!$user->is_public && (!$currentUser || $currentUser->id !== $user->id)) {
+                abort(403, 'This profile is private');
+            }
+            
+            // Increment profile views (not for own profile)
+            if (!$currentUser || $currentUser->id !== $user->id) {
+                $user->incrementProfileViews();
+            }
+            
+            // Get user's data without cache
+            $profileData = $this->getProfileData($user, $currentUser);
+            
+            return Inertia::render('User/Profile', $profileData);
         }
-
-        // Check if profile is public or user has permission to view
-        $currentUser = Auth::user();
-        if (!$user->is_public && (!$currentUser || $currentUser->id !== $user->id)) {
-            abort(403, 'This profile is private');
-        }
-
-        // Increment profile views (not for own profile)
-        if (!$currentUser || $currentUser->id !== $user->id) {
-            $user->incrementProfileViews();
-        }
-
-        // Get user's data
-        $profileData = $this->getProfileData($user, $currentUser);
-
-        return Inertia::render('User/Profile', $profileData);
     }
 
     public function edit(Request $request)
@@ -79,7 +129,7 @@ class UserProfileController extends Controller
             'location' => 'nullable|string|max:255',
             'website' => 'nullable|url|max:255',
             'birth_date' => 'nullable|date|before:today',
-            'custom_url' => 'nullable|string|max:50|unique:users,custom_url,' . $user->id . '|regex:/^[a-zA-Z0-9_-]+$/',
+            'custom_url' => ['nullable', 'string', 'max:50', 'unique:users,custom_url,' . $user->id, 'regex:/^[a-zA-Z0-9_-]+$/', new UniqueUrlSlug('user', $user->id)],
             'custom_css' => 'nullable|string|max:5000',
             'profile_color' => 'nullable|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/',
             'show_activity' => 'boolean',
@@ -207,6 +257,10 @@ class UserProfileController extends Controller
 
         $user->update($validated);
         $user->recordActivity('updated_profile', $user);
+        
+        // Clear and warm cache after profile update
+        $this->cacheService->clearProfileCache($user);
+        $this->cacheService->warmCache($user);
 
         // For AJAX requests (like from UserSettingsModal), return JSON response
         if ($request->wantsJson() || $request->header('X-Inertia')) {
@@ -227,6 +281,12 @@ class UserProfileController extends Controller
         }
 
         $success = $currentUser->follow($targetUser);
+        
+        // Clear cache for both users when follow status changes
+        if ($success) {
+            $this->cacheService->clearProfileCache($currentUser);
+            $this->cacheService->clearProfileCache($targetUser);
+        }
 
         return response()->json([
             'success' => $success,
@@ -245,6 +305,12 @@ class UserProfileController extends Controller
         }
 
         $success = $currentUser->unfollow($targetUser);
+        
+        // Clear cache for both users when follow status changes
+        if ($success) {
+            $this->cacheService->clearProfileCache($currentUser);
+            $this->cacheService->clearProfileCache($targetUser);
+        }
 
         return response()->json([
             'success' => $success,
@@ -263,6 +329,11 @@ class UserProfileController extends Controller
         }
 
         $success = $user->pinList($list);
+        
+        // Clear cache when pinning lists
+        if ($success) {
+            $this->cacheService->clearProfileCache($user);
+        }
 
         return response()->json([
             'success' => $success,
@@ -280,6 +351,11 @@ class UserProfileController extends Controller
         }
 
         $success = $user->unpinList($list);
+        
+        // Clear cache when unpinning lists
+        if ($success) {
+            $this->cacheService->clearProfileCache($user);
+        }
 
         return response()->json([
             'success' => $success,
@@ -361,8 +437,14 @@ class UserProfileController extends Controller
         $userData['has_custom_cover'] = $user->hasCustomCoverImage();
         $userData['has_custom_page_logo'] = $user->hasCustomPageLogo();
 
-        // Profile stats
-        $userData['stats'] = $user->getProfileStats();
+        // Profile stats - optimize with single query
+        $userData['stats'] = [
+            'lists_count' => $user->lists()->where('visibility', 'public')->count(),
+            'followers_count' => $user->followers()->count(),
+            'following_count' => $user->following()->count(),
+            'places_count' => $user->places()->count(),
+            'total_views' => $user->profile_views ?: 0,
+        ];
 
         // Check permissions
         $userData['permissions'] = [
@@ -374,16 +456,45 @@ class UserProfileController extends Controller
             'show_following' => $user->show_following || ($currentUser && $currentUser->id === $user->id),
         ];
 
-        // Pinned lists
+        // Pinned lists with eager loading
         $userData['pinned_lists'] = $user->pinnedLists()
-                                       ->with(['user:id,name,username,custom_url'])
+                                       ->with([
+                                           'user:id,name,username,custom_url',
+                                           'category:id,name,slug',
+                                           'items' => function ($query) {
+                                               $query->limit(5);
+                                           }
+                                       ])
+                                       ->withCount('items')
                                        ->get();
 
-        // Recent lists (non-pinned)
-        $userData['recent_lists'] = $user->getRecentLists(6);
+        // Recent lists (non-pinned) with eager loading
+        $userData['recent_lists'] = $user->lists()
+                                       ->where('visibility', 'public')
+                                       ->where('is_pinned', false)
+                                       ->with([
+                                           'category:id,name,slug',
+                                           'items' => function ($query) {
+                                               $query->limit(5);
+                                           }
+                                       ])
+                                       ->withCount('items')
+                                       ->latest()
+                                       ->limit(6)
+                                       ->get();
 
-        // Featured lists
-        $userData['featured_lists'] = $user->getFeaturedLists();
+        // Featured lists with eager loading
+        $userData['featured_lists'] = $user->lists()
+                                         ->where('visibility', 'public')
+                                         ->where('is_featured', true)
+                                         ->with([
+                                             'category:id,name,slug',
+                                             'items' => function ($query) {
+                                                 $query->limit(5);
+                                             }
+                                         ])
+                                         ->withCount('items')
+                                         ->get();
 
         // Following data (if visible)
         if ($userData['permissions']['show_following']) {
@@ -416,8 +527,17 @@ class UserProfileController extends Controller
 
         // Activity feed (if visible)
         if ($userData['permissions']['show_activity']) {
-            $userData['recent_activities'] = $user->publicActivities()
-                                                ->with(['subject'])
+            $userData['recent_activities'] = $user->activities()
+                                                ->where('is_public', true)
+                                                ->with(['subject' => function ($query) {
+                                                    // Eager load based on subject type
+                                                    $query->when($query->getRelated() instanceof UserList, function ($q) {
+                                                        $q->with('category:id,name');
+                                                    })->when($query->getRelated() instanceof Place, function ($q) {
+                                                        $q->with('category:id,name', 'region:id,name');
+                                                    });
+                                                }])
+                                                ->latest()
                                                 ->limit(10)
                                                 ->get()
                                                 ->map(function ($activity) {

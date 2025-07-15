@@ -43,33 +43,35 @@ return new class extends Migration
         });
         
         // Add PostGIS geometry column for PostgreSQL
-        if (config('database.default') === 'pgsql') {
-            DB::statement('ALTER TABLE locations ADD COLUMN geom geography(Point, 4326)');
-            DB::statement('CREATE INDEX locations_geom_gist ON locations USING GIST(geom)');
-            DB::statement('
-                CREATE OR REPLACE FUNCTION update_location_geom() RETURNS trigger AS $$
-                BEGIN
-                    NEW.geom = ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326);
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-            ');
-            DB::statement('
-                CREATE TRIGGER update_location_geom_trigger
-                BEFORE INSERT OR UPDATE ON locations
-                FOR EACH ROW
-                WHEN (NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL)
-                EXECUTE FUNCTION update_location_geom();
-            ');
-        }
+        // TODO: Enable this after installing PostGIS extension
+        // if (config('database.default') === 'pgsql') {
+        //     DB::statement('ALTER TABLE locations ADD COLUMN geom geography(Point, 4326)');
+        //     DB::statement('CREATE INDEX locations_geom_gist ON locations USING GIST(geom)');
+        //     DB::statement('
+        //         CREATE OR REPLACE FUNCTION update_location_geom() RETURNS trigger AS $$
+        //         BEGIN
+        //             NEW.geom = ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326);
+        //             RETURN NEW;
+        //         END;
+        //         $$ LANGUAGE plpgsql;
+        //     ');
+        //     DB::statement('
+        //         CREATE TRIGGER update_location_geom_trigger
+        //         BEFORE INSERT OR UPDATE ON locations
+        //         FOR EACH ROW
+        //         WHEN (NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL)
+        //         EXECUTE FUNCTION update_location_geom();
+        //     ');
+        // }
     }
 
     public function down()
     {
-        if (config('database.default') === 'pgsql') {
-            DB::statement('DROP TRIGGER IF EXISTS update_location_geom_trigger ON locations');
-            DB::statement('DROP FUNCTION IF EXISTS update_location_geom()');
-        }
+        // TODO: Enable this after installing PostGIS extension
+        // if (config('database.default') === 'pgsql') {
+        //     DB::statement('DROP TRIGGER IF EXISTS update_location_geom_trigger ON locations');
+        //     DB::statement('DROP FUNCTION IF EXISTS update_location_geom()');
+        // }
         Schema::dropIfExists('locations');
     }
 };

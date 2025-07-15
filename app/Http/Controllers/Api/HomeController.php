@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\UserList;
-use App\Models\DirectoryEntry;
+use App\Models\Place;
 use App\Models\ListCategory;
 use App\Models\Tag;
+use App\Models\Post;
 
 class HomeController extends Controller
 {
@@ -20,9 +21,9 @@ class HomeController extends Controller
         $followingIds = $user->following()->pluck('users.id')->toArray();
         $userIds = array_merge([$user->id], $followingIds);
         
-        // Get lists and places with pagination offset
+        // Get lists, places, and posts with pagination offset
         $page = request()->get('page', 1);
-        $offset = ($page - 1) * 5; // 5 items per type per page
+        $offset = ($page - 1) * 3; // 3 items per type per page
         
         $lists = UserList::whereIn('user_id', $userIds)
             ->searchable()
@@ -30,14 +31,22 @@ class HomeController extends Controller
             ->withCount('items')
             ->latest()
             ->skip($offset)
-            ->take(5)
+            ->take(3)
             ->get();
             
-        $places = DirectoryEntry::where('status', 'published')
+        $places = Place::where('status', 'published')
             ->with(['category.parent', 'location'])
             ->latest()
             ->skip($offset)
-            ->take(5)
+            ->take(3)
+            ->get();
+            
+        $posts = Post::whereIn('user_id', $userIds)
+            ->visible()
+            ->with('user')
+            ->latest()
+            ->skip($offset)
+            ->take(4)
             ->get();
             
         // Add type identifier to each item
@@ -51,8 +60,13 @@ class HomeController extends Controller
             $place->feed_timestamp = $place->created_at;
         });
         
+        $posts->each(function ($post) {
+            $post->feed_type = 'post';
+            $post->feed_timestamp = $post->created_at;
+        });
+        
         // Merge and sort by timestamp
-        $feedItems = collect([$lists, $places])
+        $feedItems = collect([$lists, $places, $posts])
             ->flatten()
             ->sortByDesc('feed_timestamp')
             ->values();
@@ -109,5 +123,29 @@ class HomeController extends Controller
             ->paginate(10);
             
         return response()->json($latestLists);
+    }
+    
+    public function getMetadata(Request $request)
+    {
+        // Get categories for sidebar
+        $categories = ListCategory::where('is_active', true)
+            ->withCount(['lists' => function($query) {
+                $query->searchable();
+            }])
+            ->orderBy('sort_order')
+            ->limit(10)
+            ->get();
+            
+        // Get trending tags
+        $trendingTags = Tag::where('is_active', true)
+            ->withCount('lists')
+            ->orderBy('lists_count', 'desc')
+            ->limit(10)
+            ->get();
+        
+        return response()->json([
+            'categories' => $categories,
+            'trendingTags' => $trendingTags,
+        ]);
     }
 }

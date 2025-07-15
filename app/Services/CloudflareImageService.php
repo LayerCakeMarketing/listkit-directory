@@ -151,17 +151,37 @@ class CloudflareImageService
     public function deleteImage(string $imageId): bool
     {
         try {
+            Log::info('Attempting to delete Cloudflare image', ['image_id' => $imageId]);
+            
             $response = Http::withHeaders(
                 $this->getAuthHeaders()
             )->delete("{$this->baseUrl}/{$imageId}");
 
-            return $response->successful();
+            if ($response->successful()) {
+                Log::info('Successfully deleted Cloudflare image', ['image_id' => $imageId]);
+                return true;
+            } else {
+                Log::error('Cloudflare API returned error when deleting image', [
+                    'image_id' => $imageId,
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+                
+                // If 404, image doesn't exist, consider it deleted
+                if ($response->status() === 404) {
+                    Log::info('Image not found in Cloudflare, considering it deleted', ['image_id' => $imageId]);
+                    return true;
+                }
+                
+                throw new Exception('Cloudflare API error: ' . $response->body());
+            }
         } catch (Exception $e) {
             Log::error('Failed to delete image from Cloudflare Images', [
                 'image_id' => $imageId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
-            return false;
+            throw $e; // Re-throw to let controller handle it
         }
     }
 
@@ -209,26 +229,33 @@ class CloudflareImageService
      */
     private function validateFile(UploadedFile $file): void
     {
-        // Check file size (14MB max)
-        if ($file->getSize() > 14 * 1024 * 1024) {
-            throw new Exception('File size too large. Maximum 14MB allowed.');
+        // Check file size (10MB max for Cloudflare Images)
+        if ($file->getSize() > 10 * 1024 * 1024) {
+            throw new Exception('File size too large. Maximum 10MB allowed by Cloudflare Images.');
         }
 
-        // Check file type
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+        // Check file type - Note: SVG+XML is supported by Cloudflare
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/svg+xml'];
         if (!in_array($file->getMimeType(), $allowedMimes)) {
-            throw new Exception('Invalid file type. Only JPEG, PNG, GIF, WebP, and AVIF are allowed.');
+            throw new Exception('Invalid file type. Only JPEG, PNG, GIF, WebP, AVIF, and SVG are allowed.');
         }
 
-        // Check image dimensions (optional)
+        // Check image dimensions per Cloudflare limits
         $imageInfo = getimagesize($file->getRealPath());
         if ($imageInfo === false) {
             throw new Exception('Invalid image file.');
         }
 
         [$width, $height] = $imageInfo;
-        if ($width > 4000 || $height > 4000) {
-            throw new Exception('Image dimensions too large. Maximum 4000x4000 pixels.');
+        
+        // Cloudflare Images limits: max 12,000 pixels per dimension and 100 megapixels total
+        if ($width > 12000 || $height > 12000) {
+            throw new Exception('Image dimensions too large. Maximum 12,000 pixels per dimension.');
+        }
+        
+        $totalPixels = $width * $height;
+        if ($totalPixels > 100000000) { // 100 megapixels
+            throw new Exception('Image resolution too large. Maximum 100 megapixels allowed.');
         }
     }
 
@@ -261,18 +288,79 @@ class CloudflareImageService
     public function getStats(): array
     {
         try {
+            // Use the correct v1 stats endpoint
+            $statsUrl = "https://api.cloudflare.com/client/v4/accounts/{$this->accountId}/images/v1/stats";
+            
             $response = Http::withHeaders(
                 $this->getAuthHeaders()
-            )->get("{$this->baseUrl}/stats");
+            )->get($statsUrl);
 
             if ($response->successful()) {
-                return $response->json()['result'];
+                $result = $response->json()['result'] ?? [];
+                
+                // Parse the nested count structure from Cloudflare v1 stats
+                $currentCount = 0;
+                if (isset($result['count']['current'])) {
+                    $currentCount = $result['count']['current'];
+                } elseif (isset($result['count']) && is_numeric($result['count'])) {
+                    $currentCount = $result['count'];
+                }
+                
+                return [
+                    'count' => $currentCount,
+                    'current' => [
+                        'count' => $currentCount,
+                        'size' => $result['size'] ?? 0, // May not be available
+                    ],
+                    'allowed' => [
+                        'count' => $result['count']['allowed'] ?? 100000,
+                        'size' => 500000000, // 500MB estimate
+                    ]
+                ];
             }
+
+            Log::warning('Cloudflare stats response not successful', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
 
             return [];
         } catch (Exception $e) {
             Log::error('Failed to get Cloudflare Images stats: ' . $e->getMessage());
             return [];
+        }
+    }
+    
+    /**
+     * List images from Cloudflare
+     */
+    public function listImages($page = 1, $perPage = 20): array
+    {
+        try {
+            // Get images with pagination
+            $response = Http::withHeaders(
+                $this->getAuthHeaders()
+            )->get("{$this->baseUrl}", [
+                'per_page' => $perPage,
+                'page' => $page
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('Failed to list Cloudflare images', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+                return ['images' => []];
+            }
+
+            $data = $response->json();
+            return [
+                'images' => $data['result']['images'] ?? [],
+                'total' => $data['result']['count'] ?? 0,
+            ];
+        } catch (Exception $e) {
+            Log::error('Failed to list Cloudflare images: ' . $e->getMessage());
+            return ['images' => []];
         }
     }
 
