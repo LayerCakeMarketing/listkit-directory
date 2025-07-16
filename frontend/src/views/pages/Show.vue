@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 
@@ -106,6 +106,11 @@ const error = ref(false)
 
 // Computed
 const slug = computed(() => route.params.slug)
+
+// Watch for route changes
+watch(() => route.params.slug, () => {
+    fetchPage()
+})
 
 // Methods
 const fetchPage = async () => {

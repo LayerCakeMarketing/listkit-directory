@@ -26,7 +26,8 @@
           <div
             v-for="list in lists"
             :key="list.id"
-            class="relative bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
+            class="relative bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+            @click="navigateToList(list)"
           >
             <!-- List Image -->
             <div class="h-48 bg-gray-200 rounded-t-lg overflow-hidden">
@@ -45,62 +46,69 @@
 
             <!-- List Content -->
             <div class="p-4">
-              <!-- Absolute positioned link for ADA compliance -->
-              <a 
-                :href="`/${currentUser?.custom_url || currentUser?.username}/${list.slug}`"
-                class="absolute inset-0 z-10"
-                :aria-label="`View ${list.name}`"
-                @click.prevent="navigateToList(list)"
-              >
-                <span class="sr-only">View {{ list.name }}</span>
-              </a>
-              
               <div class="flex justify-between items-start mb-2">
                 <h3 class="text-lg font-semibold text-gray-900">{{ list.name }}</h3>
-                <span
-                  class="px-2 py-1 text-xs rounded-full"
-                  :class="{
-                    'bg-green-100 text-green-800': list.visibility === 'public',
-                    'bg-gray-100 text-gray-800': list.visibility === 'private',
-                    'bg-yellow-100 text-yellow-800': list.is_draft
-                  }"
-                >
-                  {{ list.is_draft ? 'Draft' : list.visibility }}
-                </span>
+                <div class="flex items-center space-x-2">
+                  <span
+                    class="px-2 py-1 text-xs rounded-full"
+                    :class="{
+                      'bg-green-100 text-green-800': list.visibility === 'public',
+                      'bg-gray-100 text-gray-800': list.visibility === 'private',
+                      'bg-yellow-100 text-yellow-800': list.is_draft
+                    }"
+                  >
+                    {{ list.is_draft ? 'Draft' : list.visibility }}
+                  </span>
+                  
+                  <!-- Dropdown Menu -->
+                  <Menu as="div" class="relative inline-block text-left" @click.stop>
+                    <div>
+                      <MenuButton class="flex items-center rounded-full bg-gray-100 p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100">
+                        <span class="sr-only">Open options</span>
+                        <EllipsisVerticalIcon class="h-5 w-5" aria-hidden="true" />
+                      </MenuButton>
+                    </div>
+
+                    <transition 
+                      enter-active-class="transition ease-out duration-100" 
+                      enter-from-class="transform opacity-0 scale-95" 
+                      enter-to-class="transform opacity-100 scale-100" 
+                      leave-active-class="transition ease-in duration-75" 
+                      leave-from-class="transform opacity-100 scale-100" 
+                      leave-to-class="transform opacity-0 scale-95"
+                    >
+                      <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none">
+                        <div class="py-1">
+                          <MenuItem v-slot="{ active }">
+                            <button
+                              @click.stop="editList(list)"
+                              :class="[active ? 'bg-gray-100 text-gray-900' : 'text-gray-700', 'block w-full text-left px-4 py-2 text-sm']"
+                            >
+                              Edit
+                            </button>
+                          </MenuItem>
+                          <MenuItem v-slot="{ active }">
+                            <button
+                              @click.stop="deleteList(list)"
+                              :class="[active ? 'bg-gray-100 text-gray-900' : 'text-gray-700', 'block w-full text-left px-4 py-2 text-sm text-red-600']"
+                            >
+                              Delete
+                            </button>
+                          </MenuItem>
+                        </div>
+                      </MenuItems>
+                    </transition>
+                  </Menu>
+                </div>
               </div>
               
               <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
                 {{ list.description }}
               </p>
 
-              <div class="flex items-center justify-between text-sm text-gray-500 mb-4">
+              <div class="flex items-center justify-between text-sm text-gray-500">
                 <span>{{ list.items_count }} items</span>
                 <span>{{ list.view_count }} views</span>
-              </div>
-
-              <!-- Actions - positioned above the absolute link -->
-              <div class="flex space-x-2 relative z-20">
-                <a
-                  :href="`/${currentUser?.custom_url || currentUser?.username}/${list.slug}`"
-                  class="flex-1 text-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  @click.prevent="navigateToList(list)"
-                >
-                  View
-                </a>
-                <button
-                  @click="editList(list)"
-                  class="flex-1 text-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Edit
-                </button>
-                <button
-                  @click="deleteList(list)"
-                  class="px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 hover:bg-red-50"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
               </div>
             </div>
           </div>
@@ -129,7 +137,7 @@
     </div>
 
     <!-- Create List Modal (simplified) -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+    <div v-if="showCreateModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div class="bg-white rounded-lg max-w-md w-full p-6">
         <h2 class="text-lg font-medium mb-4">Create New List</h2>
         <form @submit.prevent="createList">
@@ -186,6 +194,8 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { EllipsisVerticalIcon } from '@heroicons/vue/20/solid'
 
 const router = useRouter()
 const authStore = useAuthStore()

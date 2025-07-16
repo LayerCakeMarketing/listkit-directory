@@ -45,7 +45,7 @@ class User extends Authenticatable
         'cover_updated_at' => 'datetime',
     ];
     
-    protected $appends = ['avatar_url'];
+    protected $appends = ['avatar_url', 'gravatar_url', 'default_avatar_url', 'has_custom_avatar'];
 
 
     // Role-based permissions
@@ -395,6 +395,24 @@ class User extends Authenticatable
     public function getDefaultAvatarUrl()
     {
         return asset('images/listerino_profile.svg');
+    }
+
+    // Accessor for gravatar_url attribute
+    public function getGravatarUrlAttribute()
+    {
+        return $this->getGravatarUrl();
+    }
+
+    // Accessor for default_avatar_url attribute
+    public function getDefaultAvatarUrlAttribute()
+    {
+        return $this->getDefaultAvatarUrl();
+    }
+
+    // Accessor for has_custom_avatar attribute
+    public function getHasCustomAvatarAttribute()
+    {
+        return $this->hasCustomAvatar();
     }
 
     public function getCoverImageUrl()

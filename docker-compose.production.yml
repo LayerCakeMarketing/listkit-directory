@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  app:
+    image: webdevops/php-nginx:8.3
+    container_name: listerino_app
+    restart: unless-stopped
+    environment:
+      - WEB_DOCUMENT_ROOT=/var/www/html/public
+      - PHP_DISPLAY_ERRORS=0
+      - PHP_MEMORY_LIMIT=512M
+      - PHP_UPLOAD_MAX_FILESIZE=50M
+      - PHP_POST_MAX_SIZE=50M
+      - PHP_MAX_EXECUTION_TIME=300
+    volumes:
+      - .:/var/www/html
+      - ./docker/php/custom.ini:/opt/docker/etc/php/conf.d/99-custom.ini:ro
+    ports:
+      - "8001:80"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - listerino-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: listerino_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-listerino}
+      POSTGRES_USER: ${DB_USERNAME:-listerino}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - listerino-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-listerino}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: listerino_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - listerino-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Automated backups
+  backup:
+    image: postgres:15-alpine
+    container_name: listerino_backup
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    networks:
+      - listerino-network
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          echo "Running backup at $$(date)"
+          pg_dump -h db -U ${DB_USERNAME:-listerino} ${DB_DATABASE:-listerino} | gzip > /backups/db_$$(date +%Y%m%d_%H%M%S).sql.gz
+          find /backups -name "db_*.sql.gz" -mtime +7 -delete
+          sleep 86400
+        done
+
+networks:
+  listerino-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -213,7 +213,7 @@ const props = defineProps({
     }
 })
 
-const emit = defineEmits(['upload-success', 'upload-error', 'upload-progress'])
+const emit = defineEmits(['upload-success', 'upload-error', 'upload-progress', 'update:modelValue'])
 
 const dropZone = ref(null)
 const fileInput = ref(null)

@@ -71,6 +71,8 @@ class Place extends Model
         'regions_updated_at' => 'datetime',
     ];
 
+    protected $appends = ['canonical_url'];
+
     protected static function boot()
     {
         parent::boot();
@@ -104,6 +106,16 @@ class Place extends Model
                 $entry->updated_by_user_id = auth()->id();
                 \Log::info('Set updated_by_user_id to:', ['user_id' => auth()->id()]);
             }
+        });
+        
+        // Update region place counts after save
+        static::saved(function ($entry) {
+            $entry->updateRegionPlaceCounts();
+        });
+        
+        // Update region place counts after delete
+        static::deleted(function ($entry) {
+            $entry->updateRegionPlaceCounts();
         });
     }
 
@@ -265,8 +277,9 @@ class Place extends Model
     {
         $parts = ['places'];
         
-        // Geographic hierarchy
+        // Geographic hierarchy - using full state name
         if ($this->stateRegion) {
+            // Use full state name slug instead of abbreviation
             $parts[] = $this->stateRegion->slug;
         }
         if ($this->cityRegion) {
@@ -285,6 +298,14 @@ class Place extends Model
     }
 
     /**
+     * Accessor for canonical_url attribute
+     */
+    public function getCanonicalUrlAttribute()
+    {
+        return $this->getCanonicalUrl();
+    }
+
+    /**
      * Get the short URL for this entry
      * Format: /p/{id}
      */
@@ -296,6 +317,42 @@ class Place extends Model
     public function isOnlineOnly()
     {
         return in_array($this->type, ['online', 'service']);
+    }
+
+    /**
+     * Update place counts for associated regions
+     */
+    public function updateRegionPlaceCounts()
+    {
+        // Update state region count
+        if ($this->state_region_id) {
+            $stateCount = self::where('state_region_id', $this->state_region_id)
+                ->where('status', 'published')
+                ->count();
+            
+            \App\Models\Region::where('id', $this->state_region_id)
+                ->update(['cached_place_count' => $stateCount]);
+        }
+        
+        // Update city region count
+        if ($this->city_region_id) {
+            $cityCount = self::where('city_region_id', $this->city_region_id)
+                ->where('status', 'published')
+                ->count();
+            
+            \App\Models\Region::where('id', $this->city_region_id)
+                ->update(['cached_place_count' => $cityCount]);
+        }
+        
+        // Update neighborhood region count
+        if ($this->neighborhood_region_id) {
+            $neighborhoodCount = self::where('neighborhood_region_id', $this->neighborhood_region_id)
+                ->where('status', 'published')
+                ->count();
+            
+            \App\Models\Region::where('id', $this->neighborhood_region_id)
+                ->update(['cached_place_count' => $neighborhoodCount]);
+        }
     }
 
     public function canBeEdited()

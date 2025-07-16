@@ -304,6 +304,12 @@ const routes = [
     component: () => import('@/views/admin/marketing-pages/HomePageSettings.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
+  {
+    path: '/admin/waitlist',
+    name: 'AdminWaitlist',
+    component: () => import('@/views/admin/waitlist/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
   // User profile and list routes (with @ prefix)
   {
     path: '/@:username/lists',
@@ -387,7 +393,14 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0, behavior: 'smooth' }
+    }
+  }
 })
 
 // Navigation guards

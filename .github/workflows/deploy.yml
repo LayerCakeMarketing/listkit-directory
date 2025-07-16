@@ -6,8 +6,42 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-test:
     runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: mbstring, pdo, pdo_pgsql, gd, zip
+    
+    - name: Run PHP Tests
+      run: |
+        cp .env.example .env
+        composer install
+        php artisan key:generate
+        php artisan test
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Build Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     
     steps:
     - uses: actions/checkout@v4
@@ -26,37 +60,33 @@ jobs:
           # Pull latest code
           git pull origin main
           
-          # Install/update composer dependencies
-          composer install --optimize-autoloader --no-dev
-          
-          # Install/update npm dependencies
+          # Build and update frontend
+          cd frontend
           npm ci
-          
-          # Build production assets
           npm run build
+          cd ..
+          
+          # Update backend in Docker
+          docker exec listerino_app composer install --optimize-autoloader --no-dev
           
           # Run database migrations
-          php artisan migrate --force
+          docker exec listerino_app php artisan migrate --force
           
           # Clear and rebuild all caches
-          php artisan optimize:clear
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache
-          php artisan optimize
+          docker exec listerino_app php artisan cache:clear
+          docker exec listerino_app php artisan config:cache
+          docker exec listerino_app php artisan route:cache
+          docker exec listerino_app php artisan view:cache
           
-          # Ensure storage link exists
-          php artisan storage:link --force
+          # Copy frontend build to container
+          docker cp frontend/dist/. listerino_app:/var/www/html/frontend/dist/
           
-          # Set proper permissions
-          chmod -R 755 storage bootstrap/cache
-          chown -R www-data:www-data storage bootstrap/cache public/storage
+          # Restart containers if needed
+          docker-compose restart
           
-          # Restart PHP-FPM
-          sudo systemctl restart php8.3-fpm
-          
-          # Reload Nginx
-          sudo nginx -s reload
+          # Health check
+          sleep 10
+          curl -f https://listerino.com/api/health || exit 1
           
     - name: Notify deployment status
       if: always()

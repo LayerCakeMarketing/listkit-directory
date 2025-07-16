@@ -1,0 +1,64 @@
+# Multi-stage Dockerfile for optimized production builds
+
+# Stage 1: Frontend Builder
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci --only=production
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Composer Dependencies
+FROM composer:2 AS composer-builder
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+COPY . .
+RUN composer dump-autoload --optimize
+
+# Stage 3: Production Image
+FROM webdevops/php-nginx:8.3-alpine
+LABEL maintainer="Listerino Team"
+
+# Set environment
+ENV WEB_DOCUMENT_ROOT=/var/www/html/public \
+    PHP_MEMORY_LIMIT=512M \
+    PHP_UPLOAD_MAX_FILESIZE=50M \
+    PHP_POST_MAX_SIZE=50M \
+    PHP_MAX_EXECUTION_TIME=300
+
+# Install additional PHP extensions
+RUN apk add --no-cache \
+    postgresql-dev \
+    && docker-php-ext-install pdo_pgsql
+
+# Copy application files
+COPY --chown=application:application . /var/www/html/
+COPY --from=composer-builder --chown=application:application /app/vendor /var/www/html/vendor
+COPY --from=frontend-builder --chown=application:application /app/frontend/dist /var/www/html/frontend/dist
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Create required directories
+RUN mkdir -p storage/framework/{sessions,views,cache} \
+    && mkdir -p storage/logs \
+    && mkdir -p bootstrap/cache \
+    && chown -R application:application storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# Copy custom PHP configuration
+COPY docker/php/custom.ini /opt/docker/etc/php/conf.d/99-custom.ini
+
+# Copy custom Nginx configuration
+COPY docker/nginx/vhost.conf /opt/docker/etc/nginx/vhost.conf
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s \
+    CMD curl -f http://localhost/api/health || exit 1
+
+# Expose port
+EXPOSE 80
+
+# Override the default command to ensure permissions
+CMD ["/bin/bash", "-c", "chown -R application:application /var/www/html/storage /var/www/html/bootstrap/cache && /entrypoint supervisord"]

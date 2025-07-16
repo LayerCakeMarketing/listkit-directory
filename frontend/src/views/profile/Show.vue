@@ -154,30 +154,86 @@
               </div>
             </div>
 
-            <!-- Recent Lists -->
+            <!-- Activity Feed -->
             <div>
-              <h2 class="text-xl font-semibold mb-4">Recent Lists</h2>
-              <div v-if="recentLists.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ListCard
-                  v-for="list in recentLists"
-                  :key="list.id"
-                  :list="list"
-                  :profile-color="profileColor"
-                />
+              <h2 class="text-xl font-semibold mb-4">Activity</h2>
+              <div v-if="loading" class="space-y-4">
+                <div v-for="i in 3" :key="i" class="bg-white rounded-lg shadow p-6 animate-pulse">
+                  <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+              <div v-else-if="activityFeed.length > 0" class="space-y-4">
+                <!-- Render different feed items based on type -->
+                <div v-for="item in activityFeed" :key="`${item.feed_type}-${item.id}`">
+                  <!-- Post Item -->
+                  <PostItem 
+                    v-if="item.feed_type === 'post'"
+                    :post="item"
+                    @updated="handlePostUpdated"
+                    @deleted="handleItemDeleted(item)"
+                  />
+                  
+                  <!-- List Item -->
+                  <div v-else-if="item.feed_type === 'list'" class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
+                    <div class="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-1">
+                          <router-link 
+                            :to="`/@${user.custom_url || user.username}/${item.slug}`"
+                            class="hover:text-blue-600"
+                          >
+                            {{ item.name }}
+                          </router-link>
+                        </h3>
+                        <p v-if="item.description" class="text-gray-600 text-sm mb-2">{{ item.description }}</p>
+                        <div class="flex items-center text-sm text-gray-500 space-x-4">
+                          <span>{{ item.items_count || 0 }} items</span>
+                          <span v-if="item.category">{{ item.category.name }}</span>
+                          <span>{{ formatDate(item.created_at) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Place Item (if user creates places) -->
+                  <div v-else-if="item.feed_type === 'place'" class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-1">
+                          <router-link 
+                            :to="item.canonical_url || `/p/${item.id}`"
+                            class="hover:text-blue-600"
+                          >
+                            {{ item.title }}
+                          </router-link>
+                        </h3>
+                        <p v-if="item.description" class="text-gray-600 text-sm mb-2">{{ item.description }}</p>
+                        <div class="flex items-center text-sm text-gray-500 space-x-4">
+                          <span v-if="item.category">{{ item.category.name }}</span>
+                          <span v-if="item.location">{{ item.location.city }}, {{ item.location.state }}</span>
+                          <span>{{ formatDate(item.created_at) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div v-else class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                No public lists yet
+                No activity yet
               </div>
-            </div>
-
-            <!-- View All Lists -->
-            <div v-if="user.lists_count > 6" class="text-center">
-              <router-link
-                :to="{ name: 'UserLists', params: { username: user.custom_url || user.username } }"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                View All Lists ({{ user.lists_count }})
-              </router-link>
+              
+              <!-- Load More -->
+              <div v-if="hasMoreActivity" class="text-center mt-6">
+                <button
+                  @click="loadMoreActivity"
+                  :disabled="loadingMore"
+                  class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <span v-if="loadingMore">Loading...</span>
+                  <span v-else>Load More</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -214,6 +270,10 @@ const tackedPost = ref(null)
 const pinnedLists = ref([])
 const recentLists = ref([])
 const isFollowing = ref(false)
+const activityFeed = ref([])
+const activityPage = ref(1)
+const hasMoreActivity = ref(true)
+const loadingMore = ref(false)
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const currentUser = computed(() => authStore.user)
@@ -238,6 +298,9 @@ async function fetchProfile(forceRefresh = false) {
     if (user.value) {
       fetchTackedPost()
     }
+    
+    // Fetch activity feed
+    fetchActivityFeed()
   } catch (error) {
     console.error('Failed to fetch profile:', error)
     user.value = null
@@ -288,6 +351,51 @@ function formatDate(dateString) {
 
 function handlePostUpdated(updatedPost) {
   tackedPost.value = updatedPost
+  // Also update in activity feed if present
+  const index = activityFeed.value.findIndex(item => item.feed_type === 'post' && item.id === updatedPost.id)
+  if (index !== -1) {
+    activityFeed.value[index] = updatedPost
+  }
+}
+
+function handleItemDeleted(item) {
+  activityFeed.value = activityFeed.value.filter(
+    feedItem => !(feedItem.feed_type === item.feed_type && feedItem.id === item.id)
+  )
+}
+
+async function fetchActivityFeed() {
+  try {
+    const response = await axios.get(`/api/users/${user.value.username}/activity`, {
+      params: {
+        page: activityPage.value,
+        per_page: 10
+      }
+    })
+    
+    if (activityPage.value === 1) {
+      activityFeed.value = response.data.data || []
+    } else {
+      activityFeed.value.push(...(response.data.data || []))
+    }
+    
+    hasMoreActivity.value = response.data.last_page > activityPage.value
+  } catch (error) {
+    console.error('Failed to fetch activity feed:', error)
+  }
+}
+
+async function loadMoreActivity() {
+  if (loadingMore.value || !hasMoreActivity.value) return
+  
+  loadingMore.value = true
+  activityPage.value++
+  
+  try {
+    await fetchActivityFeed()
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 onMounted(() => {

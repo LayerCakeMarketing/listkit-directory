@@ -30,18 +30,8 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // Proxy auth endpoints
-      '/login': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        secure: false,
-      },
+      // Only proxy the logout API endpoint
       '/logout': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/register': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,

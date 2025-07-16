@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use App\Models\Post;
+use App\Models\UserList;
+use App\Models\Place;
 
 class ProfileController extends Controller
 {
@@ -276,5 +279,79 @@ class ProfileController extends Controller
         $profileData = $cacheService->getProfile($username);
         
         return response()->json($profileData);
+    }
+
+    /**
+     * Get user's activity feed (posts, lists, places)
+     */
+    public function getUserActivity($username, Request $request)
+    {
+        $user = User::where('username', $username)
+            ->orWhere('custom_url', $username)
+            ->firstOrFail();
+
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 10);
+        
+        // Collect all activities in an array
+        $activities = collect();
+        
+        // Get posts
+        $posts = Post::where('user_id', $user->id)
+            ->visible()
+            ->with('user')
+            ->latest()
+            ->get()
+            ->map(function ($post) {
+                $post->feed_type = 'post';
+                $post->feed_timestamp = $post->created_at;
+                return $post;
+            });
+        
+        // Get public lists
+        $lists = UserList::where('user_id', $user->id)
+            ->searchable()
+            ->with(['user', 'category', 'tags'])
+            ->withCount('items')
+            ->latest()
+            ->get()
+            ->map(function ($list) {
+                $list->feed_type = 'list';
+                $list->feed_timestamp = $list->created_at;
+                return $list;
+            });
+        
+        // Get created places (if user creates places)
+        $places = Place::where('created_by_user_id', $user->id)
+            ->where('status', 'published')
+            ->with(['category', 'location'])
+            ->latest()
+            ->get()
+            ->map(function ($place) {
+                $place->feed_type = 'place';
+                $place->feed_timestamp = $place->created_at;
+                return $place;
+            });
+        
+        // Merge all activities and sort by timestamp
+        $activities = $activities->concat($posts)
+            ->concat($lists)
+            ->concat($places)
+            ->sortByDesc('feed_timestamp')
+            ->values();
+        
+        // Manual pagination
+        $total = $activities->count();
+        $items = $activities->forPage($page, $perPage);
+        
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $page,
+            ['path' => $request->url()]
+        );
+        
+        return response()->json($paginated);
     }
 }

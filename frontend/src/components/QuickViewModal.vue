@@ -49,7 +49,7 @@
 
                 <div class="mt-4">
                     <router-link
-                        :to="`/places/${item.slug}`"
+                        :to="item.canonical_url || `/p/${item.id}`"
                         class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         @click="$emit('close')"
                     >

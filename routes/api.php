@@ -24,6 +24,10 @@ Route::post('/register', [SpaAuthController::class, 'register']);
 Route::post('/logout', [SpaAuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [SpaAuthController::class, 'forgotPassword']);
 
+// Registration status and waitlist
+Route::get('/registration/status', [\App\Http\Controllers\Api\RegistrationController::class, 'status']);
+Route::post('/registration/waitlist', [\App\Http\Controllers\Api\RegistrationController::class, 'joinWaitlist']);
+
 // Public routes
 Route::get('/locations/search', [LocationController::class, 'search']);
 Route::get('/locations/nearby', [LocationController::class, 'nearby']);
@@ -32,6 +36,7 @@ Route::get('/categories', [CategoryController::class, 'index']);
 
 // Public user posts
 Route::get('/users/{username}/posts', [PostController::class, 'userPosts']);
+Route::get('/users/{username}/activity', [ProfileController::class, 'getUserActivity']);
 
 // Places routes (new canonical URL structure)
 Route::get('/places', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'index']);
@@ -420,8 +425,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/{key}', [\App\Http\Controllers\Api\Admin\SettingsController::class, 'show']);
             Route::post('/reset', [\App\Http\Controllers\Api\Admin\SettingsController::class, 'reset']);
         });
+        
+        // Waitlist management routes
+        Route::prefix('waitlist')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'index']);
+            Route::get('/stats', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'stats']);
+            Route::post('/{id}/invite', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'invite']);
+            Route::post('/invite-bulk', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'inviteBulk']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'destroy']);
+        });
     });
 });
+
+// Public login page settings (needed for login page customization)
+Route::get('/login-settings', [\App\Http\Controllers\Api\Admin\LoginPageController::class, 'show']);
 
 // Public marketing/info page route (at root level)
 Route::get('/{slug}', [PageController::class, 'show'])

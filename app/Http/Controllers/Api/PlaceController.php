@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Place;
 use App\Models\Location;
+use App\Helpers\StateHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -399,15 +400,21 @@ class PlaceController extends Controller
         
         // Create state region if doesn't exist
         if (!empty($locationData['state'])) {
+            // Normalize state to full name (e.g., CA -> California)
+            $stateName = StateHelper::normalize($locationData['state']);
+            
             $stateRegion = \App\Models\Region::firstOrCreate(
                 [
-                    'slug' => Str::slug($locationData['state']), 
+                    'slug' => Str::slug($stateName), 
                     'type' => 'state'
                 ],
                 [
-                    'name' => $locationData['state'], 
+                    'name' => $stateName, 
                     'level' => 1,
-                    'parent_id' => null
+                    'parent_id' => null,
+                    'abbreviation' => StateHelper::isAbbreviation($locationData['state']) 
+                        ? strtoupper($locationData['state']) 
+                        : StateHelper::getAbbreviation($stateName)
                 ]
             );
             $regionIds['state_region_id'] = $stateRegion->id;

@@ -334,6 +334,15 @@
                 </li>
               </ul>
             </li>
+            <li>
+                  <button 
+        @click="logout" 
+        class="text-sm text-indigo-200 hover:text-white"
+      >
+        Sign Out
+      </button>
+
+              </li>
 
             <!-- User Profile at bottom -->
             <li class="-mx-6 mt-auto">
@@ -364,12 +373,7 @@
         </svg>
       </button>
       <div class="flex-1 text-sm/6 font-semibold text-white">{{ currentPageTitle }}</div>
-      <button 
-        @click="logout" 
-        class="text-sm text-indigo-200 hover:text-white"
-      >
-        Sign Out
-      </button>
+  
     </div>
 
     <!-- Desktop top bar -->
@@ -498,6 +502,12 @@ const administrationNavigation = [
       { name: 'Login Page', to: '/admin/marketing-pages/login' },
       { name: 'Home Page', to: '/admin/marketing-pages/home' }
     ]
+  },
+  { 
+    id: 4, 
+    name: 'Waitlist', 
+    to: '/admin/waitlist', 
+    initial: 'W' 
   }
 ]
 

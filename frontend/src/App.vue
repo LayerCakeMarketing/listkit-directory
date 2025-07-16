@@ -2,7 +2,11 @@
   <div id="app">
     <!-- Admin Layout -->
     <AdminLayout v-if="isAdminRoute">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </AdminLayout>
     
     <!-- Regular Layout -->
@@ -11,7 +15,11 @@
       <UnifiedHeader v-if="showNavigation" />
 
       <main :class="{ 'pt-16': showNavigation }">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="page" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </main>
     </div>
   </div>
@@ -79,5 +87,21 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
 }
 </style>

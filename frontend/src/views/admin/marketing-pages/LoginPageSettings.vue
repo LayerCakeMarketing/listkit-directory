@@ -5,6 +5,18 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mb-6">
                 <h2 class="text-2xl font-bold text-gray-900">Login Page Settings</h2>
                 <p class="mt-1 text-sm text-gray-600">Customize the appearance and behavior of the login page</p>
+                <div class="mt-4 flex space-x-3">
+                    <a 
+                        href="/login" 
+                        target="_blank"
+                        class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        View Login Page
+                    </a>
+                </div>
             </div>
 
             <!-- Settings Form -->
@@ -13,36 +25,38 @@
                     <!-- Background Image -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Background Image</label>
-                        <div class="flex items-start space-x-4">
-                            <div v-if="settings.background_image_url" class="relative">
+                        <div class="space-y-4">
+                            <div v-if="form.background_image_id || settings.background_image_id || settings.background_image_url" class="relative inline-block">
                                 <img 
-                                    :src="settings.background_image_url" 
+                                    :src="backgroundImageUrl" 
                                     alt="Background" 
-                                    class="w-48 h-32 object-cover rounded-lg"
+                                    class="w-full max-w-md h-48 object-cover rounded-lg shadow-md"
+                                    @error="(e) => console.error('Image load error:', e, 'URL:', backgroundImageUrl)"
                                 />
                                 <button
                                     type="button"
                                     @click="removeBackgroundImage"
-                                    class="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+                                    class="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 shadow-lg"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
                             </div>
-                            <div>
-                                <input
-                                    type="file"
-                                    @change="handleImageUpload"
-                                    accept="image/*"
-                                    class="block w-full text-sm text-gray-500
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-full file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-blue-50 file:text-blue-700
-                                        hover:file:bg-blue-100"
+                            
+                            <!-- Cloudflare Upload Component -->
+                            <div v-if="!form.background_image_id && !settings.background_image_id && !settings.background_image_url">
+                                <CloudflareDragDropUploader
+                                    :max-files="1"
+                                    :max-file-size="10485760"
+                                    context="cover"
+                                    entity-type="login_page"
+                                    :entity-id="1"
+                                    accepted-types="image/jpeg,image/png,image/webp"
+                                    @upload-success="handleImagesUploaded"
+                                    @upload-error="handleUploadError"
                                 />
-                                <p class="mt-1 text-xs text-gray-500">Recommended size: 1920x1080px, Max size: 5MB</p>
+                                <p class="text-xs text-gray-500 mt-2">Recommended: 1920x859px (16:9 ratio)</p>
                             </div>
                         </div>
                     </div>
@@ -84,13 +98,48 @@
                         <p class="mt-1 text-xs text-gray-500">Add custom CSS to override default styles</p>
                     </div>
 
-                    <!-- Preview -->
+                    <!-- Live Preview -->
                     <div class="border-t pt-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Preview</h3>
-                        <div class="border rounded-lg p-4 bg-gray-50">
-                            <p class="text-sm text-gray-600 text-center">
-                                Live preview will be shown here in a future update
-                            </p>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Live Preview</h3>
+                        <div class="border rounded-lg overflow-hidden shadow-lg">
+                            <div ref="previewRef" class="login-preview relative bg-gray-100" style="min-height: 400px;">
+                                <!-- Background -->
+                                <div 
+                                    v-if="backgroundImageUrl" 
+                                    class="absolute inset-0"
+                                    :style="{ backgroundImage: `url(${backgroundImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }"
+                                ></div>
+                                
+                                <!-- Login Form Preview -->
+                                <div class="relative flex items-center justify-center p-8" style="min-height: 400px;">
+                                    <div class="bg-white/95 backdrop-blur p-8 rounded-lg shadow-xl max-w-sm w-full">
+                                        <div class="text-center mb-6">
+                                            <img src="/images/listerino_logo.svg" alt="Logo" class="h-10 w-auto mx-auto mb-4" />
+                                            <div v-if="form.welcome_message" class="text-gray-700" v-html="form.welcome_message"></div>
+                                            <div v-else class="text-gray-700">Sign in to your account</div>
+                                        </div>
+                                        
+                                        <div class="space-y-4">
+                                            <div>
+                                                <input type="email" placeholder="Email address" class="w-full px-3 py-2 border border-gray-300 rounded-md" disabled />
+                                            </div>
+                                            <div>
+                                                <input type="password" placeholder="Password" class="w-full px-3 py-2 border border-gray-300 rounded-md" disabled />
+                                            </div>
+                                            <button class="w-full bg-indigo-600 text-white py-2 rounded-md" disabled>Sign in</button>
+                                        </div>
+                                        
+                                        <!-- Social Login Preview -->
+                                        <div v-if="form.social_login_enabled" class="mt-6 pt-6 border-t">
+                                            <p class="text-center text-sm text-gray-600 mb-3">Or continue with</p>
+                                            <div class="flex space-x-3">
+                                                <button class="flex-1 py-2 px-3 border border-gray-300 rounded-md text-sm" disabled>Google</button>
+                                                <button class="flex-1 py-2 px-3 border border-gray-300 rounded-md text-sm" disabled>Facebook</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -118,8 +167,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
+import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
 
 // State
 const loading = ref(false)
@@ -132,8 +182,39 @@ const form = reactive({
     welcome_message: '',
     custom_css: '',
     social_login_enabled: true,
+    background_image_id: null,
     remove_background_image: false
 })
+
+// Computed
+const backgroundImageUrl = computed(() => {
+    console.log('Computing backgroundImageUrl - form.background_image_id:', form.background_image_id, 'settings:', settings.value)
+    if (form.background_image_id) {
+        return `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${form.background_image_id}/lgformat`
+    }
+    if (settings.value?.background_image_id) {
+        return `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${settings.value.background_image_id}/lgformat`
+    }
+    return settings.value?.background_image_url || null
+})
+
+// Create a style element for the preview
+const previewRef = ref(null)
+const updatePreviewStyles = () => {
+    if (!previewRef.value || !form.custom_css) return
+    
+    // Find or create a style element for the preview
+    let styleEl = previewRef.value.querySelector('style[data-preview-css]')
+    if (!styleEl) {
+        styleEl = document.createElement('style')
+        styleEl.setAttribute('data-preview-css', 'true')
+        previewRef.value.appendChild(styleEl)
+    }
+    
+    // Scope the CSS to the preview container
+    const scopedCss = form.custom_css.replace(/([^{]+){/g, '.login-preview $1{')
+    styleEl.textContent = scopedCss
+}
 
 // Methods
 const fetchSettings = async () => {
@@ -146,6 +227,8 @@ const fetchSettings = async () => {
         form.welcome_message = settings.value.welcome_message || ''
         form.custom_css = settings.value.custom_css || ''
         form.social_login_enabled = settings.value.social_login_enabled !== false
+        form.background_image_id = settings.value.background_image_id || null
+        form.remove_background_image = false
     } catch (error) {
         console.error('Error fetching settings:', error)
     } finally {
@@ -153,37 +236,44 @@ const fetchSettings = async () => {
     }
 }
 
-const handleImageUpload = (event) => {
-    backgroundImageFile.value = event.target.files[0]
+const handleImagesUploaded = (uploadResult) => {
+    console.log('Cloudflare image uploaded:', uploadResult)
+    if (uploadResult && uploadResult.id) {
+        form.background_image_id = uploadResult.id
+        console.log('Set form.background_image_id to:', form.background_image_id)
+        console.log('Current form state:', JSON.parse(JSON.stringify(form)))
+    }
+}
+
+const handleUploadError = (error) => {
+    console.error('Upload error:', error)
+    alert('Failed to upload image. Please try again.')
 }
 
 const removeBackgroundImage = () => {
+    form.background_image_id = null
     form.remove_background_image = true
-    settings.value.background_image_url = null
+    if (settings.value) {
+        settings.value.background_image_url = null
+        settings.value.background_image_id = null
+    }
 }
 
 const saveSettings = async () => {
     processing.value = true
 
-    const formData = new FormData()
-    formData.append('welcome_message', form.welcome_message)
-    formData.append('custom_css', form.custom_css)
-    formData.append('social_login_enabled', form.social_login_enabled ? '1' : '0')
-    
-    if (backgroundImageFile.value) {
-        formData.append('background_image', backgroundImageFile.value)
+    const payload = {
+        welcome_message: form.welcome_message,
+        custom_css: form.custom_css,
+        social_login_enabled: form.social_login_enabled,
+        background_image_id: form.background_image_id,
+        remove_background_image: form.remove_background_image
     }
     
-    if (form.remove_background_image) {
-        formData.append('remove_background_image', '1')
-    }
+    console.log('Saving settings with payload:', payload)
 
     try {
-        const response = await axios.post('/api/admin/marketing-pages/special/login', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        })
+        const response = await axios.post('/api/admin/marketing-pages/special/login', payload)
         
         settings.value = response.data.data
         form.remove_background_image = false
@@ -203,6 +293,13 @@ const resetForm = () => {
     backgroundImageFile.value = null
     form.remove_background_image = false
 }
+
+// Watch for custom CSS changes
+watch(() => form.custom_css, () => {
+    nextTick(() => {
+        updatePreviewStyles()
+    })
+})
 
 // Initialize
 onMounted(() => {

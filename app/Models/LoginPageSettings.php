@@ -11,6 +11,7 @@ class LoginPageSettings extends Model
 
     protected $fillable = [
         'background_image_path',
+        'background_image_id',
         'welcome_message',
         'custom_css',
         'social_login_enabled',
@@ -19,6 +20,8 @@ class LoginPageSettings extends Model
     protected $casts = [
         'social_login_enabled' => 'boolean',
     ];
+    
+    protected $appends = ['background_image_url'];
 
     /**
      * Get the singleton instance.
@@ -33,10 +36,16 @@ class LoginPageSettings extends Model
      */
     public function getBackgroundImageUrlAttribute()
     {
-        if (!$this->background_image_path) {
-            return null;
+        // Prioritize Cloudflare image
+        if ($this->background_image_id) {
+            return "https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/{$this->background_image_id}/lgformat";
+        }
+        
+        // Fall back to local storage
+        if ($this->background_image_path) {
+            return asset('storage/' . $this->background_image_path);
         }
 
-        return asset('storage/' . $this->background_image_path);
+        return null;
     }
 }

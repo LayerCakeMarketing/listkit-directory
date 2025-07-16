@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watchEffect, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GuestLayout from '@/components/layouts/GuestLayout.vue'
@@ -30,6 +30,32 @@ const form = reactive({
     remember: false,
     processing: false,
     errors: {}
+})
+
+const loginSettings = ref({
+    welcome_message: null,
+    background_image_id: null,
+    background_image_url: null,
+    custom_css: null,
+    social_login_enabled: false
+})
+
+const settingsLoaded = ref(false)
+
+const backgroundImageUrl = computed(() => {
+    // Don't show any image until settings are loaded to prevent flash
+    if (!settingsLoaded.value) {
+        return null
+    }
+    
+    if (loginSettings.value.background_image_id) {
+        return `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${loginSettings.value.background_image_id}/lgformat`
+    }
+    if (loginSettings.value.background_image_url) {
+        return loginSettings.value.background_image_url
+    }
+    // Default Unsplash image
+    return 'https://images.unsplash.com/photo-1496917756835-20cb06e75b4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1908&q=80'
 })
 
 const submit = async () => {
@@ -90,7 +116,43 @@ onMounted(async () => {
     } catch (error) {
         console.error('Failed to fetch CSRF token:', error)
     }
+    
+    // Fetch login page settings
+    try {
+        const response = await axios.get('/api/login-settings')
+        loginSettings.value = response.data.data
+        settingsLoaded.value = true
+    } catch (error) {
+        console.error('Failed to fetch login settings:', error)
+        settingsLoaded.value = true // Still mark as loaded to show default
+    }
+    
     document.title = 'Log in - ' + (import.meta.env.VITE_APP_NAME || 'Laravel')
+})
+
+// Handle custom CSS injection
+const styleElement = ref(null)
+
+watchEffect(() => {
+    if (loginSettings.value.custom_css) {
+        // Remove existing style element if it exists
+        if (styleElement.value) {
+            document.head.removeChild(styleElement.value)
+        }
+        
+        // Create new style element
+        styleElement.value = document.createElement('style')
+        styleElement.value.setAttribute('data-login-custom-css', 'true')
+        styleElement.value.textContent = loginSettings.value.custom_css
+        document.head.appendChild(styleElement.value)
+    }
+})
+
+// Clean up on unmount
+onUnmounted(() => {
+    if (styleElement.value) {
+        document.head.removeChild(styleElement.value)
+    }
 })
 </script>
 
@@ -102,7 +164,8 @@ onMounted(async () => {
                   
                     <Logo to="/" imgClassName="h-10 w-auto" />
             
-                    <h2 class="mt-8 text-2xl/9 font-bold tracking-tight text-gray-900">Sign in to your account</h2>
+                    <h2 v-if="loginSettings.welcome_message" class="mt-8 text-2xl/9 font-bold tracking-tight text-gray-900" v-html="loginSettings.welcome_message"></h2>
+                    <h2 v-else class="mt-8 text-2xl/9 font-bold tracking-tight text-gray-900">Sign in to your account</h2>
                     <p class="mt-2 text-sm/6 text-gray-500">
                         Don't have an account?
                         {{ ' ' }}
@@ -187,8 +250,40 @@ onMounted(async () => {
                                 {{ form.processing ? 'Signing in...' : 'Sign in' }}
                             </button>
                         </div>
+                        
+                        <!-- Social Login Options -->
+                        <div v-if="loginSettings.social_login_enabled" class="mt-6">
+                            <div class="relative">
+                                <div class="absolute inset-0 flex items-center">
+                                    <div class="w-full border-t border-gray-300" />
+                                </div>
+                                <div class="relative flex justify-center text-sm">
+                                    <span class="bg-white px-2 text-gray-500">Or continue with</span>
+                                </div>
+                            </div>
 
-                        <div class="text-center">
+                            <div class="mt-6 grid grid-cols-2 gap-3">
+                                <button type="button" class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50" disabled>
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M20 10c0-5.523-4.477-10-10-10S0 4.477 0 10c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V10h2.54V7.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V10h2.773l-.443 2.89h-2.33v6.988C16.343 19.128 20 14.991 20 10z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="ml-2">Facebook</span>
+                                </button>
+
+                                <button type="button" class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50" disabled>
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" />
+                                    </svg>
+                                    <span class="ml-2">GitHub</span>
+                                </button>
+                            </div>
+                            
+                            <p class="mt-4 text-center text-xs text-gray-500">
+                                Social login coming soon
+                            </p>
+                        </div>
+
+                        <div class="text-center mt-6">
                             <router-link to="/" class="text-sm/6 font-semibold text-indigo-600 hover:text-indigo-500">
                                 ← Return to browse
                             </router-link>
@@ -198,7 +293,16 @@ onMounted(async () => {
             </div>
         </div>
         <div class="relative hidden w-0 flex-1 lg:block">
-            <img class="absolute inset-0 size-full object-cover" src="https://images.unsplash.com/photo-1496917756835-20cb06e75b4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1908&q=80" alt="" />
+            <!-- Show a loading background while settings load -->
+            <div v-if="!settingsLoaded" class="absolute inset-0 bg-gray-100 animate-pulse"></div>
+            <!-- Show image once loaded with fade-in transition -->
+            <img 
+                v-if="backgroundImageUrl" 
+                class="absolute inset-0 size-full object-cover transition-opacity duration-500"
+                :class="{ 'opacity-0': !settingsLoaded, 'opacity-100': settingsLoaded }"
+                :src="backgroundImageUrl" 
+                alt="" 
+            />
         </div>
     </div>
 </template>

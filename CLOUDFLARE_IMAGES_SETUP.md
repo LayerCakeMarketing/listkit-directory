@@ -21,7 +21,7 @@ This guide will help you set up Cloudflare Images for your Laravel + Vue applica
 2. **Enable Cloudflare Images**
    - Navigate to "Images" in the sidebar
    - Click "Subscribe to Cloudflare Images"
-   - Choose your plan (starts at $5/month for 100k images)
+
 
 3. **Get Your Credentials**
    - **Account ID**: Found in the right sidebar of any Cloudflare dashboard page
