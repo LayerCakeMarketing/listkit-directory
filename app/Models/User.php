@@ -7,10 +7,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Place;
+use App\Traits\Followable;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, Followable;
 
     protected $fillable = [
         'name', 'email', 'password', 'username', 'custom_url', 'role', 'bio',
@@ -132,6 +133,17 @@ class User extends Authenticatable
         return $this->hasMany(UserList::class);
     }
 
+    public function channels()
+    {
+        return $this->hasMany(Channel::class);
+    }
+
+    public function followedChannels()
+    {
+        return $this->belongsToMany(Channel::class, 'channel_followers')
+                    ->withTimestamps();
+    }
+
     public function comments()
     {
         return $this->hasMany(Comment::class);
@@ -141,6 +153,79 @@ class User extends Authenticatable
     {
         return $this->hasMany(Claim::class);
     }
+    
+    // Polymorphic following relationships
+    public function following()
+    {
+        return $this->hasMany(Follow::class, 'follower_id');
+    }
+    
+    public function followingUsers()
+    {
+        return $this->morphedByMany(
+            User::class, 
+            'followable', 
+            'follows', 
+            'follower_id', 
+            'followable_id'
+        )->wherePivot('followable_type', User::class);
+    }
+    
+    public function followingPlaces()
+    {
+        return $this->morphedByMany(
+            Place::class, 
+            'followable', 
+            'follows', 
+            'follower_id', 
+            'followable_id'
+        )->wherePivot('followable_type', Place::class);
+    }
+    
+    public function isFollowing($followable): bool
+    {
+        return $this->following()
+            ->where('followable_id', $followable->id)
+            ->where('followable_type', get_class($followable))
+            ->exists();
+    }
+    
+    public function followUser(User $user): void
+    {
+        if ($user->id !== $this->id && !$this->isFollowing($user)) {
+            $this->following()->create([
+                'followable_id' => $user->id,
+                'followable_type' => User::class,
+            ]);
+        }
+    }
+    
+    public function unfollowUser(User $user): void
+    {
+        $this->following()
+            ->where('followable_id', $user->id)
+            ->where('followable_type', User::class)
+            ->delete();
+    }
+    
+    public function followPlace(Place $place): void
+    {
+        if (!$this->isFollowing($place)) {
+            $this->following()->create([
+                'followable_id' => $place->id,
+                'followable_type' => Place::class,
+            ]);
+        }
+    }
+    
+    public function unfollowPlace(Place $place): void
+    {
+        $this->following()
+            ->where('followable_id', $place->id)
+            ->where('followable_type', Place::class)
+            ->delete();
+    }
+    
 
     // Following relationships
     public function followers()
@@ -149,7 +234,7 @@ class User extends Authenticatable
                     ->withTimestamps();
     }
 
-    public function following()
+    public function followingOld()
     {
         return $this->belongsToMany(User::class, 'user_follows', 'follower_id', 'following_id')
                     ->withTimestamps();
@@ -178,6 +263,11 @@ class User extends Authenticatable
     public function activities()
     {
         return $this->hasMany(UserActivity::class)->orderBy('created_at', 'desc');
+    }
+
+    public function savedItems()
+    {
+        return $this->hasMany(SavedItem::class)->latest();
     }
 
     public function publicActivities()
@@ -242,56 +332,6 @@ class User extends Authenticatable
         return $this->followers()->where('follower_id', $user->id)->exists();
     }
 
-    public function isFollowing(User $user)
-    {
-        return $this->following()->where('following_id', $user->id)->exists();
-    }
-
-    public function follow(User $user)
-    {
-        if (!$this->isFollowing($user) && $this->id !== $user->id) {
-            $this->following()->attach($user->id);
-            $this->recordActivity('followed_user', $user);
-            return true;
-        }
-        return false;
-    }
-
-    public function unfollow(User $user)
-    {
-        if ($this->isFollowing($user)) {
-            $this->following()->detach($user->id);
-            return true;
-        }
-        return false;
-    }
-
-    public function followPlace(Place $place)
-    {
-        if (!$this->followedPlaces()->where('directory_entry_id', $place->id)->exists()) {
-            $this->followedPlaces()->attach($place->id);
-            $this->recordActivity('followed_place', $place);
-            return true;
-        }
-        return false;
-    }
-    
-    // Backward compatibility
-    public function followEntry($entry)
-    {
-        return $this->followPlace($entry);
-    }
-
-    public function unfollowPlace(Place $place)
-    {
-        return $this->followedPlaces()->detach($place->id) > 0;
-    }
-    
-    // Backward compatibility
-    public function unfollowEntry($entry)
-    {
-        return $this->unfollowPlace($entry);
-    }
 
     public function isFollowingPlace(Place $place)
     {

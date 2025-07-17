@@ -6,15 +6,18 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use App\Models\Place;
+use App\Traits\HasTags;
+use App\Traits\Saveable;
 
 class UserList extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTags, Saveable;
 
     protected $table = 'lists';
 
     protected $fillable = [
         'user_id',
+        'channel_id',
         'category_id',
         'name',
         'slug',
@@ -81,6 +84,11 @@ class UserList extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function channel()
+    {
+        return $this->belongsTo(Channel::class);
     }
 
     public function items()
@@ -451,6 +459,9 @@ class UserList extends Model
     // URL generation
     public function getPublicUrl()
     {
+        if ($this->channel_id && $this->channel) {
+            return '/@' . $this->channel->slug . '/' . $this->slug;
+        }
         return '/u/' . $this->user->getUrlSlug() . '/' . $this->slug;
     }
 

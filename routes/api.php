@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Auth\SpaAuthController;
 use App\Http\Controllers\Api\PageController;
+use App\Services\UserProfileCacheService;
 
 // Auth routes for SPA
 Route::post('/login', [SpaAuthController::class, 'login']);
@@ -37,6 +38,9 @@ Route::get('/categories', [CategoryController::class, 'index']);
 // Public user posts
 Route::get('/users/{username}/posts', [PostController::class, 'userPosts']);
 Route::get('/users/{username}/activity', [ProfileController::class, 'getUserActivity']);
+
+// Tags
+Route::get('/tags/search', [\App\Http\Controllers\Api\Admin\TagController::class, 'search']);
 
 // Places routes (new canonical URL structure)
 Route::get('/places', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'index']);
@@ -75,8 +79,46 @@ Route::prefix('regions')->group(function () {
 });
 
 // User profiles and lists (with @ prefix)
-Route::get('/@{username}', [ProfileController::class, 'showByCustomUrl']);
-Route::get('/@{username}/lists', [UserListController::class, 'userLists']);
+Route::get('/@{username}', function ($username) {
+    // Try to find a user first
+    $user = \App\Models\User::where('username', $username)
+        ->orWhere('custom_url', $username)
+        ->first();
+    
+    if ($user) {
+        // Use the ProfileController with cache service for full profile data
+        $cacheService = app(UserProfileCacheService::class);
+        return app(ProfileController::class)->showByCustomUrl($username, $cacheService);
+    }
+    
+    // Try to find a channel
+    $channel = \App\Models\Channel::where('slug', $username)->first();
+    
+    if ($channel) {
+        return app(\App\Http\Controllers\Api\ChannelController::class)->show($username);
+    }
+    
+    abort(404);
+});
+Route::get('/@{slug}/lists', function ($slug) {
+    // Try to find a user first
+    $user = \App\Models\User::where('username', $slug)
+        ->orWhere('custom_url', $slug)
+        ->first();
+    
+    if ($user) {
+        return app(UserListController::class)->userLists($slug);
+    }
+    
+    // Try to find a channel
+    $channel = \App\Models\Channel::where('slug', $slug)->first();
+    
+    if ($channel) {
+        return app(\App\Http\Controllers\Api\ChannelController::class)->lists($channel, request());
+    }
+    
+    abort(404);
+});
 Route::get('/@{username}/{slug}', [UserListController::class, 'showBySlug']);
 
 // Legacy routes for backward compatibility (can be removed later)
@@ -211,8 +253,67 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/lists/{id}', [UserListController::class, 'update']);
     Route::delete('/lists/{id}', [UserListController::class, 'destroy']);
     
+    // List items management
+    Route::post('/lists/{list}/items', [UserListController::class, 'addItem']);
+    Route::put('/lists/{list}/items/{item}', [UserListController::class, 'updateItem']);
+    Route::delete('/lists/{list}/items/{item}', [UserListController::class, 'removeItem']);
+    Route::put('/lists/{list}/items/reorder', [UserListController::class, 'reorderItems']);
+    
+    // Search directory entries for lists
+    Route::get('/directory-entries/search', [UserListController::class, 'searchEntries']);
+    
+    // List sharing (for private lists)
+    Route::get('/lists/{list}/shares', [UserListController::class, 'getShares']);
+    Route::post('/lists/{list}/shares', [UserListController::class, 'shareList']);
+    Route::delete('/lists/{list}/shares/{share}', [UserListController::class, 'removeShare']);
+    
+    // User search for sharing
+    Route::get('/users/search', [UserListController::class, 'searchUsers']);
+    
     // List categories for authenticated users
     Route::get('/list-categories', [\App\Http\Controllers\Api\Admin\ListCategoryController::class, 'options']);
+    
+    // Follow/Unfollow routes
+    Route::post('/users/{user}/follow', [\App\Http\Controllers\Api\FollowController::class, 'followUser']);
+    Route::delete('/users/{user}/follow', [\App\Http\Controllers\Api\FollowController::class, 'unfollowUser']);
+    Route::post('/places/{place}/follow', [\App\Http\Controllers\Api\FollowController::class, 'followPlace']);
+    Route::delete('/places/{place}/follow', [\App\Http\Controllers\Api\FollowController::class, 'unfollowPlace']);
+    Route::get('/following', [\App\Http\Controllers\Api\FollowController::class, 'following']);
+    Route::get('/users/{user}/followers', [\App\Http\Controllers\Api\FollowController::class, 'followers']);
+    Route::get('/following/check', [\App\Http\Controllers\Api\FollowController::class, 'checkFollowing']);
+    
+    // Saved Items routes
+    Route::get('/saved-items', [\App\Http\Controllers\Api\SavedItemController::class, 'index']);
+    Route::post('/saved-items', [\App\Http\Controllers\Api\SavedItemController::class, 'store']);
+    Route::delete('/saved-items/{type}/{id}', [\App\Http\Controllers\Api\SavedItemController::class, 'destroy']);
+    Route::post('/saved-items/check', [\App\Http\Controllers\Api\SavedItemController::class, 'checkSaved']);
+    Route::get('/saved-items/for-list-creation', [\App\Http\Controllers\Api\SavedItemController::class, 'forListCreation']);
+    
+    // Channel routes
+    Route::apiResource('channels', \App\Http\Controllers\Api\ChannelController::class);
+    Route::post('/channels/{channel}/follow', [\App\Http\Controllers\Api\ChannelController::class, 'follow']);
+    Route::delete('/channels/{channel}/follow', [\App\Http\Controllers\Api\ChannelController::class, 'unfollow']);
+    Route::get('/channels/{channel}/followers', [\App\Http\Controllers\Api\ChannelController::class, 'followers']);
+    Route::get('/channels/{channel}/lists', [\App\Http\Controllers\Api\ChannelController::class, 'lists']);
+    Route::post('/channels/check-slug', [\App\Http\Controllers\Api\ChannelController::class, 'checkSlug']);
+    Route::get('/my-channels', [\App\Http\Controllers\Api\ChannelController::class, 'myChannels']);
+    Route::get('/followed-channels', [\App\Http\Controllers\Api\ChannelController::class, 'followedChannels']);
+    
+    // User's channels
+    Route::get('/users/{user}/channels', function ($userId) {
+        $user = \App\Models\User::findOrFail($userId);
+        return $user->channels()
+            ->withCount(['lists', 'followers'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+    });
+    Route::get('/users/{user}/followed-channels', function ($userId) {
+        $user = \App\Models\User::findOrFail($userId);
+        return $user->followedChannels()
+            ->with(['user:id,name,username,custom_url,avatar,avatar_cloudflare_id'])
+            ->withCount(['lists', 'followers'])
+            ->paginate(12);
+    });
 
     // Tag validation
     Route::post('/validate-tag', function (Request $request) {
@@ -355,6 +456,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/media/{cloudflareId}', [\App\Http\Controllers\Api\Admin\MediaController::class, 'destroy']);
         Route::post('/media/bulk-delete', [\App\Http\Controllers\Api\Admin\MediaController::class, 'bulkDelete']);
         Route::post('/media/cleanup', [\App\Http\Controllers\Api\Admin\MediaController::class, 'cleanup']);
+        
+        // Tags management routes
+        Route::get('/tags', [\App\Http\Controllers\Api\Admin\TagController::class, 'index']);
+        Route::get('/tags/stats', [\App\Http\Controllers\Api\Admin\TagController::class, 'stats']);
+        Route::post('/tags', [\App\Http\Controllers\Api\Admin\TagController::class, 'store']);
+        Route::get('/tags/{tag}', [\App\Http\Controllers\Api\Admin\TagController::class, 'show']);
+        Route::put('/tags/{tag}', [\App\Http\Controllers\Api\Admin\TagController::class, 'update']);
+        Route::delete('/tags/{tag}', [\App\Http\Controllers\Api\Admin\TagController::class, 'destroy']);
+        Route::post('/tags/bulk-update', [\App\Http\Controllers\Api\Admin\TagController::class, 'bulkUpdate']);
         
         // Add data routes to match admin.php structure
         Route::prefix('data')->group(function () {

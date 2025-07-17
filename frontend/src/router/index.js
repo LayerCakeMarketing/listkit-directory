@@ -211,6 +211,40 @@ const routes = [
     props: true
   },
   
+  // Saved Items
+  {
+    path: '/saved',
+    name: 'SavedItems',
+    component: () => import('@/views/SavedItems.vue'),
+    meta: { requiresAuth: true }
+  },
+  
+  // Channel routes
+  {
+    path: '/channels',
+    name: 'Channels',
+    component: () => import('@/views/channels/Index.vue')
+  },
+  {
+    path: '/channels/create',
+    name: 'ChannelCreate',
+    component: () => import('@/views/channels/Create.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/channels/:id/edit',
+    name: 'ChannelEdit',
+    component: () => import('@/views/channels/Edit.vue'),
+    meta: { requiresAuth: true },
+    props: true
+  },
+  {
+    path: '/mychannels',
+    name: 'MyChannels',
+    component: () => import('@/views/channels/MyChannels.vue'),
+    meta: { requiresAuth: true }
+  },
+  
   // Public lists exploration
   {
     path: '/lists',
@@ -310,6 +344,12 @@ const routes = [
     component: () => import('@/views/admin/waitlist/Index.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
+  {
+    path: '/admin/tags',
+    name: 'AdminTags',
+    component: () => import('@/views/admin/tags/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
   // User profile and list routes (with @ prefix)
   {
     path: '/@:username/lists',
@@ -327,10 +367,26 @@ const routes = [
   },
   {
     path: '/@:username',
-    name: 'UserProfile',
-    component: () => import('@/views/profile/Show.vue'),
-    props: true
-    // Remove requiresAuth - public profiles should be viewable
+    name: 'DynamicProfile',
+    component: () => import('@/views/profile/DynamicProfile.vue'),
+    props: route => ({ slug: route.params.username }),
+    // This will handle both user profiles and channels
+    beforeEnter: async (to, from, next) => {
+      try {
+        // Check what type of entity this is
+        const response = await axios.get(`/api/@${to.params.username}`)
+        
+        // The API will return the appropriate data based on whether it's a user or channel
+        // The DynamicProfile component will handle rendering accordingly
+        next()
+      } catch (error) {
+        if (error.response?.status === 404) {
+          next({ name: 'NotFound' })
+        } else {
+          next()
+        }
+      }
+    }
   },
   
   // Generic category routes (should be after user routes)

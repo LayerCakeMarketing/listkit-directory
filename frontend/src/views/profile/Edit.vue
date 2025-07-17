@@ -448,6 +448,122 @@
               </div>
             </div>
 
+            <!-- Channels Tab -->
+            <div v-show="activeTab === 'channels'" class="space-y-8">
+              <div class="bg-white shadow rounded-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 class="text-lg font-medium">Your Channels</h2>
+                    <p class="text-sm text-gray-600">Create and manage channels to organize your lists</p>
+                  </div>
+                  <router-link
+                    to="/channels/create"
+                    class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+                  >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Channel
+                  </router-link>
+                </div>
+
+                <!-- Channels List -->
+                <div v-if="channelsLoading" class="flex justify-center py-8">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+
+                <div v-else-if="channels.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    v-for="channel in channels"
+                    :key="channel.id"
+                    class="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div class="flex items-start space-x-3">
+                      <img
+                        :src="channel.avatar_url || defaultChannelAvatar(channel.name)"
+                        :alt="channel.name"
+                        class="h-12 w-12 rounded-full"
+                      >
+                      <div class="flex-1">
+                        <h3 class="font-medium text-gray-900">{{ channel.name }}</h3>
+                        <p class="text-sm text-gray-500">@{{ channel.slug }}</p>
+                        <p v-if="channel.description" class="text-sm text-gray-600 mt-1">{{ channel.description }}</p>
+                        <div class="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                          <span>{{ channel.lists_count }} lists</span>
+                          <span>{{ channel.followers_count }} followers</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-4 flex items-center space-x-2">
+                      <router-link
+                        :to="`/@${channel.slug}`"
+                        class="flex-1 text-center px-3 py-1 border rounded text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        View
+                      </router-link>
+                      <router-link
+                        :to="`/channels/${channel.id}/edit`"
+                        class="flex-1 text-center px-3 py-1 border rounded text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Edit
+                      </router-link>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="text-center py-8">
+                  <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4" />
+                  </svg>
+                  <p class="mt-2 text-sm text-gray-900">No channels created yet</p>
+                  <p class="text-sm text-gray-500">Channels help you organize your lists by theme or topic</p>
+                  <router-link
+                    to="/channels/create"
+                    class="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                  >
+                    Create Your First Channel
+                  </router-link>
+                </div>
+              </div>
+
+              <!-- Followed Channels -->
+              <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-lg font-medium mb-4">Followed Channels</h2>
+                
+                <div v-if="followedChannelsLoading" class="flex justify-center py-8">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+
+                <div v-else-if="followedChannels.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <router-link
+                    v-for="channel in followedChannels"
+                    :key="channel.id"
+                    :to="`/@${channel.slug}`"
+                    class="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div class="flex items-start space-x-3">
+                      <img
+                        :src="channel.avatar_url || defaultChannelAvatar(channel.name)"
+                        :alt="channel.name"
+                        class="h-10 w-10 rounded-full"
+                      >
+                      <div>
+                        <h3 class="font-medium text-gray-900">{{ channel.name }}</h3>
+                        <p class="text-sm text-gray-500">by {{ channel.user.name }}</p>
+                        <div class="mt-1 text-sm text-gray-500">
+                          {{ channel.lists_count }} lists • {{ channel.followers_count }} followers
+                        </div>
+                      </div>
+                    </div>
+                  </router-link>
+                </div>
+
+                <div v-else class="text-center py-6 text-sm text-gray-500">
+                  You haven't followed any channels yet
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -504,6 +620,10 @@ const lightboxImage = ref(null)
 const exportingMedia = ref(false)
 const profileUpdated = ref(false)
 const profileImageTimestamp = ref(Date.now())
+const channels = ref([])
+const channelsLoading = ref(false)
+const followedChannels = ref([])
+const followedChannelsLoading = ref(false)
 
 const baseUrl = computed(() => window.location.origin)
 
@@ -511,7 +631,8 @@ const tabs = [
   { id: 'basic', name: 'Basic Information' },
   { id: 'images', name: 'Images' },
   { id: 'settings', name: 'Settings' },
-  { id: 'media', name: 'Media' }
+  { id: 'media', name: 'Media' },
+  { id: 'channels', name: 'Channels' }
 ]
 
 const form = reactive({
@@ -878,8 +999,50 @@ watch(() => profile.value.cover_image_url, () => {
   profileImageTimestamp.value = Date.now()
 })
 
+const fetchChannels = async () => {
+  channelsLoading.value = true
+  try {
+    const response = await axios.get('/api/my-channels')
+    channels.value = response.data
+  } catch (error) {
+    console.error('Error fetching channels:', error)
+  } finally {
+    channelsLoading.value = false
+  }
+}
+
+const fetchFollowedChannels = async () => {
+  followedChannelsLoading.value = true
+  try {
+    const response = await axios.get('/api/followed-channels')
+    followedChannels.value = response.data.data
+  } catch (error) {
+    console.error('Error fetching followed channels:', error)
+  } finally {
+    followedChannelsLoading.value = false
+  }
+}
+
+const defaultChannelAvatar = (name) => {
+  const initials = name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+  
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#6366f1"/>
+    <text x="50" y="50" font-family="Arial, sans-serif" font-size="40" fill="white" text-anchor="middle" dominant-baseline="central">${initials}</text>
+  </svg>`
+  
+  return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
 onMounted(() => {
   fetchProfile()
   fetchUserLists()
+  fetchChannels()
+  fetchFollowedChannels()
 })
 </script>

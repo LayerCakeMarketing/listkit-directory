@@ -7,24 +7,77 @@
                     <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                         Edit List: {{ list.name || 'Loading...' }}
                     </h2>
-                    <router-link
-                        to="/mylists/"
-                        class="text-gray-600 hover:text-gray-900"
-                    >
-                        Back to My Lists
-                    </router-link>
+                    <div class="flex items-center space-x-4">
+                        <button
+                            v-if="hasSaved"
+                            @click="previewList"
+                            type="button"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded"
+                        >
+                            Preview
+                        </button>
+                        <button
+                            @click="updateList"
+                            :disabled="savingList"
+                            type="button"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                        >
+                            {{ savingList ? 'Saving...' : 'Save' }}
+                        </button>
+                        <button
+                            @click="settingsOpen = true"
+                            class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+                            title="List Settings"
+                        >
+                            <Cog6ToothIcon class="h-5 w-5" />
+                        </button>
+                        <router-link
+                            to="/mylists/"
+                            class="text-gray-600 hover:text-gray-900"
+                        >
+                            Back to My Lists
+                        </router-link>
+                    </div>
                 </div>
 
                 <div v-if="loading" class="text-center">
                     <p class="text-gray-500">Loading list...</p>
                 </div>
-                <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- List Settings -->
-                    <div class="lg:col-span-1">
-                        <div class="bg-white p-6 rounded-lg shadow">
-                            <h3 class="text-lg font-semibold mb-4">List Settings</h3>
-                            
-                            <form @submit.prevent="updateList" class="space-y-4">
+                <div v-else>
+                    <!-- Settings Drawer -->
+                    <TransitionRoot as="template" :show="settingsOpen">
+                        <Dialog class="relative z-50" @close="settingsOpen = false">
+                            <div class="fixed inset-0 overflow-hidden">
+                                <div class="absolute inset-0 overflow-hidden">
+                                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full">
+                                        <TransitionChild
+                                            as="template"
+                                            enter="transform transition ease-in-out duration-300"
+                                            enter-from="translate-x-full"
+                                            enter-to="translate-x-0"
+                                            leave="transform transition ease-in-out duration-300"
+                                            leave-from="translate-x-0"
+                                            leave-to="translate-x-full"
+                                        >
+                                            <DialogPanel class="pointer-events-auto w-screen max-w-md">
+                                                <div class="flex h-full flex-col overflow-y-auto bg-white shadow-2xl">
+                                                    <div class="px-4 py-6 sm:px-6">
+                                                        <div class="flex items-center justify-between">
+                                                            <DialogTitle class="text-lg font-semibold text-gray-900">List Settings</DialogTitle>
+                                                            <div class="ml-3 flex h-7 items-center">
+                                                                <button
+                                                                    type="button"
+                                                                    class="rounded-md bg-white text-gray-400 hover:text-gray-500"
+                                                                    @click="settingsOpen = false"
+                                                                >
+                                                                    <span class="sr-only">Close panel</span>
+                                                                    <XMarkIcon class="h-6 w-6" aria-hidden="true" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="relative flex-1 px-4 sm:px-6">
+                                                        <form @submit.prevent="updateList" class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Name</label>
                                     <input
@@ -34,7 +87,6 @@
                                         required
                                     />
                                 </div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Description</label>
                                     <textarea
@@ -43,7 +95,6 @@
                                         class="mt-1 block w-full rounded-md border-gray-300"
                                     ></textarea>
                                 </div>
-
                                 <div>
                                     <CategorySelect
                                         v-model="listForm.category_id"
@@ -52,7 +103,23 @@
                                         help-text="Choose the category that best describes your list"
                                     />
                                 </div>
-
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Channel</label>
+                                    <select
+                                        v-model="listForm.channel_id"
+                                        class="mt-1 block w-full rounded-md border-gray-300"
+                                    >
+                                        <option :value="null">No channel (personal list)</option>
+                                        <option
+                                            v-for="channel in userChannels"
+                                            :key="channel.id"
+                                            :value="channel.id"
+                                        >
+                                            {{ channel.name }} (@{{ channel.slug }})
+                                        </option>
+                                    </select>
+                                    <p class="mt-1 text-sm text-gray-500">Assign this list to one of your channels</p>
+                                </div>
                                 <div>
                                     <TagInput
                                         v-model="listForm.tags"
@@ -63,7 +130,6 @@
                                         :max-tags="10"
                                     />
                                 </div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
                                     <div class="space-y-2">
@@ -79,7 +145,6 @@
                                                 <span class="block text-xs text-gray-500">Visible to all logged-in users and appears in feeds</span>
                                             </div>
                                         </label>
-                                        
                                         <label class="flex items-start">
                                             <input
                                                 v-model="listForm.visibility"
@@ -92,7 +157,6 @@
                                                 <span class="block text-xs text-gray-500">Only accessible via direct URL</span>
                                             </div>
                                         </label>
-                                        
                                         <label class="flex items-start">
                                             <input
                                                 v-model="listForm.visibility"
@@ -107,32 +171,6 @@
                                         </label>
                                     </div>
                                 </div>
-
-                                <div class="border-t pt-4">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Publishing Options</label>
-                                    <div class="space-y-3">
-                                        <label class="flex items-center">
-                                            <input
-                                                v-model="listForm.is_draft"
-                                                type="checkbox"
-                                                class="rounded border-gray-300"
-                                            />
-                                            <span class="ml-2 text-sm text-gray-700">Save as draft</span>
-                                        </label>
-                                        
-                                        <div v-if="!listForm.is_draft">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Schedule for later</label>
-                                            <input
-                                                v-model="listForm.scheduled_for"
-                                                type="datetime-local"
-                                                class="w-full rounded-md border-gray-300"
-                                                :min="new Date().toISOString().slice(0, 16)"
-                                            />
-                                            <p class="text-xs text-gray-500 mt-1">Leave empty to publish immediately</p>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">
                                         Photos
@@ -147,7 +185,6 @@
                                         @upload-success="handlePhotoUpload"
                                         @upload-error="handleUploadError"
                                     />
-                                    
                                     <!-- Upload Results with Drag & Drop Reordering -->
                                     <DraggableImageGallery 
                                         v-model:images="photos"
@@ -156,7 +193,6 @@
                                         @remove="handleGalleryRemove"
                                         @reorder="updateImageOrder"
                                     />
-                                    
                                     <!-- Existing Gallery Images -->
                                     <DraggableImageGallery 
                                         v-if="existingPhotos.length > 0"
@@ -166,136 +202,154 @@
                                         @remove="handleExistingGalleryRemove"
                                         @reorder="updateExistingImageOrder"
                                     />
-                                    
                                     <p class="text-xs text-gray-500 mt-1">Add photos for your list. The first photo will be used as the featured image. Drag to reorder them.</p>
                                 </div>
-
-                                <button
-                                    type="submit"
-                                    :disabled="savingList"
-                                    class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                                >
-                                    {{ savingList ? 'Saving...' : 'Save Settings' }}
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- List Sharing (Private Lists Only) -->
-                        <div v-if="listForm.visibility === 'private'" class="bg-white p-6 rounded-lg shadow mt-6">
-                            <h3 class="text-lg font-semibold mb-4">Share List</h3>
-                            
-                            <!-- Add New Share -->
-                            <div class="space-y-4 mb-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Share with user</label>
-                                    <input
-                                        v-model="shareSearch"
-                                        @input="debouncedSearchUsers"
-                                        type="text"
-                                        placeholder="Search by name, username, or email..."
-                                        class="w-full rounded-md border-gray-300"
-                                    />
-                                    <div v-if="userSearchResults.length > 0" class="mt-2 max-h-40 overflow-y-auto border rounded">
-                                        <button
-                                            v-for="user in userSearchResults"
-                                            :key="user.id"
-                                            @click="selectUserToShare(user)"
-                                            class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0 flex items-center space-x-2"
-                                        >
-                                            <div>
-                                                <div class="font-medium">{{ user.name }}</div>
-                                                <div class="text-sm text-gray-500">@{{ user.username || user.email }}</div>
-                                            </div>
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div v-if="selectedUser" class="p-3 bg-gray-50 rounded border">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <div>
-                                            <div class="font-medium">{{ selectedUser.name }}</div>
-                                            <div class="text-sm text-gray-500">@{{ selectedUser.username || selectedUser.email }}</div>
-                                        </div>
-                                        <button @click="clearSelectedUser" class="text-gray-400 hover:text-gray-600">
-                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="space-y-2">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Permission</label>
-                                            <select v-model="shareForm.permission" class="w-full rounded-md border-gray-300">
-                                                <option value="view">View only</option>
-                                                <option value="edit">Can edit</option>
-                                            </select>
-                                        </div>
-                                        
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Expires (optional)</label>
-                                            <input
-                                                v-model="shareForm.expires_at"
-                                                type="datetime-local"
-                                                class="w-full rounded-md border-gray-300"
-                                                :min="new Date().toISOString().slice(0, 16)"
-                                            />
-                                        </div>
-                                        
-                                        <button
-                                            @click="shareList"
-                                            :disabled="sharing"
-                                            class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                                        >
-                                            {{ sharing ? 'Sharing...' : 'Share List' }}
-                                        </button>
+                                                        </form>
+                                                        
+                                                        <!-- Publishing Options -->
+                                                        <div class="border-t px-4 py-4 mt-4">
+                                                            <label class="block text-sm font-medium text-gray-700 mb-2">Publishing Options</label>
+                                                            <div class="space-y-3">
+                                                                <label class="flex items-center">
+                                                                    <input
+                                                                        v-model="listForm.is_draft"
+                                                                        type="checkbox"
+                                                                        class="rounded border-gray-300"
+                                                                    />
+                                                                    <span class="ml-2 text-sm text-gray-700">Save as draft</span>
+                                                                </label>
+                                                                <div v-if="!listForm.is_draft">
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Schedule for later</label>
+                                                                    <input
+                                                                        v-model="listForm.scheduled_for"
+                                                                        type="datetime-local"
+                                                                        class="w-full rounded-md border-gray-300"
+                                                                        :min="new Date().toISOString().slice(0, 16)"
+                                                                    />
+                                                                    <p class="text-xs text-gray-500 mt-1">Leave empty to publish immediately</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- List Sharing (Private Lists Only) -->
+                                                        <div v-if="listForm.visibility === 'private'" class="border-t px-4 py-4 mt-4">
+                                                            <h3 class="text-lg font-semibold mb-4">Share List</h3>
+                                                            <!-- Add New Share -->
+                                                            <div class="space-y-4 mb-6">
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Share with user</label>
+                                                                    <input
+                                                                        v-model="shareSearch"
+                                                                        @input="debouncedSearchUsers"
+                                                                        type="text"
+                                                                        placeholder="Search by name, username, or email..."
+                                                                        class="w-full rounded-md border-gray-300"
+                                                                    />
+                                                                    <div v-if="userSearchResults.length > 0" class="mt-2 max-h-40 overflow-y-auto border rounded">
+                                                                        <button
+                                                                            v-for="user in userSearchResults"
+                                                                            :key="user.id"
+                                                                            @click="selectUserToShare(user)"
+                                                                            class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0 flex items-center space-x-2"
+                                                                        >
+                                                                            <div>
+                                                                                <div class="font-medium">{{ user.name }}</div>
+                                                                                <div class="text-sm text-gray-500">@{{ user.username || user.email }}</div>
+                                                                            </div>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div v-if="selectedUser" class="p-3 bg-gray-50 rounded border">
+                                                                    <div class="flex items-center justify-between mb-3">
+                                                                        <div>
+                                                                            <div class="font-medium">{{ selectedUser.name }}</div>
+                                                                            <div class="text-sm text-gray-500">@{{ selectedUser.username || selectedUser.email }}</div>
+                                                                        </div>
+                                                                        <button @click="clearSelectedUser" class="text-gray-400 hover:text-gray-600">
+                                                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="space-y-2">
+                                                                        <div>
+                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">Permission</label>
+                                                                            <select v-model="shareForm.permission" class="w-full rounded-md border-gray-300">
+                                                                                <option value="view">View only</option>
+                                                                                <option value="edit">Can edit</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">Expires (optional)</label>
+                                                                            <input
+                                                                                v-model="shareForm.expires_at"
+                                                                                type="datetime-local"
+                                                                                class="w-full rounded-md border-gray-300"
+                                                                                :min="new Date().toISOString().slice(0, 16)"
+                                                                            />
+                                                                        </div>
+                                                                        <button
+                                                                            @click="shareList"
+                                                                            :disabled="sharing"
+                                                                            class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                                                                        >
+                                                                            {{ sharing ? 'Sharing...' : 'Share List' }}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <!-- Current Shares -->
+                                                            <div v-if="shares.length > 0">
+                                                                <h4 class="font-medium text-gray-900 mb-3">Current Shares</h4>
+                                                                <div class="space-y-2">
+                                                                    <div
+                                                                        v-for="share in shares"
+                                                                        :key="share.id"
+                                                                        class="flex items-center justify-between p-3 bg-gray-50 rounded border"
+                                                                    >
+                                                                        <div>
+                                                                            <div class="font-medium">{{ share.user.name }}</div>
+                                                                            <div class="text-sm text-gray-500">
+                                                                                {{ share.permission }} access
+                                                                                <span v-if="share.expires_at"> • Expires {{ formatDate(share.expires_at) }}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="flex items-center space-x-2">
+                                                                            <button
+                                                                                @click="editShare(share)"
+                                                                                class="text-blue-600 hover:text-blue-800 text-sm"
+                                                                            >
+                                                                                Edit
+                                                                            </button>
+                                                                            <button
+                                                                                @click="removeShare(share)"
+                                                                                class="text-red-600 hover:text-red-800 text-sm"
+                                                                            >
+                                                                                Remove
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div v-else class="text-sm text-gray-500 text-center py-4">
+                                                                No one has access to this private list yet.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </DialogPanel>
+                                        </TransitionChild>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Current Shares -->
-                            <div v-if="shares.length > 0">
-                                <h4 class="font-medium text-gray-900 mb-3">Current Shares</h4>
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="share in shares"
-                                        :key="share.id"
-                                        class="flex items-center justify-between p-3 bg-gray-50 rounded border"
-                                    >
-                                        <div>
-                                            <div class="font-medium">{{ share.user.name }}</div>
-                                            <div class="text-sm text-gray-500">
-                                                {{ share.permission }} access
-                                                <span v-if="share.expires_at"> • Expires {{ formatDate(share.expires_at) }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <button
-                                                @click="editShare(share)"
-                                                class="text-blue-600 hover:text-blue-800 text-sm"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                @click="removeShare(share)"
-                                                class="text-red-600 hover:text-red-800 text-sm"
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div v-else class="text-sm text-gray-500 text-center py-4">
-                                No one has access to this private list yet.
-                            </div>
-                        </div>
+                        </Dialog>
+                    </TransitionRoot>
 
+                    <!-- List Items (full width when drawer is closed) -->
+                    <div class="flex flex-col gap-6">
                         <!-- Add New Item -->
-                        <div class="bg-white p-6 rounded-lg shadow mt-6">
+                        <div class="bg-white p-6 rounded-lg shadow">
                             <h3 class="text-lg font-semibold mb-4">Add Item</h3>
-                            
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Item Type</label>
@@ -303,6 +357,7 @@
                                         <button
                                             v-for="type in itemTypes"
                                             :key="type.value"
+                                            type="button"
                                             @click="selectedItemType = type.value"
                                             :class="[
                                                 'p-2 text-sm rounded border',
@@ -315,20 +370,29 @@
                                         </button>
                                     </div>
                                 </div>
-
                                 <!-- Directory Entry Search -->
                                 <div v-if="selectedItemType === 'directory_entry'">
-                                    <input
-                                        v-model="entrySearch"
-                                        @input="debouncedSearchEntries"
-                                        type="text"
-                                        placeholder="Search directory entries..."
-                                        class="w-full rounded-md border-gray-300"
-                                    />
+                                    <div class="flex gap-2">
+                                        <input
+                                            v-model="entrySearch"
+                                            @input="debouncedSearchEntries"
+                                            type="text"
+                                            placeholder="Search directory entries..."
+                                            class="flex-1 rounded-md border-gray-300"
+                                        />
+                                        <button
+                                            @click="showSavedItems = true"
+                                            type="button"
+                                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
+                                        >
+                                            From Saved
+                                        </button>
+                                    </div>
                                     <div v-if="searchResults.length > 0" class="mt-2 max-h-60 overflow-y-auto border rounded">
                                         <button
                                             v-for="entry in searchResults"
                                             :key="entry.id"
+                                            type="button"
                                             @click="addDirectoryEntry(entry)"
                                             class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0"
                                         >
@@ -337,7 +401,6 @@
                                         </button>
                                     </div>
                                 </div>
-
                                 <!-- Text Item -->
                                 <div v-if="selectedItemType === 'text'" class="space-y-2">
                                     <input
@@ -353,13 +416,13 @@
                                         class="w-full rounded-md border-gray-300"
                                     ></textarea>
                                     <button
+                                        type="button"
                                         @click="addTextItem"
                                         class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                                     >
                                         Add Text
                                     </button>
                                 </div>
-
                                 <!-- Location Item -->
                                 <div v-if="selectedItemType === 'location'" class="space-y-2">
                                     <input
@@ -391,13 +454,13 @@
                                         />
                                     </div>
                                     <button
+                                        type="button"
                                         @click="addLocationItem"
                                         class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                                     >
                                         Add Location
                                     </button>
                                 </div>
-
                                 <!-- Event Item -->
                                 <div v-if="selectedItemType === 'event'" class="space-y-2">
                                     <input
@@ -424,6 +487,7 @@
                                         class="w-full rounded-md border-gray-300"
                                     />
                                     <button
+                                        type="button"
                                         @click="addEventItem"
                                         class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                                     >
@@ -432,20 +496,15 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- List Items -->
-                    <div class="lg:col-span-2">
+                        <!-- List Items -->
                         <div class="bg-white rounded-lg shadow">
                             <div class="p-6 border-b">
                                 <h3 class="text-lg font-semibold">List Items</h3>
                                 <p class="text-sm text-gray-500 mt-1">Drag to reorder items</p>
                             </div>
-
                             <div v-if="items.length === 0" class="p-6 text-center text-gray-500">
                                 No items yet. Add some content to your list!
                             </div>
-
                             <draggable
                                 v-else
                                 v-model="items"
@@ -472,12 +531,14 @@
                                                             {{ element.type }}
                                                         </span>
                                                         <button
+                                                            type="button"
                                                             @click="editItem(element)"
                                                             class="text-blue-600 hover:text-blue-800 text-sm"
                                                         >
                                                             Edit
                                                         </button>
                                                         <button
+                                                            type="button"
                                                             @click="removeItem(element)"
                                                             class="text-red-600 hover:text-red-800 text-sm"
                                                         >
@@ -512,7 +573,6 @@
                 <h3 class="text-lg font-medium text-gray-900 mb-4">
                     Edit Item
                 </h3>
-
                 <form @submit.prevent="updateItem" class="space-y-4">
                     <div v-if="editingItem.type !== 'directory_entry'">
                         <label class="block text-sm font-medium text-gray-700">Title</label>
@@ -523,7 +583,6 @@
                             required
                         />
                     </div>
-
                     <div v-if="['text', 'event'].includes(editingItem.type)">
                         <label class="block text-sm font-medium text-gray-700">Content</label>
                         <textarea
@@ -532,7 +591,6 @@
                             class="mt-1 block w-full rounded-md border-gray-300"
                         ></textarea>
                     </div>
-
                     <div v-if="editingItem.type === 'directory_entry' || editForm.affiliate_url !== undefined">
                         <label class="block text-sm font-medium text-gray-700">Affiliate URL</label>
                         <input
@@ -542,7 +600,6 @@
                             placeholder="https://example.com/affiliate"
                         />
                     </div>
-
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Notes</label>
                         <textarea
@@ -552,7 +609,6 @@
                             placeholder="Personal notes about this item..."
                         ></textarea>
                     </div>
-
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Item Image</label>
                         <DirectCloudflareUpload
@@ -566,7 +622,6 @@
                         />
                         <p class="text-xs text-gray-500 mt-1">Add an image to make this list item more visually appealing</p>
                     </div>
-
                     <div class="flex justify-end space-x-3">
                         <button
                             type="button"
@@ -586,11 +641,103 @@
                 </form>
             </div>
         </Modal>
+        
+        <!-- Saved Items Modal -->
+        <TransitionRoot :show="showSavedItems" as="template" @after-leave="savedItemsQuery = ''">
+            <Dialog as="div" class="relative z-50" @close="showSavedItems = false">
+                <TransitionChild
+                    as="template"
+                    enter="ease-out duration-300"
+                    enter-from="opacity-0"
+                    enter-to="opacity-100"
+                    leave="ease-in duration-200"
+                    leave-from="opacity-100"
+                    leave-to="opacity-0"
+                >
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+                </TransitionChild>
+
+                <div class="fixed inset-0 z-10 overflow-y-auto">
+                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                        <TransitionChild
+                            as="template"
+                            enter="ease-out duration-300"
+                            enter-from="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                            enter-to="opacity-100 translate-y-0 sm:scale-100"
+                            leave="ease-in duration-200"
+                            leave-from="opacity-100 translate-y-0 sm:scale-100"
+                            leave-to="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                        >
+                            <DialogPanel class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
+                                <div>
+                                    <h3 class="text-lg font-medium leading-6 text-gray-900">
+                                        Select from Saved Places
+                                    </h3>
+                                    <div class="mt-4">
+                                        <input
+                                            v-model="savedItemsQuery"
+                                            type="text"
+                                            placeholder="Filter saved places..."
+                                            class="w-full rounded-md border-gray-300 mb-4"
+                                        />
+                                        
+                                        <div v-if="loadingSavedItems" class="text-center py-4">
+                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                        </div>
+                                        
+                                        <div v-else-if="filteredSavedItems.length === 0" class="text-center py-8 text-gray-500">
+                                            No saved places found.
+                                        </div>
+                                        
+                                        <div v-else class="max-h-96 overflow-y-auto space-y-2">
+                                            <div
+                                                v-for="place in filteredSavedItems"
+                                                :key="place.id"
+                                                class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                                                @click="addSavedPlace(place)"
+                                            >
+                                                <div class="flex items-start justify-between">
+                                                    <div>
+                                                        <h4 class="font-medium text-gray-900">{{ place.title }}</h4>
+                                                        <p class="text-sm text-gray-500">
+                                                            {{ place.category }}
+                                                            <span v-if="place.location"> · {{ place.location }}</span>
+                                                        </p>
+                                                        <p v-if="place.description" class="text-sm text-gray-600 mt-1 line-clamp-2">
+                                                            {{ place.description }}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        class="ml-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                                    >
+                                                        Add
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-5 sm:mt-6">
+                                    <button
+                                        type="button"
+                                        class="inline-flex w-full justify-center rounded-md bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-400"
+                                        @click="showSavedItems = false"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </DialogPanel>
+                        </TransitionChild>
+                    </div>
+                </div>
+            </Dialog>
+        </TransitionRoot>
     </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import Modal from '@/components/Modal.vue'
@@ -601,10 +748,22 @@ import CategorySelect from '@/components/ui/CategorySelect.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import draggable from 'vuedraggable'
 import { debounce } from 'lodash'
+import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
+import { XMarkIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
+// import { useToast } from 'vue-toastification'
 
 // Vue Router
 const route = useRoute()
 const router = useRouter()
+// const toast = useToast()
+
+// Simple toast alternative
+const showToast = (message, type = 'success') => {
+  console.log(`${type}: ${message}`)
+  if (type === 'error') {
+    alert(`Error: ${message}`)
+  }
+}
 
 // Get listId from route params
 const listId = ref(route.params.id)
@@ -638,6 +797,17 @@ const itemImage = ref(null)
 const photos = ref([])
 const existingPhotos = ref([])
 
+// Drawer state
+const settingsOpen = ref(false)
+const hasSaved = ref(false)
+
+// Saved items state
+const showSavedItems = ref(false)
+const savedItems = ref([])
+const loadingSavedItems = ref(false)
+const savedItemsQuery = ref('')
+const userChannels = ref([])
+
 const listForm = reactive({
     name: '',
     description: '',
@@ -648,6 +818,7 @@ const listForm = reactive({
     featured_image_cloudflare_id: null,
     gallery_images: [],
     category_id: '',
+    channel_id: null,
     tags: []
 })
 
@@ -682,6 +853,17 @@ const itemTypes = [
     { value: 'event', label: 'Event' }
 ]
 
+// Computed
+const filteredSavedItems = computed(() => {
+    if (!savedItemsQuery.value) return savedItems.value
+    const query = savedItemsQuery.value.toLowerCase()
+    return savedItems.value.filter(item => 
+        item.title.toLowerCase().includes(query) ||
+        (item.description && item.description.toLowerCase().includes(query)) ||
+        (item.category && item.category.toLowerCase().includes(query))
+    )
+})
+
 // Methods
 const fetchList = async () => {
     loading.value = true
@@ -704,6 +886,7 @@ const fetchList = async () => {
             featured_image_cloudflare_id: response.data.featured_image_cloudflare_id || null,
             gallery_images: response.data.gallery_images || [],
             category_id: response.data.category_id || '',
+            channel_id: response.data.channel_id || null,
             tags: response.data.tags || []
         })
         
@@ -746,12 +929,21 @@ const updateList = async () => {
     savingList.value = true
     try {
         await axios.put(`/api/lists/${listId.value}`, listForm)
+        hasSaved.value = true
         alert('List settings saved successfully')
     } catch (error) {
         alert('Error saving list: ' + error.response?.data?.message)
     } finally {
         savingList.value = false
     }
+}
+
+const previewList = () => {
+    // Open the list in a new tab
+    const user = list.value.user
+    const baseUrl = user?.custom_url ? `/@${user.custom_url}` : `/users/${user?.username || user?.id}`
+    const listUrl = `${baseUrl}/${list.value.slug}`
+    window.open(listUrl, '_blank')
 }
 
 const searchEntries = async () => {
@@ -783,6 +975,33 @@ const addDirectoryEntry = async (entry) => {
         searchResults.value = []
     } catch (error) {
         alert('Error adding entry: ' + error.response?.data?.message)
+    }
+}
+
+const fetchSavedItems = async () => {
+    loadingSavedItems.value = true
+    try {
+        const response = await axios.get('/api/saved-items/for-list-creation')
+        savedItems.value = response.data.places || []
+    } catch (error) {
+        console.error('Error fetching saved items:', error)
+        savedItems.value = []
+    } finally {
+        loadingSavedItems.value = false
+    }
+}
+
+const addSavedPlace = async (place) => {
+    try {
+        const response = await axios.post(`/api/lists/${listId.value}/items`, {
+            type: 'directory_entry',
+            directory_entry_id: place.id
+        })
+        items.value.push(response.data.item)
+        showSavedItems.value = false
+        showToast('Place added to list')
+    } catch (error) {
+        showToast('Error adding place: ' + (error.response?.data?.message || 'Unknown error'), 'error')
     }
 }
 
@@ -1092,6 +1311,22 @@ watch(() => listForm.visibility, (newValue, oldValue) => {
     }
 })
 
+// Watch for saved items modal
+watch(showSavedItems, (newValue) => {
+    if (newValue && savedItems.value.length === 0) {
+        fetchSavedItems()
+    }
+})
+
+const fetchChannels = async () => {
+    try {
+        const response = await axios.get('/api/my-channels')
+        userChannels.value = response.data
+    } catch (error) {
+        console.error('Error fetching channels:', error)
+    }
+}
+
 // Lifecycle
 onMounted(() => {
     if (!listId.value) {
@@ -1100,5 +1335,6 @@ onMounted(() => {
         return
     }
     fetchList()
+    fetchChannels()
 })
 </script>

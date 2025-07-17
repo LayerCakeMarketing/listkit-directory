@@ -29,6 +29,14 @@
                 My Lists
             </DropdownLink>
 
+            <DropdownLink :to="{ name: 'SavedItems' }">
+                My Saved Items
+            </DropdownLink>
+
+            <DropdownLink :to="{ name: 'MyChannels' }">
+                My Channels
+            </DropdownLink>
+
             <DropdownLink :to="{ name: 'ProfileEdit' }">
                 Settings
             </DropdownLink>
