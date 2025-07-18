@@ -19,10 +19,10 @@ use App\Http\Controllers\Auth\SpaAuthController;
 use App\Http\Controllers\Api\PageController;
 use App\Services\UserProfileCacheService;
 
-// Auth routes for SPA
+// Auth routes for SPA - these need web middleware in SPA mode for sessions
 Route::post('/login', [SpaAuthController::class, 'login']);
 Route::post('/register', [SpaAuthController::class, 'register']);
-Route::post('/logout', [SpaAuthController::class, 'logout'])->middleware('auth:sanctum');
+Route::post('/logout', [SpaAuthController::class, 'logout'])->middleware('auth');
 Route::post('/forgot-password', [SpaAuthController::class, 'forgotPassword']);
 
 // Registration status and waitlist
@@ -78,9 +78,8 @@ Route::prefix('regions')->group(function () {
     Route::get('/{id}/featured', [RegionController::class, 'featured']);
 });
 
-// User profiles and lists (with @ prefix)
-Route::get('/@{username}', function ($username) {
-    // Try to find a user first
+// User profiles (with /up/ prefix)
+Route::get('/up/@{username}', function ($username) {
     $user = \App\Models\User::where('username', $username)
         ->orWhere('custom_url', $username)
         ->first();
@@ -91,26 +90,27 @@ Route::get('/@{username}', function ($username) {
         return app(ProfileController::class)->showByCustomUrl($username, $cacheService);
     }
     
-    // Try to find a channel
-    $channel = \App\Models\Channel::where('slug', $username)->first();
+    abort(404);
+});
+
+// Channel profiles (with @ prefix)
+Route::get('/@{slug}', function ($slug) {
+    $channel = \App\Models\Channel::where('slug', $slug)->first();
     
     if ($channel) {
-        return app(\App\Http\Controllers\Api\ChannelController::class)->show($username);
+        return app(\App\Http\Controllers\Api\ChannelController::class)->show($slug);
     }
     
     abort(404);
 });
+// User lists (with /up/ prefix)
+Route::get('/up/@{username}/lists', function ($username) {
+    return app(UserListController::class)->userLists($username);
+});
+Route::get('/up/@{username}/{slug}', [UserListController::class, 'showBySlug']);
+
+// Channel lists (with @ prefix)
 Route::get('/@{slug}/lists', function ($slug) {
-    // Try to find a user first
-    $user = \App\Models\User::where('username', $slug)
-        ->orWhere('custom_url', $slug)
-        ->first();
-    
-    if ($user) {
-        return app(UserListController::class)->userLists($slug);
-    }
-    
-    // Try to find a channel
     $channel = \App\Models\Channel::where('slug', $slug)->first();
     
     if ($channel) {
@@ -119,7 +119,25 @@ Route::get('/@{slug}/lists', function ($slug) {
     
     abort(404);
 });
-Route::get('/@{username}/{slug}', [UserListController::class, 'showBySlug']);
+
+// Public channel routes (for edit page and public viewing)
+Route::get('/channels', [\App\Http\Controllers\Api\ChannelController::class, 'index']);
+Route::get('/channels/{channel}', [\App\Http\Controllers\Api\ChannelController::class, 'show']);
+
+// Public list categories
+Route::get('/list-categories/public', [\App\Http\Controllers\Api\Admin\ListCategoryController::class, 'publicOptions']);
+
+// Channel individual list - using proper controller method
+Route::get('/channels/{channel:slug}/lists/{listSlug}', [\App\Http\Controllers\Api\ChannelController::class, 'showList']);
+
+// Legacy route for backward compatibility
+Route::get('/@{channelSlug}/{listSlug}', function ($channelSlug, $listSlug) {
+    // Redirect to the new route structure
+    return app(\App\Http\Controllers\Api\ChannelController::class)->showList(
+        \App\Models\Channel::where('slug', $channelSlug)->firstOrFail(),
+        $listSlug
+    );
+});
 
 // Legacy routes for backward compatibility (can be removed later)
 Route::get('/users/by-username/{username}', [UserProfileController::class, 'showByUsername']);
@@ -189,30 +207,9 @@ Route::get('/resolve-path', function (Request $request) {
     return response()->json(['type' => 'not_found']);
 });
 
-// Debug endpoint to check session
-Route::get('/debug/session', function (Request $request) {
-    return response()->json([
-        'session_id' => session()->getId(),
-        'session_exists' => session()->has('laravel_session'),
-        'auth_check' => auth()->check(),
-        'sanctum_auth' => auth('sanctum')->check(),
-        'user' => auth()->user(),
-        'headers' => $request->headers->all(),
-        'cookies' => $request->cookies->all()
-    ]);
-});
-
-// Debug endpoint to test CSRF
-Route::post('/debug/csrf-test', function (Request $request) {
-    return response()->json([
-        'message' => 'CSRF token is valid!',
-        'session_id' => session()->getId(),
-        'request_data' => $request->all()
-    ]);
-});
-
 // Authenticated routes
-Route::middleware(['auth:sanctum'])->group(function () {
+// In SPA mode, we use the default 'auth' middleware which uses the web guard
+Route::middleware(['auth'])->group(function () {
     // Return authenticated user info
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -289,8 +286,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/saved-items/check', [\App\Http\Controllers\Api\SavedItemController::class, 'checkSaved']);
     Route::get('/saved-items/for-list-creation', [\App\Http\Controllers\Api\SavedItemController::class, 'forListCreation']);
     
-    // Channel routes
-    Route::apiResource('channels', \App\Http\Controllers\Api\ChannelController::class);
+    // Channel routes (authenticated only)
+    Route::post('/channels', [\App\Http\Controllers\Api\ChannelController::class, 'store']);
+    Route::put('/channels/{channel}', [\App\Http\Controllers\Api\ChannelController::class, 'update']);
+    Route::delete('/channels/{channel}', [\App\Http\Controllers\Api\ChannelController::class, 'destroy']);
     Route::post('/channels/{channel}/follow', [\App\Http\Controllers\Api\ChannelController::class, 'follow']);
     Route::delete('/channels/{channel}/follow', [\App\Http\Controllers\Api\ChannelController::class, 'unfollow']);
     Route::get('/channels/{channel}/followers', [\App\Http\Controllers\Api\ChannelController::class, 'followers']);
@@ -552,4 +551,4 @@ Route::get('/login-settings', [\App\Http\Controllers\Api\Admin\LoginPageControll
 
 // Public marketing/info page route (at root level)
 Route::get('/{slug}', [PageController::class, 'show'])
-    ->where('slug', '^(?!@|api|admin|places|lists|regions|login|register|logout|dashboard|profile|settings|images|cloudflare|stats|debug|resolve-path).*');
+    ->where('slug', '^(?!@|api|admin|places|lists|regions|login|register|logout|dashboard|profile|settings|images|cloudflare|stats|resolve-path).*');

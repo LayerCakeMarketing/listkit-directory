@@ -130,6 +130,35 @@ class User extends Authenticatable
 
     public function lists()
     {
+        // Use hasMany relationship for polymorphic owned lists
+        return $this->hasMany(UserList::class, 'owner_id')
+            ->where('owner_type', self::class);
+    }
+    
+    // Get all lists (both polymorphic and legacy)
+    public function getAllLists()
+    {
+        return UserList::where(function($query) {
+            $query->where(function($q) {
+                $q->where('owner_type', self::class)
+                  ->where('owner_id', $this->id);
+            })
+            ->orWhere(function($q) {
+                $q->where('user_id', $this->id)
+                  ->whereNull('owner_type');
+            });
+        });
+    }
+    
+    // Polymorphic relationship
+    public function polymorphicLists()
+    {
+        return $this->morphMany(UserList::class, 'owner');
+    }
+    
+    // Legacy relationship for backward compatibility
+    public function legacyLists()
+    {
         return $this->hasMany(UserList::class);
     }
 
@@ -142,6 +171,14 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Channel::class, 'channel_followers')
                     ->withTimestamps();
+    }
+
+    /**
+     * Check if the user is following a specific channel
+     */
+    public function isFollowingChannel(Channel $channel): bool
+    {
+        return $this->followedChannels()->where('channel_id', $channel->id)->exists();
     }
 
     public function comments()

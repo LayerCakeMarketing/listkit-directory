@@ -3,12 +3,16 @@ import { createPinia } from 'pinia'
 import router from './router'
 import axios from 'axios'
 import App from './App.vue'
+// import Toast from 'vue-toastification'
+// import 'vue-toastification/dist/index.css'
 import './assets/css/app.css'
 
 // Configure axios defaults
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 axios.defaults.withCredentials = true
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8001' : '')
+// In development, use relative URLs so requests go through Vite proxy
+// In production, use the configured API URL
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 
 // Handle CSRF token
 const token = document.head.querySelector('meta[name="csrf-token"]')
@@ -113,6 +117,23 @@ app.use(pinia)
 
 // Use Vue Router
 app.use(router)
+
+// Use Toast
+// const toastOptions = {
+//   position: 'top-right',
+//   timeout: 3000,
+//   closeOnClick: true,
+//   pauseOnFocusLoss: true,
+//   pauseOnHover: true,
+//   draggable: true,
+//   draggablePercent: 0.6,
+//   showCloseButtonOnHover: false,
+//   hideProgressBar: false,
+//   closeButton: 'button',
+//   icon: true,
+//   rtl: false
+// }
+// app.use(Toast, toastOptions)
 
 // Global properties
 app.config.globalProperties.$axios = axios

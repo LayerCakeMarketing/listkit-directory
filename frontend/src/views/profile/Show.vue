@@ -121,20 +121,41 @@
 
           <!-- Main Content -->
           <div class="lg:col-span-2 space-y-8">
-            <!-- Tacked Post -->
-            <div v-if="tackedPost">
-              <h2 class="text-xl font-semibold mb-4 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05L14.5 16.95a1 1 0 01-1.414-.05l-1.086-1.086L11 17a1 1 0 01-2 0v-1.186l-1.086 1.086a1 1 0 01-1.414.05L3.333 13.98a1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L10 4.323V3a1 1 0 011-1z" />
-                </svg>
-                Tacked Post
-              </h2>
-              <PostItem 
-                :post="tackedPost"
-                @updated="handlePostUpdated"
-                @deleted="tackedPost = null"
-              />
+            <!-- Tabs Navigation -->
+            <div class="bg-white rounded-lg shadow">
+              <nav class="flex border-b">
+                <button
+                  v-for="tab in tabs"
+                  :key="tab.key"
+                  @click="activeTab = tab.key"
+                  :class="[
+                    'flex-1 py-4 px-6 text-center font-medium transition-colors',
+                    activeTab === tab.key
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  ]"
+                >
+                  {{ tab.label }}
+                </button>
+              </nav>
             </div>
+
+            <!-- Tab Content -->
+            <div v-if="activeTab === 'activity'">
+              <!-- Tacked Post -->
+              <div v-if="tackedPost">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                  <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05L14.5 16.95a1 1 0 01-1.414-.05l-1.086-1.086L11 17a1 1 0 01-2 0v-1.186l-1.086 1.086a1 1 0 01-1.414.05L3.333 13.98a1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L10 4.323V3a1 1 0 011-1z" />
+                  </svg>
+                  Tacked Post
+                </h2>
+                <PostItem 
+                  :post="tackedPost"
+                  @updated="handlePostUpdated"
+                  @deleted="tackedPost = null"
+                />
+              </div>
             
             <!-- Pinned Lists -->
             <div v-if="pinnedLists.length > 0">
@@ -154,10 +175,10 @@
               </div>
             </div>
 
-            <!-- Activity Feed -->
-            <div>
-              <h2 class="text-xl font-semibold mb-4">Activity</h2>
-              <div v-if="loading" class="space-y-4">
+              <!-- Activity Feed -->
+              <div>
+                <h2 class="text-xl font-semibold mb-4">Activity</h2>
+                <div v-if="loadingActivity" class="space-y-4">
                 <div v-for="i in 3" :key="i" class="bg-white rounded-lg shadow p-6 animate-pulse">
                   <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
                   <div class="h-4 bg-gray-200 rounded w-1/2"></div>
@@ -180,7 +201,7 @@
                       <div>
                         <h3 class="text-lg font-semibold text-gray-900 mb-1">
                           <router-link 
-                            :to="`/@${user.custom_url || user.username}/${item.slug}`"
+                            :to="`/up/@${user.custom_url || user.username}/${item.slug}`"
                             class="hover:text-blue-600"
                           >
                             {{ item.name }}
@@ -235,6 +256,102 @@
                 </button>
               </div>
             </div>
+            </div>
+            
+            <!-- Places Tab -->
+            <div v-else-if="activeTab === 'places'" class="space-y-4">
+              <div v-if="loadingPlaces" class="space-y-4">
+                <div v-for="i in 3" :key="i" class="bg-white rounded-lg shadow p-6 animate-pulse">
+                  <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+              <div v-else-if="followingPlaces.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  v-for="place in followingPlaces"
+                  :key="place.id"
+                  class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6"
+                >
+                  <h3 class="text-lg font-semibold text-gray-900 mb-1">
+                    <router-link 
+                      :to="place.canonical_url || `/p/${place.id}`"
+                      class="hover:text-blue-600"
+                    >
+                      {{ place.title }}
+                    </router-link>
+                  </h3>
+                  <p v-if="place.description" class="text-gray-600 text-sm mb-2 line-clamp-2">
+                    {{ place.description }}
+                  </p>
+                  <div class="flex items-center justify-between mt-3">
+                    <div class="flex items-center text-sm text-gray-500 space-x-4">
+                      <span v-if="place.category">{{ place.category.name }}</span>
+                      <span v-if="place.location">{{ place.location.city }}, {{ place.location.state }}</span>
+                    </div>
+                    <FollowButton
+                      v-if="isOwnProfile"
+                      :followable-type="'place'"
+                      :followable-id="place.id"
+                      :initial-following="true"
+                      @unfollow="removeFollowingPlace(place.id)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div v-else class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+                {{ isOwnProfile ? "You're not following any places yet" : "Not following any places yet" }}
+              </div>
+            </div>
+            
+            <!-- People Tab -->
+            <div v-else-if="activeTab === 'people'" class="space-y-4">
+              <div v-if="loadingPeople" class="space-y-4">
+                <div v-for="i in 3" :key="i" class="bg-white rounded-lg shadow p-6 animate-pulse">
+                  <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+              <div v-else-if="followingUsers.length > 0" class="space-y-4">
+                <div
+                  v-for="person in followingUsers"
+                  :key="person.id"
+                  class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 flex items-center justify-between"
+                >
+                  <div class="flex items-center space-x-4">
+                    <img
+                      :src="person.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&size=64`"
+                      :alt="person.name"
+                      class="w-16 h-16 rounded-full"
+                    />
+                    <div>
+                      <h3 class="text-lg font-semibold text-gray-900">
+                        <router-link 
+                          :to="`/@${person.custom_url || person.username}`"
+                          class="hover:text-blue-600"
+                        >
+                          {{ person.name }}
+                        </router-link>
+                      </h3>
+                      <p v-if="person.display_title" class="text-sm text-gray-600">{{ person.display_title }}</p>
+                      <div class="flex items-center text-sm text-gray-500 space-x-4 mt-1">
+                        <span>{{ person.lists_count || 0 }} lists</span>
+                        <span v-if="person.followers_count">{{ person.followers_count }} followers</span>
+                      </div>
+                    </div>
+                  </div>
+                  <FollowButton
+                    v-if="isOwnProfile"
+                    :followable-type="'user'"
+                    :followable-id="person.id"
+                    :initial-following="true"
+                    @unfollow="removeFollowingUser(person.id)"
+                  />
+                </div>
+              </div>
+              <div v-else class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+                {{ isOwnProfile ? "You're not following anyone yet" : "Not following anyone yet" }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -255,6 +372,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useProfilesStore } from '@/stores/profiles'
 import PostItem from '@/components/PostItem.vue'
+import FollowButton from '@/components/FollowButton.vue'
 import axios from 'axios'
 
 // Note: ListCard component is defined inline below
@@ -274,6 +392,21 @@ const activityFeed = ref([])
 const activityPage = ref(1)
 const hasMoreActivity = ref(true)
 const loadingMore = ref(false)
+const loadingActivity = ref(false)
+
+// Tab state
+const activeTab = ref('activity')
+const tabs = ref([
+  { key: 'activity', label: 'Activity' },
+  { key: 'places', label: 'Places' },
+  { key: 'people', label: 'People' }
+])
+
+// Following data
+const followingPlaces = ref([])
+const followingUsers = ref([])
+const loadingPlaces = ref(false)
+const loadingPeople = ref(false)
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const currentUser = computed(() => authStore.user)
@@ -328,17 +461,21 @@ function editProfile() {
 
 async function toggleFollow() {
   try {
-    const endpoint = isFollowing.value 
-      ? `/api/users/${user.value.username}/unfollow`
-      : `/api/users/${user.value.username}/follow`
-    
-    await axios.post(endpoint)
+    if (isFollowing.value) {
+      await axios.delete(`/api/users/${user.value.id}/follow`)
+    } else {
+      await axios.post(`/api/users/${user.value.id}/follow`)
+    }
     
     isFollowing.value = !isFollowing.value
     user.value.followers_count += isFollowing.value ? 1 : -1
   } catch (error) {
     console.error('Failed to toggle follow:', error)
-    alert('Failed to update follow status')
+    if (error.response?.status === 401) {
+      alert('Please login to follow users')
+    } else {
+      alert(error.response?.data?.message || 'Failed to update follow status')
+    }
   }
 }
 
@@ -398,6 +535,55 @@ async function loadMoreActivity() {
   }
 }
 
+async function fetchFollowingPlaces() {
+  if (!isOwnProfile.value) return
+  
+  loadingPlaces.value = true
+  try {
+    const response = await axios.get('/api/following', {
+      params: { type: 'places' }
+    })
+    followingPlaces.value = response.data.data || []
+  } catch (error) {
+    console.error('Failed to fetch following places:', error)
+  } finally {
+    loadingPlaces.value = false
+  }
+}
+
+async function fetchFollowingUsers() {
+  if (!isOwnProfile.value) return
+  
+  loadingPeople.value = true
+  try {
+    const response = await axios.get('/api/following', {
+      params: { type: 'users' }
+    })
+    followingUsers.value = response.data.data || []
+  } catch (error) {
+    console.error('Failed to fetch following users:', error)
+  } finally {
+    loadingPeople.value = false
+  }
+}
+
+function removeFollowingPlace(placeId) {
+  followingPlaces.value = followingPlaces.value.filter(p => p.id !== placeId)
+}
+
+function removeFollowingUser(userId) {
+  followingUsers.value = followingUsers.value.filter(u => u.id !== userId)
+}
+
+// Watch for tab changes
+watch(activeTab, (newTab) => {
+  if (newTab === 'places' && followingPlaces.value.length === 0 && isOwnProfile.value) {
+    fetchFollowingPlaces()
+  } else if (newTab === 'people' && followingUsers.value.length === 0 && isOwnProfile.value) {
+    fetchFollowingUsers()
+  }
+})
+
 onMounted(() => {
   fetchProfile()
 })
@@ -416,7 +602,9 @@ export const ListCard = {
   props: ['list', 'profileColor'],
   template: `
     <router-link
-      :to="{ name: 'UserList', params: { username: list.user.custom_url || list.user.username, slug: list.slug } }"
+      :to="list.channel_id && list.channel ? 
+           { name: 'ChannelList', params: { channelSlug: list.channel.slug, listSlug: list.slug } } : 
+           { name: 'UserList', params: { username: list.user.custom_url || list.user.username, slug: list.slug } }"
       class="block bg-white rounded-lg shadow hover:shadow-md transition-shadow p-4"
     >
       <div v-if="list.featured_image_url" class="h-32 rounded-lg overflow-hidden mb-4">

@@ -32,10 +32,10 @@
                             <Cog6ToothIcon class="h-5 w-5" />
                         </button>
                         <router-link
-                            to="/mylists/"
+                            :to="backLink"
                             class="text-gray-600 hover:text-gray-900"
                         >
-                            Back to My Lists
+                            {{ backLinkText }}
                         </router-link>
                     </div>
                 </div>
@@ -44,6 +44,23 @@
                     <p class="text-gray-500">Loading list...</p>
                 </div>
                 <div v-else>
+                    <!-- On Hold Warning -->
+                    <div v-if="list.status === 'on_hold'" class="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">This list is on hold</h3>
+                                <div class="mt-2 text-sm text-red-700">
+                                    <p>This list has been put on hold by an administrator. It is not visible to the public.</p>
+                                    <p v-if="list.status_reason" class="mt-1">Reason: {{ list.status_reason }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Settings Drawer -->
                     <TransitionRoot as="template" :show="settingsOpen">
                         <Dialog class="relative z-50" @close="settingsOpen = false">
@@ -89,11 +106,11 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Description</label>
-                                    <textarea
+                                    <RichTextEditor
                                         v-model="listForm.description"
-                                        rows="3"
-                                        class="mt-1 block w-full rounded-md border-gray-300"
-                                    ></textarea>
+                                        placeholder="Enter list description..."
+                                        :max-height="200"
+                                    />
                                 </div>
                                 <div>
                                     <CategorySelect
@@ -585,11 +602,11 @@
                     </div>
                     <div v-if="['text', 'event'].includes(editingItem.type)">
                         <label class="block text-sm font-medium text-gray-700">Content</label>
-                        <textarea
+                        <RichTextEditor
                             v-model="editForm.content"
-                            rows="4"
-                            class="mt-1 block w-full rounded-md border-gray-300"
-                        ></textarea>
+                            placeholder="Enter item content..."
+                            :max-height="300"
+                        />
                     </div>
                     <div v-if="editingItem.type === 'directory_entry' || editForm.affiliate_url !== undefined">
                         <label class="block text-sm font-medium text-gray-700">Affiliate URL</label>
@@ -602,12 +619,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Notes</label>
-                        <textarea
+                        <RichTextEditor
                             v-model="editForm.notes"
-                            rows="2"
-                            class="mt-1 block w-full rounded-md border-gray-300"
                             placeholder="Personal notes about this item..."
-                        ></textarea>
+                            :max-height="150"
+                        />
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Item Image</label>
@@ -746,6 +762,7 @@ import DraggableImageGallery from '@/components/DraggableImageGallery.vue'
 import DirectCloudflareUpload from '@/components/image-upload/DirectCloudflareUpload.vue'
 import CategorySelect from '@/components/ui/CategorySelect.vue'
 import TagInput from '@/components/ui/TagInput.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import draggable from 'vuedraggable'
 import { debounce } from 'lodash'
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
@@ -854,6 +871,30 @@ const itemTypes = [
 ]
 
 // Computed
+const backLink = computed(() => {
+    // Check if it's a channel list
+    if (list.value.owner_type === 'App\\Models\\Channel' && list.value.channel) {
+        return `/@${list.value.channel.slug}`
+    } else if (list.value.channel_id && list.value.channel) {
+        // Legacy channel list
+        return `/@${list.value.channel.slug}`
+    }
+    // Default to user lists
+    return '/mylists'
+})
+
+const backLinkText = computed(() => {
+    // Check if it's a channel list
+    if (list.value.owner_type === 'App\\Models\\Channel' && list.value.channel) {
+        return 'Back to Channel'
+    } else if (list.value.channel_id && list.value.channel) {
+        // Legacy channel list
+        return 'Back to Channel'
+    }
+    // Default to user lists
+    return 'Back to My Lists'
+})
+
 const filteredSavedItems = computed(() => {
     if (!savedItemsQuery.value) return savedItems.value
     const query = savedItemsQuery.value.toLowerCase()
@@ -940,9 +981,22 @@ const updateList = async () => {
 
 const previewList = () => {
     // Open the list in a new tab
-    const user = list.value.user
-    const baseUrl = user?.custom_url ? `/@${user.custom_url}` : `/users/${user?.username || user?.id}`
-    const listUrl = `${baseUrl}/${list.value.slug}`
+    let listUrl = ''
+    
+    // Check if it's a channel list or user list based on owner_type
+    if (list.value.owner_type === 'App\\Models\\Channel' && list.value.channel) {
+        // Channel list
+        listUrl = `/@${list.value.channel.slug}/${list.value.slug}`
+    } else if (list.value.channel_id && list.value.channel) {
+        // Legacy channel list
+        listUrl = `/@${list.value.channel.slug}/${list.value.slug}`
+    } else {
+        // User list
+        const user = list.value.user
+        const baseUrl = user?.custom_url ? `/up/@${user.custom_url}` : `/up/@${user?.username || user?.id}`
+        listUrl = `${baseUrl}/${list.value.slug}`
+    }
+    
     window.open(listUrl, '_blank')
 }
 

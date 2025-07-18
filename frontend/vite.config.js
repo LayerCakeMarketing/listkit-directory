@@ -29,17 +29,43 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            // Forward cookies
+            const cookieHeader = req.headers.cookie
+            if (cookieHeader) {
+              proxyReq.setHeader('cookie', cookieHeader)
+            }
+          })
+        },
       },
       // Only proxy the logout API endpoint
       '/logout': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            const cookieHeader = req.headers.cookie
+            if (cookieHeader) {
+              proxyReq.setHeader('cookie', cookieHeader)
+            }
+          })
+        },
       },
       '/sanctum': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            const cookieHeader = req.headers.cookie
+            if (cookieHeader) {
+              proxyReq.setHeader('cookie', cookieHeader)
+            }
+          })
+        },
       },
       // Proxy storage files
       '/storage': {

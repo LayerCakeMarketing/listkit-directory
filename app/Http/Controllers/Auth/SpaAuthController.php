@@ -31,9 +31,18 @@ class SpaAuthController extends Controller
 
         $request->session()->regenerate();
 
+        // Debug: Log session info
+        \Log::info('Login session info', [
+            'session_id' => session()->getId(),
+            'user_id' => Auth::id(),
+            'session_cookie' => config('session.cookie'),
+        ]);
+
         return response()->json([
             'user' => Auth::user(),
-            'redirect' => $request->input('redirect', '/home')
+            'redirect' => $request->input('redirect', '/home'),
+            'session_id' => session()->getId(),
+            'session_cookie_name' => config('session.cookie'),
         ]);
     }
 

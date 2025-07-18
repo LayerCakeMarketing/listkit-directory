@@ -50,9 +50,9 @@
                 >
                     <!-- Absolute positioned link for ADA compliance -->
                     <a 
-                        :href="`/@${list.user.custom_url || list.user.username}/${list.slug}`"
+                        :href="getListUrl(list)"
                         class="absolute inset-0 z-10"
-                        :aria-label="`View ${list.name} by ${list.user.name}`"
+                        :aria-label="`View ${list.name} by ${getListOwnerName(list)}`"
                     >
                         <span class="sr-only">View {{ list.name }}</span>
                     </a>
@@ -107,12 +107,22 @@
                         
                         <!-- Author -->
                         <div class="mt-3 pt-3 border-t border-gray-100 flex items-center">
-                            <SmartAvatar 
-                                :user="list.user" 
-                                :size="6"
-                                class="mr-2"
-                            />
-                            <span class="text-sm text-gray-600">{{ list.user.name }}</span>
+                            <template v-if="list.owner_type === 'App\\Models\\Channel' && (list.owner || list.channel_data)">
+                                <img
+                                    :src="(list.owner || list.channel_data).avatar_url || getDefaultChannelAvatar((list.owner || list.channel_data).name)"
+                                    :alt="(list.owner || list.channel_data).name"
+                                    class="h-6 w-6 rounded-full mr-2"
+                                />
+                                <span class="text-sm text-gray-600">{{ (list.owner || list.channel_data).name }}</span>
+                            </template>
+                            <template v-else>
+                                <SmartAvatar 
+                                    :user="list.user" 
+                                    :size="6"
+                                    class="mr-2"
+                                />
+                                <span class="text-sm text-gray-600">{{ list.user.name }}</span>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -146,6 +156,39 @@ import axios from 'axios'
 import SmartAvatar from '@/components/ui/SmartAvatar.vue'
 import Pagination from '@/components/Pagination.vue'
 
+// Helper functions
+const getListUrl = (list) => {
+    if (list.owner_type === 'App\\Models\\Channel' && (list.owner || list.channel_data)) {
+        const channel = list.owner || list.channel_data
+        return `/@${channel.slug}/${list.slug}`
+    }
+    return `/up/@${list.user.custom_url || list.user.username}/${list.slug}`
+}
+
+const getListOwnerName = (list) => {
+    if (list.owner_type === 'App\\Models\\Channel' && (list.owner || list.channel_data)) {
+        const channel = list.owner || list.channel_data
+        return channel.name
+    }
+    return list.user.name
+}
+
+const getDefaultChannelAvatar = (name) => {
+    const initials = name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+    
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+        <rect width="100" height="100" fill="#6366f1"/>
+        <text x="50" y="50" font-family="Arial, sans-serif" font-size="40" fill="white" text-anchor="middle" dominant-baseline="central">${initials}</text>
+    </svg>`
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
 // State
 const loading = ref(true)
 const error = ref(null)
@@ -165,7 +208,7 @@ const pagination = ref({
 // Methods
 const fetchCategories = async () => {
     try {
-        const response = await axios.get('/api/admin/data/list-categories/options')
+        const response = await axios.get('/api/list-categories/public')
         // Get categories with lists count
         const categoriesData = await Promise.all(
             response.data.map(async (category) => {

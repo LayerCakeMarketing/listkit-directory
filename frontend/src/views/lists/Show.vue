@@ -39,8 +39,45 @@
               <!-- List Meta -->
               <div class="mt-4 flex items-center space-x-6 text-sm text-gray-500">
                 <router-link 
-                  v-if="list.user"
-                  :to="`/@${list.user.custom_url || list.user.username}`"
+                  v-if="list.owner_type === 'App\\Models\\Channel' && list.owner"
+                  :to="`/@${list.owner.slug}`"
+                  class="flex items-center hover:text-gray-700"
+                >
+                  <img 
+                    :src="list.owner.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(list.owner.name)}&size=32`"
+                    :alt="list.owner.name"
+                    class="w-8 h-8 rounded-full mr-2"
+                  />
+                  <span>{{ list.owner.name }}</span>
+                </router-link>
+                <router-link 
+                  v-else-if="list.owner_type === 'App\\Models\\User' && list.owner"
+                  :to="`/up/@${list.owner.custom_url || list.owner.username}`"
+                  class="flex items-center hover:text-gray-700"
+                >
+                  <img 
+                    :src="list.owner.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(list.owner.name)}&size=32`"
+                    :alt="list.owner.name"
+                    class="w-8 h-8 rounded-full mr-2"
+                  />
+                  <span>{{ list.owner.name }}</span>
+                </router-link>
+                <!-- Fallback to legacy display -->
+                <router-link 
+                  v-else-if="list.channel"
+                  :to="`/@${list.channel.slug}`"
+                  class="flex items-center hover:text-gray-700"
+                >
+                  <img 
+                    :src="list.channel.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(list.channel.name)}&size=32`"
+                    :alt="list.channel.name"
+                    class="w-8 h-8 rounded-full mr-2"
+                  />
+                  <span>{{ list.channel.name }}</span>
+                </router-link>
+                <router-link 
+                  v-else-if="list.user"
+                  :to="`/up/@${list.user.custom_url || list.user.username}`"
                   class="flex items-center hover:text-gray-700"
                 >
                   <img 
@@ -73,8 +110,15 @@
             </div>
 
             <!-- Action Buttons -->
-            <div v-if="isOwnList" class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3">
+              <SaveButton
+                v-if="authStore.isAuthenticated"
+                item-type="list"
+                :item-id="list.id"
+                :initial-saved="list.is_saved || false"
+              />
               <router-link
+                v-if="isOwnList"
                 :to="{ name: 'ListEdit', params: { id: list.id } }"
                 class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
@@ -195,8 +239,15 @@
         <!-- Back to Lists -->
         <div class="mt-8 text-center">
           <router-link
-            v-if="list.user"
-            :to="`/@${list.user.custom_url || list.user.username}`"
+            v-if="list.channel"
+            :to="`/@${list.channel.slug}`"
+            class="text-indigo-600 hover:text-indigo-500"
+          >
+            ← Back to {{ list.channel.name }}
+          </router-link>
+          <router-link
+            v-else-if="list.user"
+            :to="`/up/@${list.user.custom_url || list.user.username}`"
             class="text-indigo-600 hover:text-indigo-500"
           >
             ← Back to {{ list.user.name }}'s profile
@@ -222,6 +273,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
+import SaveButton from '@/components/SaveButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -233,15 +285,43 @@ const errorTitle = ref('List Not Found')
 const errorMessage = ref("The list you're looking for doesn't exist or is private.")
 
 const currentUser = computed(() => authStore.user)
-const isOwnList = computed(() => currentUser.value?.id === list.value?.user?.id)
+const isOwnList = computed(() => {
+  if (!currentUser.value || !list.value) return false
+  
+  // Check polymorphic ownership
+  if (list.value.owner_type === 'App\\Models\\User') {
+    return list.value.owner_id === currentUser.value.id
+  } else if (list.value.owner_type === 'App\\Models\\Channel' && list.value.owner) {
+    return list.value.owner.user_id === currentUser.value.id
+  }
+  
+  // Fallback to legacy ownership
+  if (list.value.user?.id === currentUser.value.id) return true
+  if (list.value.channel && list.value.channel.user_id === currentUser.value.id) return true
+  
+  return false
+})
 
 async function fetchList() {
   loading.value = true
   
   try {
-    const { username, slug } = route.params
-    console.log('Fetching list:', username, slug)
-    const response = await axios.get(`/api/users/${username}/${slug}`)
+    let response
+    
+    // Check if this is a channel list or user list
+    if (route.params.channelSlug) {
+      // Channel list: /@{channel}/{list}
+      const { channelSlug, slug } = route.params
+      console.log('Fetching channel list:', channelSlug, slug || route.params.listSlug)
+      const listSlug = slug || route.params.listSlug
+      response = await axios.get(`/api/channels/${channelSlug}/lists/${listSlug}`)
+    } else {
+      // User list: /up/@{username}/{list}
+      const { username, slug } = route.params
+      console.log('Fetching user list:', username, slug)
+      response = await axios.get(`/api/up/@${username}/${slug}`)
+    }
+    
     console.log('List fetched successfully:', response.data)
     list.value = response.data
   } catch (error) {

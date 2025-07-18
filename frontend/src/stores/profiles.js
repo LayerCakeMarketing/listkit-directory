@@ -42,7 +42,7 @@ export const useProfilesStore = defineStore('profiles', {
 
       try {
         console.log('Fetching fresh profile for:', customUrl)
-        const response = await axios.get(`/api/@${customUrl}`)
+        const response = await axios.get(`/api/up/@${customUrl}`)
         
         // Store in cache
         this.profileCache[customUrl] = response.data

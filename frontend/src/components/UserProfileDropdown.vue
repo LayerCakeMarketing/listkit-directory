@@ -92,9 +92,12 @@ const userProfileImage = computed(() => {
 const myPageUrl = computed(() => {
     if (!props.user) return '/'
     if (props.user.custom_url) {
-        return `/@${props.user.custom_url}`
+        return `/up/@${props.user.custom_url}`
+    } else if (props.user.username) {
+        return `/up/@${props.user.username}`
     }
-    return `/@${props.user.username || props.user.id}`
+    // Fallback to profile edit if no username set
+    return '/profile/edit'
 })
 
 const myListsUrl = computed(() => {

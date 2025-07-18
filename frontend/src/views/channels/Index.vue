@@ -155,8 +155,20 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { debounce } from 'lodash-es'
 import { useAuthStore } from '@/stores/auth'
+
+// Simple debounce implementation
+function debounce(func, wait) {
+  let timeout
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
 
 const authStore = useAuthStore()
 

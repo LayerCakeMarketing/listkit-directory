@@ -11,11 +11,19 @@
               Profile updated successfully!
             </span>
             <router-link
+              v-if="profile.username || profile.custom_url"
               :to="{ name: 'UserProfile', params: { username: profile.custom_url || profile.username } }"
               class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </router-link>
+            <button
+              v-else
+              @click="$router.push('/home')"
+              class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
             <button
               @click="saveProfile"
               :disabled="saving || activeTab === 'media'"
@@ -24,6 +32,7 @@
               {{ saving ? 'Saving...' : 'Save Changes' }}
             </button>
             <a
+              v-if="profile.username || profile.custom_url"
               :href="`/${profile.custom_url || profile.username}`"
               target="_blank"
               class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
@@ -609,7 +618,12 @@ import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.
 const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
-const profile = ref({})
+const profile = ref({
+  username: '',
+  custom_url: '',
+  name: '',
+  email: ''
+})
 const errors = reactive({})
 const urlCheckMessage = ref('')
 const urlAvailable = ref(null)
@@ -849,10 +863,21 @@ async function fetchUserLists() {
 async function fetchListImages(listId) {
   try {
     const response = await axios.get(`/api/entities/list/${listId}/media`)
-    listImages.value[listId] = response.data.images || []
+    // Use Vue.set equivalent to ensure reactivity
+    if (listImages.value) {
+      listImages.value = {
+        ...listImages.value,
+        [listId]: response.data.images || []
+      }
+    }
   } catch (error) {
     console.error(`Failed to fetch images for list ${listId}:`, error)
-    listImages.value[listId] = []
+    if (listImages.value) {
+      listImages.value = {
+        ...listImages.value,
+        [listId]: []
+      }
+    }
   }
 }
 
@@ -1039,10 +1064,14 @@ const defaultChannelAvatar = (name) => {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
-onMounted(() => {
-  fetchProfile()
-  fetchUserLists()
-  fetchChannels()
-  fetchFollowedChannels()
+onMounted(async () => {
+  try {
+    await fetchProfile()
+    await fetchUserLists()
+    await fetchChannels()
+    await fetchFollowedChannels()
+  } catch (error) {
+    console.error('Error during component initialization:', error)
+  }
 })
 </script>

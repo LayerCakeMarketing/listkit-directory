@@ -57,6 +57,18 @@
                     </p>
                 </div>
                 
+                <!-- Media Gallery Button -->
+                <div v-if="entityType && entityId" class="mt-4">
+                    <div class="text-sm text-gray-500 mb-2">or</div>
+                    <MediaGallery
+                        :entity-type="entityType"
+                        :entity-id="entityId"
+                        button-text="Choose from Gallery"
+                        @media-selected="handleMediaSelected"
+                        @click.stop
+                    />
+                </div>
+                
                 <!-- Global Progress -->
                 <div v-if="isUploading" class="w-full bg-gray-200 rounded-full h-2">
                     <div
@@ -172,6 +184,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { compressImage } from '@/utils/imageCompression'
+import MediaGallery from './MediaGallery.vue'
 
 const props = defineProps({
     maxFiles: {
@@ -189,7 +202,7 @@ const props = defineProps({
     context: {
         type: String,
         default: null,
-        validator: (value) => !value || ['avatar', 'cover', 'gallery', 'logo', 'item', 'post'].includes(value)
+        validator: (value) => !value || ['avatar', 'cover', 'gallery', 'logo', 'item', 'post', 'avatar_temp', 'banner_temp', 'banner'].includes(value)
     },
     entityType: {
         type: String,
@@ -537,6 +550,47 @@ const confirmUpload = async (uploadResult) => {
     } catch (error) {
         console.warn('Error confirming upload:', error)
         // Don't fail the upload for database tracking errors
+    }
+}
+
+const handleMediaSelected = (mediaItem) => {
+    // Create a file-like object from the selected media
+    const selectedFile = {
+        name: mediaItem.filename,
+        size: mediaItem.file_size,
+        preview: `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${mediaItem.cloudflare_id}/public`,
+        status: 'success',
+        progress: 100,
+        result: {
+            id: mediaItem.cloudflare_id,
+            url: `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${mediaItem.cloudflare_id}/public`,
+            filename: mediaItem.filename
+        }
+    }
+
+    // Add to files if not at max capacity
+    if (files.value.length < props.maxFiles) {
+        files.value.push(selectedFile)
+    } else {
+        // Replace the last file if at capacity
+        files.value[files.value.length - 1] = selectedFile
+    }
+
+    // Emit the upload success event
+    emit('upload-success', selectedFile.result)
+
+    // Emit v-model update for single file uploads
+    if (props.maxFiles === 1) {
+        const valueToEmit = props.modelValue === null || (typeof props.modelValue === 'string' && props.modelValue.includes('http'))
+            ? selectedFile.result.url 
+            : selectedFile.result.id
+        emit('update:modelValue', valueToEmit)
+    } else {
+        // For multiple files, emit an array of URLs
+        const urls = files.value
+            .filter(f => f.status === 'success' && f.result?.url)
+            .map(f => f.result.url)
+        emit('update:modelValue', urls)
     }
 }
 

@@ -19,7 +19,9 @@ class Channel extends Model
         'name',
         'description',
         'avatar_image',
+        'avatar_cloudflare_id',
         'banner_image',
+        'banner_cloudflare_id',
         'is_public',
     ];
 
@@ -27,7 +29,15 @@ class Channel extends Model
         'is_public' => 'boolean',
     ];
 
-    protected $appends = ['followers_count', 'lists_count', 'is_following'];
+    protected $appends = ['followers_count', 'lists_count', 'is_following', 'avatar_url', 'banner_url'];
+
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
 
     /**
      * Get the user that owns the channel.
@@ -40,7 +50,13 @@ class Channel extends Model
     /**
      * Get the lists for the channel.
      */
-    public function lists(): HasMany
+    public function lists()
+    {
+        return $this->morphMany(UserList::class, 'owner');
+    }
+    
+    // Legacy relationship for backward compatibility
+    public function legacyLists(): HasMany
     {
         return $this->hasMany(UserList::class);
     }
@@ -59,6 +75,9 @@ class Channel extends Model
      */
     public function getFollowersCountAttribute(): int
     {
+        if (!$this->exists) {
+            return 0;
+        }
         return $this->followers()->count();
     }
 
@@ -67,6 +86,9 @@ class Channel extends Model
      */
     public function getListsCountAttribute(): int
     {
+        if (!$this->exists) {
+            return 0;
+        }
         return $this->lists()->count();
     }
 
@@ -109,6 +131,11 @@ class Channel extends Model
      */
     public function getAvatarUrlAttribute(): ?string
     {
+        // If we have a Cloudflare ID, use it
+        if ($this->avatar_cloudflare_id) {
+            return "https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/{$this->avatar_cloudflare_id}/public";
+        }
+
         if (!$this->avatar_image) {
             return null;
         }
@@ -127,6 +154,11 @@ class Channel extends Model
      */
     public function getBannerUrlAttribute(): ?string
     {
+        // If we have a Cloudflare ID, use it
+        if ($this->banner_cloudflare_id) {
+            return "https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/{$this->banner_cloudflare_id}/public";
+        }
+
         if (!$this->banner_image) {
             return null;
         }

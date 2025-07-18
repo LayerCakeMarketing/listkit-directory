@@ -47,6 +47,15 @@
           />
         </div>
         
+        <!-- Tags Input -->
+        <div v-if="isFocused || content.length > 0" class="mt-3">
+          <TagInput
+            v-model="tags"
+            placeholder="Add tags..."
+            :max-tags="5"
+          />
+        </div>
+        
         <!-- Actions Bar -->
         <div 
           v-if="isFocused || content.length > 0 || hasMedia" 
@@ -146,6 +155,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
 import PostMediaUploader from '@/components/PostMediaUploader.vue'
+import TagInput from '@/components/TagInput.vue'
 import axios from 'axios'
 
 const authStore = useAuthStore()
@@ -158,6 +168,7 @@ const placeholder = computed(() => `What's on your mind, ${user.value?.name?.spl
 const content = ref('')
 const mediaData = ref(null)
 const expiresInDays = ref(30)
+const tags = ref([])
 const isSubmitting = ref(false)
 const isFocused = ref(false)
 const showSuccess = ref(false)
@@ -250,6 +261,13 @@ const handleSubmit = async () => {
       }
     }
     
+    // Add tags if present - convert objects to strings
+    if (tags.value.length > 0) {
+      postData.tags = tags.value.map(tag => 
+        typeof tag === 'string' ? tag : tag.name
+      )
+    }
+    
     const response = await axios.post('/api/posts', postData)
     
     // Add to feed store
@@ -258,6 +276,7 @@ const handleSubmit = async () => {
     // Reset form
     content.value = ''
     mediaData.value = null
+    tags.value = []
     if (mediaUploader.value) {
       mediaUploader.value.clearAllMedia()
     }
@@ -287,6 +306,7 @@ const handleSubmit = async () => {
 const handleCancel = () => {
   content.value = ''
   mediaData.value = null
+  tags.value = []
   if (mediaUploader.value) {
     mediaUploader.value.clearAllMedia()
   }

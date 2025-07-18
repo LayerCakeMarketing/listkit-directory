@@ -84,7 +84,7 @@
                     >
                         <!-- Absolute positioned link for ADA compliance -->
                         <a 
-                            :href="`/@${list.user.custom_url || list.user.username}/${list.slug}`"
+                            :href="`/up/@${list.user.custom_url || list.user.username}/${list.slug}`"
                             class="absolute inset-0 z-10"
                             :aria-label="`View ${list.name} by ${list.user.name}`"
                         >
@@ -198,7 +198,7 @@ const pagination = ref({
 const fetchCategory = async () => {
     try {
         // First get all categories to find the one with matching slug
-        const response = await axios.get('/api/admin/data/list-categories/options')
+        const response = await axios.get('/api/list-categories/public')
         const matchingCategory = response.data.find(cat => cat.slug === route.params.categorySlug)
         
         if (!matchingCategory) {
@@ -206,14 +206,8 @@ const fetchCategory = async () => {
             return
         }
 
-        // Get full category details
-        const categoryResponse = await axios.get(`/api/admin/data/list-categories/${matchingCategory.id}`)
-        category.value = categoryResponse.data
-        
-        // Set random quote
-        if (category.value.quotes && category.value.quotes.length > 0) {
-            randomQuote.value = category.value.quotes[Math.floor(Math.random() * category.value.quotes.length)]
-        }
+        // For now, just use the basic category info since we don't have a public category detail endpoint
+        category.value = matchingCategory
     } catch (err) {
         console.error('Error fetching category:', err)
         error.value = 'Failed to load category'

@@ -26,10 +26,20 @@
 
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">
-          {{ cityData?.display_name || cityData?.full_name || cityData?.name || 'Loading...' }}<span v-if="stateData">, {{ stateData.display_name || stateData.full_name || stateData.name }}</span>
-        </h1>
-        <p v-if="cityData?.description" class="mt-2 text-lg text-gray-600">{{ cityData.description }}</p>
+        <div class="flex items-start justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">
+              {{ cityData?.display_name || cityData?.full_name || cityData?.name || 'Loading...' }}<span v-if="stateData">, {{ stateData.display_name || stateData.full_name || stateData.name }}</span>
+            </h1>
+            <p v-if="cityData?.description" class="mt-2 text-lg text-gray-600">{{ cityData.description }}</p>
+          </div>
+          <SaveButton
+            v-if="authStore.isAuthenticated && cityData?.id"
+            item-type="region"
+            :item-id="cityData.id"
+            :initial-saved="cityData.is_saved || false"
+          />
+        </div>
       </div>
 
       <!-- Loading State -->
@@ -267,6 +277,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import SaveButton from '@/components/SaveButton.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
   state: {
@@ -280,6 +292,7 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const authStore = useAuthStore()
 const loading = ref(true)
 const error = ref(null)
 const stateData = ref(null)

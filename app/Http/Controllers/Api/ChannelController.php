@@ -70,8 +70,10 @@ class ChannelController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
             'is_public' => 'boolean',
-            'avatar_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120', // 5MB
-            'banner_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120', // 5MB
+            'avatar_cloudflare_id' => 'nullable|string',
+            'avatar_url' => 'nullable|url',
+            'banner_cloudflare_id' => 'nullable|string',
+            'banner_url' => 'nullable|url',
         ]);
 
         $validated['user_id'] = auth()->id();
@@ -79,19 +81,17 @@ class ChannelController extends Controller
 
         DB::beginTransaction();
         try {
+            // Map the URL fields to the image fields for backward compatibility
+            if (isset($validated['avatar_url'])) {
+                $validated['avatar_image'] = $validated['avatar_url'];
+                unset($validated['avatar_url']);
+            }
+            if (isset($validated['banner_url'])) {
+                $validated['banner_image'] = $validated['banner_url'];
+                unset($validated['banner_url']);
+            }
+
             $channel = Channel::create($validated);
-
-            // Handle avatar upload
-            if ($request->hasFile('avatar_image')) {
-                $path = $request->file('avatar_image')->store('channels/avatars', 'public');
-                $channel->update(['avatar_image' => $path]);
-            }
-
-            // Handle banner upload
-            if ($request->hasFile('banner_image')) {
-                $path = $request->file('banner_image')->store('channels/banners', 'public');
-                $channel->update(['banner_image' => $path]);
-            }
 
             DB::commit();
 
@@ -113,11 +113,15 @@ class ChannelController extends Controller
      */
     public function show($slugOrId)
     {
-        $channel = Channel::where('slug', $slugOrId)
-            ->orWhere('id', $slugOrId)
-            ->with(['user:id,name,username,custom_url,avatar,avatar_cloudflare_id'])
-            ->withCount(['lists', 'followers'])
-            ->firstOrFail();
+        $query = Channel::with(['user:id,name,username,custom_url,avatar,avatar_cloudflare_id'])
+            ->withCount(['lists', 'followers']);
+
+        // If it's numeric, search by ID, otherwise by slug
+        if (is_numeric($slugOrId)) {
+            $channel = $query->where('id', $slugOrId)->firstOrFail();
+        } else {
+            $channel = $query->where('slug', $slugOrId)->firstOrFail();
+        }
 
         // Check if user can view this channel
         if (!$channel->canBeViewedBy(auth()->user())) {
@@ -132,6 +136,12 @@ class ChannelController extends Controller
                     ->latest()
                     ->limit(10);
             }]);
+        }
+
+        // Add is_following status
+        $channel->is_following = false;
+        if (auth()->check()) {
+            $channel->is_following = auth()->user()->isFollowingChannel($channel);
         }
 
         return response()->json($channel);
@@ -164,6 +174,9 @@ class ChannelController extends Controller
             ],
             'description' => 'nullable|string|max:1000',
             'is_public' => 'boolean',
+            'avatar_cloudflare_id' => 'nullable|string',
+            'banner_cloudflare_id' => 'nullable|string',
+            // Keep legacy support for file uploads
             'avatar_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120', // 5MB
             'banner_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120', // 5MB
         ]);
@@ -175,22 +188,42 @@ class ChannelController extends Controller
                 $validated['slug'] = Str::slug($validated['slug']);
             }
 
-            // Handle avatar upload
+            // Handle Cloudflare avatar upload
+            if (isset($validated['avatar_cloudflare_id'])) {
+                // Set the avatar_cloudflare_id field
+                // The avatar_image field should remain null when using Cloudflare
+                if ($validated['avatar_cloudflare_id']) {
+                    $validated['avatar_image'] = null; // Clear old local image
+                }
+            }
+
+            // Handle Cloudflare banner upload
+            if (isset($validated['banner_cloudflare_id'])) {
+                // Set the banner_cloudflare_id field
+                // The banner_image field should remain null when using Cloudflare
+                if ($validated['banner_cloudflare_id']) {
+                    $validated['banner_image'] = null; // Clear old local image
+                }
+            }
+
+            // Legacy: Handle avatar file upload
             if ($request->hasFile('avatar_image')) {
                 // Delete old avatar if exists
                 if ($channel->avatar_image && !filter_var($channel->avatar_image, FILTER_VALIDATE_URL)) {
                     \Storage::disk('public')->delete($channel->avatar_image);
                 }
                 $validated['avatar_image'] = $request->file('avatar_image')->store('channels/avatars', 'public');
+                $validated['avatar_cloudflare_id'] = null; // Clear cloudflare ID when using local file
             }
 
-            // Handle banner upload
+            // Legacy: Handle banner file upload
             if ($request->hasFile('banner_image')) {
                 // Delete old banner if exists
                 if ($channel->banner_image && !filter_var($channel->banner_image, FILTER_VALIDATE_URL)) {
                     \Storage::disk('public')->delete($channel->banner_image);
                 }
                 $validated['banner_image'] = $request->file('banner_image')->store('channels/banners', 'public');
+                $validated['banner_cloudflare_id'] = null; // Clear cloudflare ID when using local file
             }
 
             $channel->update($validated);
@@ -317,7 +350,7 @@ class ChannelController extends Controller
     public function lists(Channel $channel, Request $request)
     {
         $query = $channel->lists()
-            ->with(['user:id,name,username,custom_url', 'category:id,name,slug'])
+            ->with(['user:id,name,username,custom_url', 'channel:id,name,slug,avatar_cloudflare_id', 'category:id,name,slug'])
             ->withCount('items');
 
         // Only show public lists to non-owners
@@ -331,6 +364,37 @@ class ChannelController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         return $query->paginate($request->input('per_page', 12));
+    }
+
+    /**
+     * Show a specific list belonging to a channel.
+     */
+    public function showList(Channel $channel, $listSlug)
+    {
+        $list = $channel->lists()
+            ->where('slug', $listSlug)
+            ->with(['owner', 'user', 'channel', 'category', 'tags', 'items' => function($query) {
+                $query->orderBy('order_index')
+                      ->with(['place.location', 'place.category']);
+            }])
+            ->firstOrFail();
+
+        // Check if user can view this list
+        if (!$list->canView(auth()->user())) {
+            abort(403, 'You do not have permission to view this list');
+        }
+
+        // Increment view count if not owner and list is viewable
+        if (!$list->isOwnedBy(auth()->user()) && $list->isPublished()) {
+            $list->incrementViewCount();
+        }
+
+        // Add saved status if user is authenticated
+        if (auth()->check()) {
+            $list->is_saved = $list->isSavedBy(auth()->user());
+        }
+
+        return response()->json($list);
     }
 
     /**

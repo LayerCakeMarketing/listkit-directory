@@ -15,9 +15,19 @@ class UserList extends Model
 
     protected $table = 'lists';
 
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
+
     protected $fillable = [
         'user_id',
         'channel_id',
+        'owner_id',
+        'owner_type',
         'category_id',
         'name',
         'slug',
@@ -59,7 +69,7 @@ class UserList extends Model
         'order_index' => 'integer',
     ];
     
-    protected $appends = ['featured_image_url', 'gallery_images_with_urls'];
+    protected $appends = ['featured_image_url', 'gallery_images_with_urls', 'channel_data'];
 
     protected static function boot()
     {
@@ -81,6 +91,13 @@ class UserList extends Model
     }
 
     // Relationships
+    // Polymorphic owner relationship
+    public function owner()
+    {
+        return $this->morphTo();
+    }
+    
+    // Legacy relationships for backward compatibility
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -89,6 +106,19 @@ class UserList extends Model
     public function channel()
     {
         return $this->belongsTo(Channel::class);
+    }
+    
+    // Scopes
+    public function scopeForChannel($query, $channelId)
+    {
+        return $query->where('owner_id', $channelId)
+                     ->where('owner_type', Channel::class);
+    }
+    
+    public function scopeForUser($query, $userId)
+    {
+        return $query->where('owner_id', $userId)
+                     ->where('owner_type', User::class);
     }
 
     public function items()
@@ -176,8 +206,8 @@ class UserList extends Model
     public function scopeSearchable($query)
     {
         return $query->where('visibility', 'public')
-                     ->published();
-        // Note: Removed ->active() call since status column doesn't exist yet
+                     ->published()
+                     ->notOnHold(); // Exclude lists with on_hold status
     }
 
     // Status scopes (gracefully handle missing status column)
@@ -293,7 +323,23 @@ class UserList extends Model
     public function isOwnedBy($user)
     {
         if (!$user) return false;
-        return $this->user_id === $user->id;
+        
+        // Check polymorphic ownership
+        if ($this->owner_type === User::class) {
+            return $this->owner_id === $user->id;
+        } elseif ($this->owner_type === Channel::class && $this->owner) {
+            return $this->owner->user_id === $user->id;
+        }
+        
+        // Fallback to legacy ownership check
+        if ($this->user_id === $user->id) return true;
+        
+        // Legacy channel ownership
+        if ($this->channel_id && $this->channel) {
+            return $this->channel->user_id === $user->id;
+        }
+        
+        return false;
     }
 
     public function canEdit($user = null)
@@ -456,11 +502,19 @@ class UserList extends Model
         })->toArray();
     }
 
+    public function getChannelDataAttribute()
+    {
+        if ($this->owner_type === Channel::class && $this->relationLoaded('owner')) {
+            return $this->owner;
+        }
+        return null;
+    }
+
     // URL generation
     public function getPublicUrl()
     {
-        if ($this->channel_id && $this->channel) {
-            return '/@' . $this->channel->slug . '/' . $this->slug;
+        if ($this->owner_type === Channel::class && $this->owner) {
+            return '/@' . $this->owner->slug . '/' . $this->slug;
         }
         return '/u/' . $this->user->getUrlSlug() . '/' . $this->slug;
     }

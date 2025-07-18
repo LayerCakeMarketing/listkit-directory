@@ -152,7 +152,7 @@ const searchTags = async (query) => {
     }
     
     try {
-        const response = await axios.get('/data/tags/search', {
+        const response = await axios.get('/api/tags/search', {
             params: { q: query }
         })
         
@@ -246,7 +246,7 @@ const createTag = async () => {
     
     // Check for profanity
     try {
-        const response = await axios.post('/data/tags/validate', { name: tagName })
+        const response = await axios.post('/api/validate-tag', { name: tagName })
         if (!response.data.valid) {
             alert('This tag contains inappropriate content and cannot be created.')
             return

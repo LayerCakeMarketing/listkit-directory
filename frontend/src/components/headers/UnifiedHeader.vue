@@ -362,9 +362,12 @@ const userProfileImage = computed(() => {
 // My Page URL
 const myPageUrl = computed(() => {
   if (user.value?.custom_url) {
-    return `/@${user.value.custom_url}`
+    return `/up/@${user.value.custom_url}`
+  } else if (user.value?.username) {
+    return `/up/@${user.value.username}`
   }
-  return `/@${user.value?.username || user.value?.id}`
+  // Fallback to profile edit if no username set
+  return '/profile/edit'
 })
 
 // Generate default avatar for mobile view

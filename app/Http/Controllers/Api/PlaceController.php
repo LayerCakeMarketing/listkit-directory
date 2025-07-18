@@ -523,6 +523,12 @@ class PlaceController extends Controller
             ->limit(6)
             ->get();
 
+        // Add following and saved status if user is authenticated
+        if (auth()->check()) {
+            $entry->is_following = auth()->user()->isFollowing($entry);
+            $entry->is_saved = $entry->isSavedBy(auth()->user());
+        }
+
         return response()->json([
             'entry' => $entry,
             'relatedEntries' => $relatedEntries,
@@ -546,6 +552,12 @@ class PlaceController extends Controller
             ->published()
             ->limit(6)
             ->get();
+
+        // Add following and saved status if user is authenticated
+        if (auth()->check()) {
+            $entry->is_following = auth()->user()->isFollowing($entry);
+            $entry->is_saved = $entry->isSavedBy(auth()->user());
+        }
 
         return response()->json([
             'entry' => $entry,
@@ -580,6 +592,12 @@ class PlaceController extends Controller
             ->published()
             ->limit(6)
             ->get();
+
+        // Add following and saved status if user is authenticated
+        if (auth()->check()) {
+            $entry->is_following = auth()->user()->isFollowing($entry);
+            $entry->is_saved = $entry->isSavedBy(auth()->user());
+        }
 
         return response()->json([
             'entry' => $entry,

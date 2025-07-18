@@ -17,17 +17,22 @@ return Application::configure(basePath: dirname(__DIR__))
             'role.api' => \App\Http\Middleware\CheckRoleApi::class,
         ]);
         
-        // Ensure Sanctum middleware is applied to API routes
-        $middleware->api(prepend: [
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-        ]);
-        
-        // Add session to API routes for SPA mode
+        // For SPA mode, we need to set up the correct middleware order
         if (env('SPA_MODE', false)) {
-            $middleware->group('api', [
-                \Illuminate\Cookie\Middleware\EncryptCookies::class,
-                \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
-                \Illuminate\Session\Middleware\StartSession::class,
+            // Clear the default API middleware and set our own
+            $middleware->group('api', []);
+            
+            // Then append the middleware in the correct order
+            $middleware->appendToGroup('api', \App\Http\Middleware\EncryptCookies::class);
+            $middleware->appendToGroup('api', \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class);
+            $middleware->appendToGroup('api', \Illuminate\Session\Middleware\StartSession::class);
+            $middleware->appendToGroup('api', \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class);
+            // Remove throttle:api as it's not defined
+            $middleware->appendToGroup('api', \Illuminate\Routing\Middleware\SubstituteBindings::class);
+        } else {
+            // Non-SPA mode: just prepend Sanctum middleware
+            $middleware->api(prepend: [
+                \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             ]);
         }
     })

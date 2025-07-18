@@ -50,6 +50,13 @@
                 <h3 class="text-lg font-semibold text-gray-900">{{ list.name }}</h3>
                 <div class="flex items-center space-x-2">
                   <span
+                    v-if="list.status === 'on_hold'"
+                    class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800"
+                  >
+                    On Hold
+                  </span>
+                  <span
+                    v-else
                     class="px-2 py-1 text-xs rounded-full"
                     :class="{
                       'bg-green-100 text-green-800': list.visibility === 'public',
@@ -168,6 +175,14 @@
               <option value="public">Public</option>
             </select>
           </div>
+          <div class="mb-4">
+            <TagInput
+              v-model="newList.tags"
+              label="Tags"
+              placeholder="Add tags..."
+              :max-tags="10"
+            />
+          </div>
           <div class="flex justify-end space-x-3">
             <button
               type="button"
@@ -196,6 +211,7 @@ import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { EllipsisVerticalIcon } from '@heroicons/vue/20/solid'
+import TagInput from '@/components/TagInput.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -209,7 +225,8 @@ const newList = reactive({
   name: '',
   description: '',
   visibility: 'private',
-  category_id: 1 // Default category - you may want to fetch categories and let user select
+  category_id: 1, // Default category - you may want to fetch categories and let user select
+  tags: []
 })
 
 // Fetch user's lists
@@ -243,6 +260,7 @@ async function createList() {
     newList.name = ''
     newList.description = ''
     newList.visibility = 'private'
+    newList.tags = []
     showCreateModal.value = false
     
     // Navigate to the new list
@@ -260,15 +278,27 @@ async function createList() {
 
 // Navigate to list
 function navigateToList(list) {
-  const username = currentUser.value?.custom_url || currentUser.value?.username
-  console.log('Navigating to list:', username, list.slug)
-  router.push({ 
-    name: 'UserList', 
-    params: { 
-      username: username,
-      slug: list.slug 
-    } 
-  })
+  // Check if this is a channel list or user list
+  if (list.channel_id && list.channel) {
+    // Navigate to channel list
+    router.push({ 
+      name: 'ChannelList', 
+      params: { 
+        channelSlug: list.channel.slug,
+        listSlug: list.slug 
+      } 
+    })
+  } else {
+    // Navigate to user list
+    const username = currentUser.value?.custom_url || currentUser.value?.username
+    router.push({ 
+      name: 'UserList', 
+      params: { 
+        username: username,
+        slug: list.slug 
+      } 
+    })
+  }
 }
 
 // Edit list

@@ -244,6 +244,13 @@ const routes = [
     component: () => import('@/views/channels/MyChannels.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/channels/:channelId/lists/create',
+    name: 'ChannelListCreate',
+    component: () => import('@/views/channels/lists/Create.vue'),
+    meta: { requiresAuth: true },
+    props: true
+  },
   
   // Public lists exploration
   {
@@ -350,43 +357,43 @@ const routes = [
     component: () => import('@/views/admin/tags/Index.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
-  // User profile and list routes (with @ prefix)
+  // User profile routes (with /up/ prefix)
   {
-    path: '/@:username/lists',
+    path: '/up/@:username',
+    name: 'UserProfile',
+    component: () => import('@/views/profile/Show.vue'),
+    props: route => ({ username: route.params.username })
+  },
+  {
+    path: '/up/@:username/lists',
     name: 'UserListsPublic',
     component: () => import('@/views/lists/UserLists.vue'),
     props: true,
     meta: { requiresAuth: true }
   },
   {
-    path: '/@:username/:slug',
+    path: '/up/@:username/:slug',
     name: 'UserList',
     component: () => import('@/views/lists/Show.vue'),
     props: true
-    // Remove requiresAuth - authentication is handled by the API based on list visibility
+  },
+  
+  // Channel routes (with @ prefix)
+  {
+    path: '/@:slug',
+    name: 'ChannelProfile',
+    component: () => import('@/views/channels/Show.vue'),
+    props: route => ({ slug: route.params.slug })
   },
   {
-    path: '/@:username',
-    name: 'DynamicProfile',
-    component: () => import('@/views/profile/DynamicProfile.vue'),
-    props: route => ({ slug: route.params.username }),
-    // This will handle both user profiles and channels
-    beforeEnter: async (to, from, next) => {
-      try {
-        // Check what type of entity this is
-        const response = await axios.get(`/api/@${to.params.username}`)
-        
-        // The API will return the appropriate data based on whether it's a user or channel
-        // The DynamicProfile component will handle rendering accordingly
-        next()
-      } catch (error) {
-        if (error.response?.status === 404) {
-          next({ name: 'NotFound' })
-        } else {
-          next()
-        }
-      }
-    }
+    path: '/@:channelSlug/:listSlug',
+    name: 'ChannelList',
+    component: () => import('@/views/lists/Show.vue'),
+    props: route => ({ 
+      channelSlug: route.params.channelSlug,
+      slug: route.params.listSlug,
+      isChannelList: true
+    })
   },
   
   // Generic category routes (should be after user routes)
@@ -403,20 +410,6 @@ const routes = [
     props: true
   },
 
-  // Test auth route
-  {
-    path: '/test-auth',
-    name: 'TestAuth',
-    component: () => import('@/views/TestAuth.vue')
-  },
-  
-  // Debug auth route
-  {
-    path: '/debug-auth',
-    name: 'DebugAuth',
-    component: () => import('@/views/DebugAuth.vue')
-  },
-  
   // Marketing/Public pages at root level (must be after all specific routes)
   {
     path: '/:slug',

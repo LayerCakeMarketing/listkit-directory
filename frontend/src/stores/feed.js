@@ -49,10 +49,20 @@ export const useFeedStore = defineStore('feed', {
           }
         })
 
+        console.log('API Response:', response.data)
+
         // Handle both paginated and direct array responses
-        this.posts = response.data.feedItems?.data || response.data.data || []
+        // The API returns feedItems as a paginated object with data property
+        if (response.data.feedItems) {
+          this.posts = response.data.feedItems.data || []
+          this.hasMore = response.data.feedItems.next_page_url !== null
+        } else {
+          // Fallback for non-paginated response
+          this.posts = response.data.data || []
+          this.hasMore = false
+        }
+        
         this.currentPage = 1
-        this.hasMore = response.data.feedItems?.next_page_url !== null || response.data.next_page_url !== null
         this.lastFetched = Date.now()
 
         // Prefetch top 5 images
@@ -83,15 +93,22 @@ export const useFeedStore = defineStore('feed', {
           }
         })
 
-        const newPosts = response.data.feedItems?.data || response.data.data || []
+        let newPosts = []
+        
+        if (response.data.feedItems) {
+          newPosts = response.data.feedItems.data || []
+          this.hasMore = response.data.feedItems.next_page_url !== null
+        } else {
+          newPosts = response.data.data || []
+          this.hasMore = false
+        }
         
         // Append new posts, avoiding duplicates
-        const existingIds = new Set(this.posts.map(p => p.id))
-        const uniqueNewPosts = newPosts.filter(p => !existingIds.has(p.id))
+        const existingIds = new Set(this.posts.map(p => `${p.feed_type}-${p.id}`))
+        const uniqueNewPosts = newPosts.filter(p => !existingIds.has(`${p.feed_type}-${p.id}`))
         
         this.posts = [...this.posts, ...uniqueNewPosts]
         this.currentPage = nextPage
-        this.hasMore = response.data.feedItems?.next_page_url !== null || response.data.next_page_url !== null
 
         // Prefetch images for new posts
         this.prefetchImages(uniqueNewPosts.slice(0, 3))

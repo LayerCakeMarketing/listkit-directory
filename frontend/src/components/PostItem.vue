@@ -19,7 +19,7 @@
     <div class="flex items-start justify-between mb-4">
       <div class="flex items-center space-x-3">
         <router-link 
-          :to="`/@${post.user?.custom_url || post.user?.username}`"
+          :to="`/up/@${post.user?.custom_url || post.user?.username}`"
           class="flex-shrink-0"
         >
           <img
@@ -31,7 +31,7 @@
         
         <div>
           <router-link 
-            :to="`/@${post.user?.custom_url || post.user?.username}`"
+            :to="`/up/@${post.user?.custom_url || post.user?.username}`"
             class="font-medium text-gray-900 hover:text-blue-600"
           >
             {{ post.user?.name }}
@@ -129,6 +129,23 @@
     <!-- Post Content -->
     <div class="mb-4">
       <p class="text-gray-900 whitespace-pre-wrap">{{ post.content }}</p>
+    </div>
+    
+    <!-- Tags -->
+    <div v-if="post.tags && post.tags.length > 0" class="mb-4">
+      <div class="flex flex-wrap gap-2">
+        <span
+          v-for="tag in post.tags"
+          :key="tag.id"
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+          :style="{ 
+            backgroundColor: (tag.color || '#6B7280') + '20', 
+            color: tag.color || '#6B7280' 
+          }"
+        >
+          #{{ tag.name }}
+        </span>
+      </div>
     </div>
     
     <!-- Media -->

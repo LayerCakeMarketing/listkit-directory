@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\UserList;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Auth;
 
@@ -32,10 +33,22 @@ class UserProfileCacheService
     {
         $user = User::where('custom_url', $customUrl)
             ->orWhere('username', $customUrl)
-            ->withCount(['followers', 'following', 'lists' => function ($query) {
-                $query->where('visibility', 'public');
-            }])
+            ->withCount(['followers', 'followingOld as following_count'])
             ->firstOrFail();
+            
+        // Manually calculate lists count due to complex relationship
+        $user->lists_count = UserList::where(function($query) use ($user) {
+                $query->where(function($q) use ($user) {
+                    $q->where('owner_type', User::class)
+                      ->where('owner_id', $user->id);
+                })
+                ->orWhere(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->whereNull('owner_type');
+                });
+            })
+            ->where('visibility', 'public')
+            ->count();
 
         // Get pinned lists
         $pinnedLists = $user->lists()

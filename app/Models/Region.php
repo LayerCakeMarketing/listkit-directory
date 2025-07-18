@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Models\Place;
+use App\Traits\Saveable;
 
 class Region extends Model
 {
-    use HasFactory;
+    use HasFactory, Saveable;
 
     protected $fillable = [
         'name',

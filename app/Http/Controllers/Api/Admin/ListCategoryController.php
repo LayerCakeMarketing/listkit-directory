@@ -181,4 +181,14 @@ class ListCategoryController extends Controller
 
         return response()->json($categories);
     }
+
+    public function publicOptions()
+    {
+        $categories = ListCategory::active()
+                                 ->ordered()
+                                 ->select('id', 'name', 'slug', 'color')
+                                 ->get();
+
+        return response()->json($categories);
+    }
 }

@@ -282,23 +282,46 @@
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="flex items-center">
-                                                <div class="flex-shrink-0 h-8 w-8">
-                                                    <img
-                                                        v-if="list.user?.avatar"
-                                                        class="h-8 w-8 rounded-full"
-                                                        :src="list.user.avatar"
-                                                        :alt="list.user.name"
-                                                    />
-                                                    <div v-else class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                                                        <span class="text-gray-600 text-xs font-medium">
-                                                            {{ list.user?.name?.charAt(0)?.toUpperCase() || '?' }}
-                                                        </span>
+                                                <!-- Channel Owner -->
+                                                <template v-if="list.owner_type === 'App\\Models\\Channel' && list.owner">
+                                                    <div class="flex-shrink-0 h-8 w-8">
+                                                        <img
+                                                            v-if="list.owner.avatar_url"
+                                                            class="h-8 w-8 rounded-full"
+                                                            :src="list.owner.avatar_url"
+                                                            :alt="list.owner.name"
+                                                        />
+                                                        <div v-else class="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center">
+                                                            <span class="text-white text-xs font-medium">
+                                                                {{ list.owner.name?.charAt(0)?.toUpperCase() || 'C' }}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <div class="text-sm font-medium text-gray-900">{{ list.user?.name || 'Unknown' }}</div>
-                                                    <div class="text-xs text-gray-500">{{ list.user?.email }}</div>
-                                                </div>
+                                                    <div class="ml-3">
+                                                        <div class="text-sm font-medium text-gray-900">{{ list.owner.name }}</div>
+                                                        <div class="text-xs text-purple-600">Channel</div>
+                                                    </div>
+                                                </template>
+                                                <!-- User Owner -->
+                                                <template v-else>
+                                                    <div class="flex-shrink-0 h-8 w-8">
+                                                        <img
+                                                            v-if="list.user?.avatar"
+                                                            class="h-8 w-8 rounded-full"
+                                                            :src="list.user.avatar"
+                                                            :alt="list.user.name"
+                                                        />
+                                                        <div v-else class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                                            <span class="text-gray-600 text-xs font-medium">
+                                                                {{ list.user?.name?.charAt(0)?.toUpperCase() || '?' }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="ml-3">
+                                                        <div class="text-sm font-medium text-gray-900">{{ list.user?.name || 'Unknown' }}</div>
+                                                        <div class="text-xs text-gray-500">{{ list.user?.email }}</div>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
@@ -365,7 +388,7 @@
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <router-link
-                                                :to="`/@${list.user?.custom_url || list.user?.username || list.user_id}/${list.slug}`"
+                                                :to="`/up/@${list.user?.custom_url || list.user?.username || list.user_id}/${list.slug}`"
                                                 target="_blank"
                                                 class="text-green-600 hover:text-green-900 mr-3"
                                             >
@@ -564,7 +587,7 @@ const bulkUpdateVisibility = async () => {
     if (!visibility || !['public', 'private'].includes(visibility)) return
 
     try {
-        await axios.post('/admin/data/lists/bulk-update', {
+        await axios.post('/api/admin/lists/bulk-update', {
             list_ids: selectedLists.value,
             action: 'update_visibility',
             is_public: visibility === 'public'
@@ -579,7 +602,7 @@ const bulkUpdateVisibility = async () => {
 
 const bulkToggleFeatured = async () => {
     try {
-        await axios.post('/admin/data/lists/bulk-update', {
+        await axios.post('/api/admin/lists/bulk-update', {
             list_ids: selectedLists.value,
             action: 'toggle_featured'
         })
@@ -595,7 +618,7 @@ const bulkDelete = async () => {
     if (!confirm(`Are you sure you want to delete ${selectedLists.value.length} lists?`)) return
 
     try {
-        await axios.post('/admin/data/lists/bulk-update', {
+        await axios.post('/api/admin/lists/bulk-update', {
             list_ids: selectedLists.value,
             action: 'delete'
         })
@@ -707,7 +730,7 @@ const bulkPutOnHold = async () => {
     if (!reason) return
 
     try {
-        await axios.post('/admin/data/lists/bulk-update', {
+        await axios.post('/api/admin/lists/bulk-update', {
             list_ids: selectedLists.value,
             action: 'update_status',
             status: 'on_hold',
@@ -724,7 +747,24 @@ const bulkPutOnHold = async () => {
 
 // Initialize
 onMounted(() => {
-    fetchLists()
+    fetchLists().then(() => {
+        // Debug: Check first list with channel owner
+        const channelList = lists.value.data?.find(l => l.owner_type === 'App\\Models\\Channel')
+        if (channelList) {
+            console.log('Channel list found:', {
+                owner_type: channelList.owner_type,
+                owner: channelList.owner,
+                channel_data: channelList.channel_data,
+                user: channelList.user
+            })
+        } else {
+            console.log('No channel lists found in:', lists.value.data?.map(l => ({
+                id: l.id,
+                name: l.name,
+                owner_type: l.owner_type
+            })))
+        }
+    })
     fetchListCategories()
     fetchUsers()
     fetchStats()

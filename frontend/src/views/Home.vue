@@ -112,14 +112,14 @@
                                                 </button>
                                             </div>
                                             <router-link 
-                                                :to="`/@${item.user?.custom_url || item.user?.username}/${item.slug}`"
+                                                :to="`/up/@${item.user?.custom_url || item.user?.username}/${item.slug}`"
                                                 class="text-lg font-semibold text-gray-900 hover:text-blue-600"
                                             >
                                                 {{ item.name }}
                                             </router-link>
                                             <div class="flex items-center gap-3 mt-1 text-sm text-gray-600">
                                                 <router-link 
-                                                    :to="`/@${item.user?.custom_url || item.user?.username}`"
+                                                    :to="`/up/@${item.user?.custom_url || item.user?.username}`"
                                                     class="hover:text-gray-900"
                                                 >
                                                     by {{ item.user?.name }}
@@ -239,14 +239,14 @@
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                             </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900">No lists yet</h3>
-                            <p class="mt-1 text-sm text-gray-500">Start following people to see their lists here.</p>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">Inconceivable - nothing here?</h3>
+                            <p class="mt-1 text-sm text-gray-500">Start following people, places and channels to see their lists and posts here.</p>
                             <div class="mt-6">
                                 <router-link
                                     to="/lists"
                                     class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                                 >
-                                    Explore Lists
+                                    Explore
                                 </router-link>
                             </div>
                         </div>
@@ -317,7 +317,7 @@
                                     Browse Places
                                 </router-link>
                                 <router-link
-                                    :to="`/@${user.custom_url || user.username}`"
+                                    :to="`/up/@${user.custom_url || user.username}`"
                                     class="flex items-center text-sm text-blue-600 hover:text-blue-800"
                                 >
                                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

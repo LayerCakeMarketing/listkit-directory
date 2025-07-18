@@ -23,6 +23,8 @@ class PostController extends Controller
             'media.*.metadata' => 'nullable|array',
             'media_type' => 'nullable|in:images,video',
             'expires_in_days' => 'nullable|integer|min:1|max:365',
+            'tags' => 'nullable|array|max:5',
+            'tags.*' => 'string|max:50',
         ]);
 
         // Use default expiration if not specified
@@ -38,8 +40,13 @@ class PostController extends Controller
             'expires_in_days' => $validated['expires_in_days'],
         ]);
 
+        // Handle tags if provided
+        if (!empty($validated['tags'])) {
+            $post->syncTags($validated['tags']);
+        }
+
         // Load relationships for response
-        $post->load('user');
+        $post->load('user', 'tags');
         $post->feed_type = 'post'; // Add feed type for frontend
 
         return response()->json([
@@ -53,7 +60,7 @@ class PostController extends Controller
      */
     public function show($id)
     {
-        $post = Post::with('user')
+        $post = Post::with('user', 'tags')
             ->visible()
             ->findOrFail($id);
 
@@ -79,6 +86,8 @@ class PostController extends Controller
             'media_type' => 'nullable|in:images,video',
             'removed_media' => 'nullable|array',
             'removed_media.*.fileId' => 'required|string',
+            'tags' => 'nullable|array|max:5',
+            'tags.*' => 'string|max:50',
         ]);
 
         // Handle removed media - delete from ImageKit
@@ -135,7 +144,12 @@ class PostController extends Controller
 
         $post->update($updateData);
 
-        $post->load('user');
+        // Handle tags if provided
+        if (isset($validated['tags'])) {
+            $post->syncTags($validated['tags']);
+        }
+
+        $post->load('user', 'tags');
         $post->feed_type = 'post';
 
         return response()->json([
@@ -212,7 +226,7 @@ class PostController extends Controller
             ->firstOrFail();
 
         $query = Post::where('user_id', $user->id)
-            ->with('user')
+            ->with(['user', 'tags'])
             ->visible();
             
         // Filter for tacked posts only if requested

@@ -5,10 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Traits\HasTags;
+use App\Traits\Followable;
+use App\Traits\Saveable;
 
 class Place extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTags, Followable, Saveable;
     
     protected $table = 'directory_entries';
 
@@ -184,6 +187,11 @@ class Place extends Model
     public function claims()
     {
         return $this->hasMany(Claim::class);
+    }
+
+    public function tags()
+    {
+        return $this->morphToMany(Tag::class, 'taggable');
     }
 
     // Scopes

@@ -324,7 +324,8 @@ class UserProfileController extends Controller
         $user = Auth::user();
         $list = UserList::findOrFail($listId);
 
-        if ($list->user_id !== $user->id) {
+        // Check if user owns the list (polymorphic)
+        if ($list->owner_type !== User::class || $list->owner_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -346,7 +347,8 @@ class UserProfileController extends Controller
         $user = Auth::user();
         $list = UserList::findOrFail($listId);
 
-        if ($list->user_id !== $user->id) {
+        // Check if user owns the list (polymorphic)
+        if ($list->owner_type !== User::class || $list->owner_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -439,7 +441,10 @@ class UserProfileController extends Controller
 
         // Profile stats - optimize with single query
         $userData['stats'] = [
-            'lists_count' => $user->lists()->where('visibility', 'public')->count(),
+            'lists_count' => UserList::where('owner_type', User::class)
+                                    ->where('owner_id', $user->id)
+                                    ->where('visibility', 'public')
+                                    ->count(),
             'followers_count' => $user->followers()->count(),
             'following_count' => $user->following()->count(),
             'places_count' => $user->places()->count(),

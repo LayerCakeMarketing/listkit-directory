@@ -21,21 +21,27 @@ class EntityMediaController extends Controller
     public function getEntityMedia(Request $request, string $entityType, $entityId)
     {
         try {
-            // Validate entity type
-            $validTypes = ['user', 'list', 'place', 'region'];
-            if (!in_array(strtolower($entityType), $validTypes)) {
-                return response()->json(['error' => 'Invalid entity type'], 400);
+            // Handle direct model class names from frontend
+            if (str_contains($entityType, 'App\\Models\\')) {
+                $modelClass = $entityType;
+            } else {
+                // Validate entity type
+                $validTypes = ['user', 'list', 'place', 'region', 'channel'];
+                if (!in_array(strtolower($entityType), $validTypes)) {
+                    return response()->json(['error' => 'Invalid entity type'], 400);
+                }
+
+                // Map frontend entity types to model class names
+                $entityTypeMap = [
+                    'user' => 'App\Models\User',
+                    'list' => 'App\Models\UserList',
+                    'place' => 'App\Models\Place',
+                    'region' => 'App\Models\Region',
+                    'channel' => 'App\Models\Channel',
+                ];
+                
+                $modelClass = $entityTypeMap[strtolower($entityType)];
             }
-
-            // Map frontend entity types to model class names
-            $entityTypeMap = [
-                'user' => 'App\Models\User',
-                'list' => 'App\Models\UserList',
-                'place' => 'App\Models\Place',
-                'region' => 'App\Models\Region',
-            ];
-
-            $modelClass = $entityTypeMap[strtolower($entityType)];
 
             // Check if entity exists
             if (!class_exists($modelClass) || !$modelClass::find($entityId)) {

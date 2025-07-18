@@ -15,14 +15,17 @@ services:
       - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
       - laravel
-    depends_on:
-      - db
+    # depends_on:
+    #   - db
+    env_file:
+      - .env.docker
     environment:
-      - DB_HOST=db
+      - DB_HOST=docker.for.mac.localhost
       - DB_PORT=5432
-      - DB_DATABASE=laravel
-      - DB_USERNAME=laravel
-      - DB_PASSWORD=secret
+      - DB_DATABASE=illum_local
+      - DB_USERNAME=ericslarson
+      - DB_PASSWORD=
+      - SPA_MODE=true
 
   # Vue Frontend SPA
   frontend:
@@ -38,24 +41,23 @@ services:
     networks:
       - laravel
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+    # Don't set VITE_API_URL so requests go through Vite proxy
 
-  # PostgreSQL Database
-  db:
-    image: postgres:15
-    container_name: laravel-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: laravel
-      POSTGRES_USER: laravel
-      POSTGRES_PASSWORD: secret
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - laravel
+  # PostgreSQL Database - Commented out since we're using local PostgreSQL
+  # db:
+  #   image: postgres:15
+  #   container_name: laravel-db
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: laravel
+  #     POSTGRES_USER: laravel
+  #     POSTGRES_PASSWORD: secret
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - laravel
 
   # Nginx Web Server
   nginx:
@@ -76,5 +78,5 @@ networks:
   laravel:
     driver: bridge
 
-volumes:
-  postgres_data:
+# volumes:
+#   postgres_data:

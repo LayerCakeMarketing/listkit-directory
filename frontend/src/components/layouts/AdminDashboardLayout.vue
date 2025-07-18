@@ -206,9 +206,10 @@ const managementSections = [
   { id: 1, name: 'Regions', href: '/admin/regions', initial: 'R' },
   { id: 2, name: 'Lists', href: '/admin/lists', initial: 'L' },
   { id: 3, name: 'List Categories', href: '/admin/list-categories', initial: 'LC' },
-  { id: 4, name: 'Media', href: '/admin/media', initial: 'M' },
-  { id: 5, name: 'Reports', href: '/admin/reports', initial: 'RP' },
-  { id: 6, name: 'Settings', href: '/admin/settings', initial: 'S' },
+  { id: 4, name: 'Tags', href: '/admin/tags', initial: 'T' },
+  { id: 5, name: 'Media', href: '/admin/media', initial: 'M' },
+  { id: 6, name: 'Reports', href: '/admin/reports', initial: 'RP' },
+  { id: 7, name: 'Settings', href: '/admin/settings', initial: 'S' },
 ]
 
 const isCurrentRoute = (href) => {

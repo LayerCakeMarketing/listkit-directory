@@ -24,7 +24,7 @@ class CloudflareImageController extends Controller
         try {
             // Validate optional context parameters
             $request->validate([
-                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover',
+                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover,avatar_temp,banner_temp,banner',
                 'entity_type' => 'nullable|string',
                 'entity_id' => 'nullable|integer',
             ]);
@@ -94,7 +94,7 @@ class CloudflareImageController extends Controller
             $request->validate([
                 'cloudflare_id' => 'required|string',
                 'filename' => 'required|string',
-                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover',
+                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover,avatar_temp,banner_temp,banner',
                 'entity_type' => 'nullable|string',
                 'entity_id' => 'nullable|integer',
                 'metadata' => 'nullable|array',
@@ -211,7 +211,7 @@ class CloudflareImageController extends Controller
                 'cloudflare_id' => 'required|string',
                 'entity_type' => 'nullable|string',
                 'entity_id' => 'nullable|integer',
-                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover',
+                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover,avatar_temp,banner_temp,banner',
             ]);
 
             $image = CloudflareImage::where('cloudflare_id', $request->cloudflare_id)->first();

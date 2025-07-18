@@ -27,7 +27,7 @@
 
                 <div class="mt-4">
                     <router-link
-                        :to="`/@${item.user?.custom_url || item.user?.username}/${item.slug}`"
+                        :to="`/up/@${item.user?.custom_url || item.user?.username}/${item.slug}`"
                         class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         @click="$emit('close')"
                     >

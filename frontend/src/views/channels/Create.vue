@@ -44,8 +44,8 @@
               <div class="mt-2 flex items-center space-x-4">
                 <div class="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                   <img 
-                    v-if="avatarPreview" 
-                    :src="avatarPreview" 
+                    v-if="avatarImageUrl" 
+                    :src="avatarImageUrl" 
                     alt="Avatar preview"
                     class="h-full w-full object-cover"
                   >
@@ -53,20 +53,23 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <input
-                  type="file"
-                  ref="avatarInput"
-                  @change="handleAvatarChange"
-                  accept="image/*"
-                  class="hidden"
-                >
-                <button
-                  type="button"
-                  @click="$refs.avatarInput.click()"
-                  class="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Choose Avatar
-                </button>
+                <CloudflareDragDropUploader
+                  v-if="!channelId"
+                  :max-files="1"
+                  context="avatar_temp"
+                  :entity-type="'App\\Models\\Channel'"
+                  :entity-id="0"
+                  :metadata="{
+                    temp: true,
+                    context: 'avatar'
+                  }"
+                  @upload-success="handleAvatarUpload"
+                  :compact="true"
+                  button-text="Choose Avatar"
+                />
+                <div v-else class="text-sm text-gray-500">
+                  Avatar uploaded
+                </div>
               </div>
             </div>
 
@@ -78,8 +81,8 @@
               <div class="mt-2">
                 <div class="h-32 w-full rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden">
                   <img 
-                    v-if="bannerPreview" 
-                    :src="bannerPreview" 
+                    v-if="bannerImageUrl" 
+                    :src="bannerImageUrl" 
                     alt="Banner preview"
                     class="h-full w-full object-cover"
                   >
@@ -87,20 +90,24 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <input
-                  type="file"
-                  ref="bannerInput"
-                  @change="handleBannerChange"
-                  accept="image/*"
-                  class="hidden"
-                >
-                <button
-                  type="button"
-                  @click="$refs.bannerInput.click()"
-                  class="mt-2 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Choose Banner
-                </button>
+                <CloudflareDragDropUploader
+                  v-if="!channelId"
+                  :max-files="1"
+                  context="banner_temp"
+                  :entity-type="'App\\Models\\Channel'"
+                  :entity-id="0"
+                  :metadata="{
+                    temp: true,
+                    context: 'banner'
+                  }"
+                  @upload-success="handleBannerUpload"
+                  :compact="true"
+                  button-text="Choose Banner"
+                  class="mt-2"
+                />
+                <div v-else class="text-sm text-gray-500 mt-2">
+                  Banner uploaded
+                </div>
               </div>
             </div>
 
@@ -167,6 +174,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
 
 const router = useRouter()
 
@@ -177,12 +185,13 @@ const form = ref({
   is_public: true
 })
 
-const avatarFile = ref(null)
-const bannerFile = ref(null)
-const avatarPreview = ref(null)
-const bannerPreview = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const channelId = ref(null)
+const avatarImageUrl = ref(null)
+const avatarCloudflareId = ref(null)
+const bannerImageUrl = ref(null)
+const bannerCloudflareId = ref(null)
 
 // Computed
 const generatedSlug = computed(() => {
@@ -194,59 +203,25 @@ const generatedSlug = computed(() => {
 })
 
 // Methods
-const handleAvatarChange = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    // Check file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB in bytes
-    if (file.size > maxSize) {
-      error.value = 'Avatar image must be less than 5MB'
-      event.target.value = '' // Reset input
-      return
-    }
-    
-    // Check file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      error.value = 'Avatar must be a valid image file (JPEG, PNG, GIF, or WebP)'
-      event.target.value = '' // Reset input
-      return
-    }
-    
-    avatarFile.value = file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      avatarPreview.value = e.target.result
-    }
-    reader.readAsDataURL(file)
+// Handle avatar upload success
+const handleAvatarUpload = (result) => {
+  console.log('Avatar upload result:', result)
+  
+  if (result && result.id) {
+    avatarCloudflareId.value = result.id
+    avatarImageUrl.value = result.url || result.variants?.[0] || `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${result.id}/public`
+    error.value = null
   }
 }
 
-const handleBannerChange = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    // Check file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB in bytes
-    if (file.size > maxSize) {
-      error.value = 'Banner image must be less than 5MB'
-      event.target.value = '' // Reset input
-      return
-    }
-    
-    // Check file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      error.value = 'Banner must be a valid image file (JPEG, PNG, GIF, or WebP)'
-      event.target.value = '' // Reset input
-      return
-    }
-    
-    bannerFile.value = file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      bannerPreview.value = e.target.result
-    }
-    reader.readAsDataURL(file)
+// Handle banner upload success
+const handleBannerUpload = (result) => {
+  console.log('Banner upload result:', result)
+  
+  if (result && result.id) {
+    bannerCloudflareId.value = result.id
+    bannerImageUrl.value = result.url || result.variants?.[0] || `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${result.id}/public`
+    error.value = null
   }
 }
 
@@ -255,24 +230,17 @@ const createChannel = async () => {
   error.value = null
   
   try {
-    const formData = new FormData()
-    formData.append('name', form.value.name)
-    formData.append('description', form.value.description || '')
-    formData.append('is_public', form.value.is_public ? '1' : '0')
-    
-    if (avatarFile.value) {
-      formData.append('avatar_image', avatarFile.value)
+    const payload = {
+      name: form.value.name,
+      description: form.value.description || '',
+      is_public: form.value.is_public,
+      avatar_cloudflare_id: avatarCloudflareId.value,
+      avatar_url: avatarImageUrl.value,
+      banner_cloudflare_id: bannerCloudflareId.value,
+      banner_url: bannerImageUrl.value
     }
     
-    if (bannerFile.value) {
-      formData.append('banner_image', bannerFile.value)
-    }
-    
-    const response = await axios.post('/api/channels', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    const response = await axios.post('/api/channels', payload)
     
     // Redirect to the new channel
     router.push(`/@${response.data.channel.slug}`)

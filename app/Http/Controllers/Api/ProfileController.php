@@ -22,7 +22,19 @@ class ProfileController extends Controller
     public function show(Request $request)
     {
         $user = $request->user();
-        $user->loadCount(['followers', 'following', 'lists']);
+        
+        // Try to load counts safely
+        try {
+            $user->loadCount(['followers', 'following', 'lists']);
+            $followers_count = $user->followers_count ?? 0;
+            $following_count = $user->following_count ?? 0;
+            $lists_count = $user->lists_count ?? 0;
+        } catch (\Exception $e) {
+            \Log::error('Error loading counts: ' . $e->getMessage());
+            $followers_count = 0;
+            $following_count = 0;
+            $lists_count = 0;
+        }
         
         $userData = [
             'id' => $user->id,
@@ -49,9 +61,9 @@ class ProfileController extends Controller
             'page_logo_option' => $user->page_logo_option,
             'page_logo_cloudflare_id' => $user->page_logo_cloudflare_id,
             'page_logo_url' => $user->page_logo_url,
-            'followers_count' => $user->followers_count,
-            'following_count' => $user->following_count,
-            'lists_count' => $user->lists_count,
+            'followers_count' => $followers_count,
+            'following_count' => $following_count,
+            'lists_count' => $lists_count,
             'created_at' => $user->created_at,
         ];
         

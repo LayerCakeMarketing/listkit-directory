@@ -6,6 +6,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ListKit is a Laravel-based directory application with custom user URLs, list management, and advanced search capabilities. Built with Laravel 11, Vue.js 3, and Inertia.js.
 
+## Database Configuration
+
+### Important: Hybrid Setup
+This project uses a hybrid database configuration:
+- **Local PostgreSQL**: The actual application data is stored in a local PostgreSQL database (`illum_local`)
+- **Docker PostgreSQL**: A PostgreSQL container is included in docker-compose.yml but is NOT used for data
+
+### Configuration Files
+1. **`.env`** - Used for local development (php artisan serve)
+   ```
+   DB_HOST=localhost             # For local development
+   DB_DATABASE=illum_local       # Local PostgreSQL database
+   ```
+
+2. **`.env.docker`** - Used by Docker containers
+   ```
+   DB_HOST=docker.for.mac.localhost  # macOS Docker host gateway
+   DB_DATABASE=illum_local           # Same database as local
+   ```
+
+3. **`docker-compose.yml`** - Uses .env.docker and overrides specific values
+   ```yaml
+   env_file:
+     - .env.docker
+   environment:
+     - DB_HOST=docker.for.mac.localhost
+     - DB_DATABASE=illum_local
+   ```
+
+### Important Notes
+- Docker containers use `.env.docker`, NOT `.env`
+- On macOS, use `docker.for.mac.localhost` to access host services from Docker
+- The local PostgreSQL must be configured to accept connections from Docker (listen on all interfaces)
+
+### Docker Usage
+
+#### Starting Docker Services
+```bash
+docker-compose up -d          # Start all services
+docker-compose down           # Stop all services
+docker-compose restart        # Restart all services
+```
+
+#### Verifying Database Connection
+```bash
+# Check which database Docker is using
+docker exec laravel-app php artisan tinker --execute="echo 'Database: ' . config('database.connections.pgsql.database') . ' on host: ' . config('database.connections.pgsql.host');"
+```
+
+#### Common Issues
+1. **Database Connection Errors**: "could not translate host name"
+   - Ensure PostgreSQL is configured to accept external connections
+   - Use `docker.for.mac.localhost` on macOS (not `host.docker.internal`)
+   - Check that `.env.docker` is being used by Docker (not `.env`)
+
+2. **Wrong Database**: If Docker shows "Database: laravel on host: db"
+   - Docker is using the container database instead of local
+   - Fix: Ensure `docker-compose.yml` has `env_file: .env.docker`
+   - Restart: `docker-compose down && docker-compose up -d`
+
+3. **CSRF Token Errors**: Enable SPA mode in both `.env` and `.env.docker`
+   ```
+   SPA_MODE=true
+   ```
+
+4. **404 Errors on API Routes**: Ensure `routes/web-spa.php` and `resources/views/spa.blade.php` exist when SPA_MODE=true
+
 ## Development Commands
 
 ### Local Development

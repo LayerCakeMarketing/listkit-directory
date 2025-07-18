@@ -11,7 +11,7 @@ class TagController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Tag::withCount('taggables');
+        $query = Tag::with('creator');
 
         // Search functionality
         if ($request->filled('search')) {
@@ -22,94 +22,97 @@ class TagController extends Controller
             });
         }
 
-        // Filter by status
-        if ($request->filled('status')) {
-            $isActive = $request->status === 'active';
-            $query->where('is_active', $isActive);
+        // Filter by type
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
         }
 
-        // Filter by content type
-        if ($request->filled('content_type')) {
-            $contentType = $request->content_type;
-            $query->whereHas('taggables', function ($q) use ($contentType) {
-                $q->where('taggable_type', $contentType);
-            });
+        // Filter by featured
+        if ($request->boolean('featured')) {
+            $query->where('is_featured', true);
+        }
+
+        // Filter by system
+        if ($request->boolean('system')) {
+            $query->where('is_system', true);
         }
 
         // Sorting
         $sortBy = $request->get('sort_by', 'name');
         $sortOrder = $request->get('sort_order', 'asc');
         
-        if ($sortBy === 'usage_count') {
-            $query->orderBy('taggables_count', $sortOrder);
+        if ($sortBy === 'usage') {
+            $query->orderBy('usage_count', $sortOrder);
         } else {
             $query->orderBy($sortBy, $sortOrder);
         }
 
-        $tags = $query->paginate(20);
-
-        // Add usage by type for each tag
-        $tags->getCollection()->transform(function ($tag) {
-            $usageByType = DB::table('taggables')
-                ->select('taggable_type', DB::raw('count(*) as count'))
-                ->where('tag_id', $tag->id)
-                ->groupBy('taggable_type')
-                ->pluck('count', 'taggable_type');
-            
-            $tag->usage_by_type = $usageByType;
-            return $tag;
-        });
+        $tags = $query->paginate($request->get('per_page', 50));
 
         return response()->json($tags);
     }
 
     public function stats()
     {
-        $contentTypeStats = DB::table('taggables')
-            ->select('taggable_type', DB::raw('count(distinct tag_id) as unique_tags'), DB::raw('count(*) as total_usages'))
-            ->groupBy('taggable_type')
-            ->get()
-            ->keyBy('taggable_type');
+        $stats = [
+            'total' => Tag::count(),
+            'by_type' => Tag::selectRaw('type, count(*) as count')
+                ->groupBy('type')
+                ->pluck('count', 'type'),
+            'featured' => Tag::where('is_featured', true)->count(),
+            'system' => Tag::where('is_system', true)->count(),
+            'most_used' => Tag::orderBy('usage_count', 'desc')
+                ->limit(10)
+                ->get(['id', 'name', 'usage_count', 'color']),
+            'recently_created' => Tag::latest()
+                ->limit(10)
+                ->with('creator')
+                ->get(['id', 'name', 'created_at', 'created_by']),
+        ];
 
-        return response()->json([
-            'total_tags' => Tag::count(),
-            'active_tags' => Tag::where('is_active', true)->count(),
-            'inactive_tags' => Tag::where('is_active', false)->count(),
-            'total_usages' => DB::table('taggables')->count(),
-            'content_types' => $contentTypeStats,
-        ]);
+        return response()->json($stats);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:tags,slug',
-            'description' => 'nullable|string|max:1000',
-            'color' => 'nullable|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/',
-            'is_active' => 'boolean',
+            'type' => 'nullable|string|in:general,category,location,event,trending',
+            'color' => 'nullable|string|max:7', // hex color
+            'description' => 'nullable|string|max:500',
+            'is_featured' => 'boolean',
+            'is_system' => 'boolean',
         ]);
 
-        $tag = Tag::create($validated);
+        // Check for duplicate
+        $slug = \Illuminate\Support\Str::slug($validated['name']);
+        if (Tag::where('slug', $slug)->exists()) {
+            return response()->json([
+                'message' => 'A tag with this name already exists.',
+                'errors' => ['name' => ['Tag already exists']]
+            ], 422);
+        }
+
+        $tag = Tag::create([
+            'name' => $validated['name'],
+            'slug' => $slug,
+            'type' => $validated['type'] ?? 'general',
+            'color' => $validated['color'] ?? null,
+            'description' => $validated['description'] ?? null,
+            'is_featured' => $validated['is_featured'] ?? false,
+            'is_system' => $validated['is_system'] ?? false,
+            'created_by' => auth()->id(),
+        ]);
 
         return response()->json([
             'message' => 'Tag created successfully',
-            'tag' => $tag,
+            'tag' => $tag->load('creator')
         ], 201);
     }
 
     public function show($id)
     {
-        $tag = Tag::withCount('taggables')->findOrFail($id);
-        
-        // Get usage by type
-        $usageByType = DB::table('taggables')
-            ->select('taggable_type', DB::raw('count(*) as count'))
-            ->where('tag_id', $tag->id)
-            ->groupBy('taggable_type')
-            ->pluck('count', 'taggable_type');
-        
-        $tag->usage_by_type = $usageByType;
+        $tag = Tag::with('creator')->findOrFail($id);
         
         return response()->json($tag);
     }
@@ -118,19 +121,38 @@ class TagController extends Controller
     {
         $tag = Tag::findOrFail($id);
 
+        // Prevent editing system tags (except by super admin)
+        if ($tag->is_system && !auth()->user()->hasRole('super_admin')) {
+            return response()->json(['message' => 'Cannot edit system tags'], 403);
+        }
+
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:tags,slug,' . $id,
-            'description' => 'nullable|string|max:1000',
-            'color' => 'nullable|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/',
-            'is_active' => 'boolean',
+            'name' => 'sometimes|required|string|max:255',
+            'type' => 'nullable|string|in:general,category,location,event,trending',
+            'color' => 'nullable|string|max:7',
+            'description' => 'nullable|string|max:500',
+            'is_featured' => 'boolean',
+            'is_system' => 'boolean',
         ]);
 
+        // Check for duplicate if name is changing
+        if (isset($validated['name']) && $validated['name'] !== $tag->name) {
+            $slug = \Illuminate\Support\Str::slug($validated['name']);
+            if (Tag::where('slug', $slug)->where('id', '!=', $tag->id)->exists()) {
+                return response()->json([
+                    'message' => 'A tag with this name already exists.',
+                    'errors' => ['name' => ['Tag already exists']]
+                ], 422);
+            }
+            $validated['slug'] = $slug;
+        }
+
         $tag->update($validated);
+        $tag->updateCounts();
 
         return response()->json([
             'message' => 'Tag updated successfully',
-            'tag' => $tag->fresh(),
+            'tag' => $tag->fresh()->load('creator')
         ]);
     }
 
@@ -138,7 +160,19 @@ class TagController extends Controller
     {
         $tag = Tag::findOrFail($id);
         
-        // This will also delete related taggables due to cascade
+        // Prevent deleting system tags
+        if ($tag->is_system) {
+            return response()->json(['message' => 'Cannot delete system tags'], 403);
+        }
+
+        // Check if tag is in use
+        if ($tag->usage_count > 0) {
+            return response()->json([
+                'message' => 'Cannot delete tag that is in use',
+                'usage_count' => $tag->usage_count
+            ], 422);
+        }
+
         $tag->delete();
 
         return response()->json([
@@ -151,22 +185,35 @@ class TagController extends Controller
         $validated = $request->validate([
             'tag_ids' => 'required|array',
             'tag_ids.*' => 'exists:tags,id',
-            'action' => 'required|string|in:delete,activate,deactivate,merge',
-            'is_active' => 'required_if:action,activate,deactivate|boolean',
+            'action' => 'required|string|in:delete,toggle_featured,merge',
             'target_tag_id' => 'required_if:action,merge|exists:tags,id',
         ]);
 
         switch ($validated['action']) {
             case 'delete':
-                Tag::whereIn('id', $validated['tag_ids'])->delete();
-                $message = 'Tags deleted successfully';
+                // Only delete non-system tags with no usage
+                $tagsToDelete = Tag::whereIn('id', $validated['tag_ids'])
+                    ->where('is_system', false)
+                    ->where('usage_count', 0)
+                    ->pluck('id');
+                
+                if ($tagsToDelete->isEmpty()) {
+                    return response()->json([
+                        'message' => 'No tags could be deleted. Tags must not be system tags and must have zero usage.'
+                    ], 422);
+                }
+                
+                Tag::whereIn('id', $tagsToDelete)->delete();
+                $message = count($tagsToDelete) . ' tags deleted successfully';
                 break;
 
-            case 'activate':
-            case 'deactivate':
+            case 'toggle_featured':
                 Tag::whereIn('id', $validated['tag_ids'])
-                    ->update(['is_active' => $validated['is_active']]);
-                $message = 'Tags updated successfully';
+                    ->where('is_system', false)
+                    ->each(function ($tag) {
+                        $tag->update(['is_featured' => !$tag->is_featured]);
+                    });
+                $message = 'Tags featured status toggled successfully';
                 break;
 
             case 'merge':
@@ -203,31 +250,13 @@ class TagController extends Controller
             return response()->json([]);
         }
 
-        $tags = Tag::active()
-                   ->where('name', 'like', "%{$query}%")
-                   ->orderBy('name')
+        $tags = Tag::where('name', 'like', "%{$query}%")
+                   ->orderBy('usage_count', 'desc')
                    ->limit(20)
-                   ->select('id', 'name', 'slug', 'color')
+                   ->select('id', 'name', 'slug', 'color', 'usage_count')
                    ->get();
 
         return response()->json($tags);
     }
 
-    public function popular(Request $request)
-    {
-        $limit = $request->get('limit', 20);
-        $contentType = $request->get('content_type');
-
-        $query = Tag::active()->popular($limit);
-
-        if ($contentType) {
-            $query->whereHas('taggables', function ($q) use ($contentType) {
-                $q->where('taggable_type', $contentType);
-            });
-        }
-
-        $tags = $query->get();
-
-        return response()->json($tags);
-    }
 }

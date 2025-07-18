@@ -112,7 +112,7 @@ const deleteChannel = async () => {
   }
   
   try {
-    await axios.delete(`/api/channels/${props.channel.id}`)
+    await axios.delete(`/api/channels/${props.channel.slug}`)
     emit('deleted', props.channel.id)
   } catch (error) {
     console.error('Error deleting channel:', error)

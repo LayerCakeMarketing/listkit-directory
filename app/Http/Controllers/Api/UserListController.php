@@ -17,9 +17,22 @@ class UserListController extends Controller
 {
     public function index(Request $request)
     {
-        $query = UserList::with(['user', 'items'])
+        $userId = auth()->id();
+        
+        $query = UserList::with(['owner', 'user', 'items', 'channel'])
                         ->withCount('items')
-                        ->where('user_id', auth()->id());
+                        ->where(function($q) use ($userId) {
+                            // Check polymorphic ownership
+                            $q->where(function($sub) use ($userId) {
+                                $sub->where('owner_type', \App\Models\User::class)
+                                    ->where('owner_id', $userId);
+                            })
+                            // Also check legacy user_id field for backward compatibility
+                            ->orWhere(function($sub) use ($userId) {
+                                $sub->where('user_id', $userId)
+                                    ->whereNull('owner_type');
+                            });
+                        });
 
         // Search
         if ($request->filled('search')) {
@@ -42,6 +55,19 @@ class UserListController extends Controller
 
     public function store(Request $request)
     {
+        \Log::info('UserListController@store - Request data:', $request->all());
+        
+        // If channel_id is provided, verify the user owns the channel
+        if ($request->has('channel_id') && $request->channel_id) {
+            \Log::info('Channel ID provided:', ['channel_id' => $request->channel_id]);
+            $channel = \App\Models\Channel::findOrFail($request->channel_id);
+            if ($channel->user_id !== auth()->id()) {
+                return response()->json(['message' => 'You do not own this channel'], 403);
+            }
+        } else {
+            \Log::info('No channel_id in request');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -55,16 +81,28 @@ class UserListController extends Controller
             'gallery_images.*.url' => 'nullable|string',
             'gallery_images.*.filename' => 'nullable|string',
             'category_id' => 'required|exists:list_categories,id',
+            'channel_id' => 'nullable|exists:channels,id',
             'tags' => 'nullable|array',
             'tags.*.name' => 'string|max:255',
             'tags.*.is_new' => 'boolean',
         ]);
 
         DB::transaction(function() use ($validated, &$list) {
-            $list = UserList::create([
-                'user_id' => auth()->id(),
+            // Determine the owner
+            if (!empty($validated['channel_id'])) {
+                $owner = \App\Models\Channel::findOrFail($validated['channel_id']);
+            } else {
+                $owner = auth()->user();
+            }
+            
+            // Create the list with polymorphic owner
+            $listData = [
+                'user_id' => auth()->id(), // Keep for backward compatibility
+                'channel_id' => $validated['channel_id'] ?? null, // Keep for backward compatibility
+                'owner_type' => get_class($owner),
+                'owner_id' => $owner->id,
                 'name' => $validated['name'],
-                'slug' => Str::slug($validated['name']),
+                'slug' => $this->generateUniqueSlug($validated['name'], $validated['channel_id'] ?? null),
                 'description' => $validated['description'] ?? null,
                 'visibility' => $validated['visibility'],
                 'is_draft' => $validated['is_draft'] ?? false,
@@ -74,7 +112,9 @@ class UserListController extends Controller
                 'featured_image_cloudflare_id' => $validated['featured_image_cloudflare_id'] ?? null,
                 'gallery_images' => $validated['gallery_images'] ?? null,
                 'category_id' => $validated['category_id'],
-            ]);
+            ];
+            
+            $list = UserList::create($listData);
 
             // Handle tags
             if (!empty($validated['tags'])) {
@@ -98,8 +138,9 @@ class UserListController extends Controller
                             $tag = Tag::create([
                                 'name' => $tagData['name'],
                                 'slug' => $slug,
+                                'type' => 'general',
                                 'color' => '#6B7280',
-                                'is_active' => true,
+                                'created_by' => auth()->id(),
                             ]);
                             $tagIds[] = $tag->id;
                         }
@@ -116,7 +157,15 @@ class UserListController extends Controller
             }
         });
 
-        $list->load('user', 'category', 'tags');
+        $list->load('owner', 'user', 'channel', 'category', 'tags');
+        
+        \Log::info('List created:', [
+            'id' => $list->id,
+            'name' => $list->name,
+            'slug' => $list->slug,
+            'channel_id' => $list->channel_id,
+            'user_id' => $list->user_id
+        ]);
         
         return response()->json([
             'message' => 'List created successfully',
@@ -126,7 +175,7 @@ class UserListController extends Controller
 
     public function show($id)
     {
-        $list = UserList::with(['user', 'category', 'tags', 'items' => function($query) {
+        $list = UserList::with(['owner', 'user', 'channel', 'category', 'tags', 'items' => function($query) {
             $query->orderBy('order_index')
                   ->with(['place.location', 'place.category']);
         }])->findOrFail($id);
@@ -139,6 +188,11 @@ class UserListController extends Controller
         // Increment view count if not owner and list is viewable
         if (!$list->isOwnedBy(auth()->user()) && $list->isPublished()) {
             $list->incrementViewCount();
+        }
+
+        // Add saved status if user is authenticated
+        if (auth()->check()) {
+            $list->is_saved = $list->isSavedBy(auth()->user());
         }
 
         return response()->json($list);
@@ -211,8 +265,9 @@ class UserListController extends Controller
                             $tag = Tag::create([
                                 'name' => $tagData['name'],
                                 'slug' => $slug,
+                                'type' => 'general',
                                 'color' => '#6B7280',
-                                'is_active' => true,
+                                'created_by' => auth()->id(),
                             ]);
                             $tagIds[] = $tag->id;
                         }
@@ -261,7 +316,7 @@ class UserListController extends Controller
 
         $validated = $request->validate([
             'type' => 'required|in:directory_entry,text,location,event',
-            'directory_entry_id' => 'required_if:type,directory_entry|exists:directory_entries,id',
+            'directory_entry_id' => 'required_if:type,directory_entry|exists:places,id',
             'title' => 'required_if:type,text,location,event|string|max:255',
             'content' => 'nullable|string',
             'data' => 'nullable|array',
@@ -409,7 +464,19 @@ public function myLists(Request $request)
 {
     $user = auth()->user();
     
-    $query = $user->lists()->with(['items', 'category', 'tags']);
+    $query = UserList::with(['owner', 'items', 'category', 'tags'])
+        ->where(function($q) use ($user) {
+            // Check polymorphic ownership
+            $q->where(function($sub) use ($user) {
+                $sub->where('owner_type', \App\Models\User::class)
+                    ->where('owner_id', $user->id);
+            })
+            // Also check legacy user_id field for backward compatibility
+            ->orWhere(function($sub) use ($user) {
+                $sub->where('user_id', $user->id)
+                    ->whereNull('owner_type');
+            });
+        });
     
     // Apply filters
     if ($request->has('search') && $request->search) {
@@ -440,7 +507,8 @@ public function myLists(Request $request)
 public function publicLists(Request $request)
 {
     $query = \App\Models\UserList::searchable()
-        ->with(['user', 'items', 'category'])
+        ->notOnHold() // Exclude lists with on_hold status
+        ->with(['user', 'owner', 'items', 'category'])
         ->withCount('items');
     
     // Apply filters
@@ -638,6 +706,105 @@ public function validateTag(Request $request)
 }
 
 /**
+ * Get shares for a list
+ */
+public function getShares($listId)
+{
+    $list = UserList::findOrFail($listId);
+    
+    if (!$list->canEdit()) {
+        abort(403, 'Unauthorized to view shares for this list');
+    }
+    
+    $shares = $list->shares()->with('user')->get();
+    
+    return response()->json($shares);
+}
+
+/**
+ * Share a list with another user
+ */
+public function shareList(Request $request, $listId)
+{
+    $list = UserList::findOrFail($listId);
+    
+    if (!$list->canEdit()) {
+        abort(403, 'Unauthorized to share this list');
+    }
+    
+    $validated = $request->validate([
+        'user_id' => 'required|exists:users,id',
+        'permission' => 'required|in:view,edit',
+        'expires_at' => 'nullable|date|after:now'
+    ]);
+    
+    // Check if already shared with this user
+    $existingShare = $list->shares()->where('user_id', $validated['user_id'])->first();
+    
+    if ($existingShare) {
+        // Update existing share
+        $existingShare->update([
+            'permission' => $validated['permission'],
+            'expires_at' => $validated['expires_at'] ?? null,
+            'shared_by' => auth()->id()
+        ]);
+        $share = $existingShare;
+    } else {
+        // Create new share
+        $share = $list->shareWith(
+            \App\Models\User::find($validated['user_id']), 
+            $validated['permission'], 
+            $validated['expires_at'] ?? null
+        );
+    }
+    
+    return response()->json([
+        'message' => 'List shared successfully',
+        'share' => $share->load('user')
+    ]);
+}
+
+/**
+ * Remove a share
+ */
+public function removeShare($listId, $shareId)
+{
+    $list = UserList::findOrFail($listId);
+    
+    if (!$list->canEdit()) {
+        abort(403, 'Unauthorized to manage shares for this list');
+    }
+    
+    $share = $list->shares()->findOrFail($shareId);
+    $share->delete();
+    
+    return response()->json(['message' => 'Share removed successfully']);
+}
+
+/**
+ * Search users for sharing
+ */
+public function searchUsers(Request $request)
+{
+    $query = $request->get('q', '');
+    
+    if (strlen($query) < 2) {
+        return response()->json([]);
+    }
+    
+    $users = \App\Models\User::where('id', '!=', auth()->id())
+        ->where(function($q) use ($query) {
+            $q->where('name', 'like', "%{$query}%")
+              ->orWhere('username', 'like', "%{$query}%")
+              ->orWhere('email', 'like', "%{$query}%");
+        })
+        ->limit(10)
+        ->get(['id', 'name', 'username', 'email', 'avatar_url']);
+        
+    return response()->json($users);
+}
+
+/**
  * Get lists for a specific user by username or custom URL
  */
 public function userLists($username)
@@ -653,13 +820,24 @@ public function userLists($username)
         ], 404);
     }
     
-    // Get user's public lists with optimized loading
-    $lists = $user->lists()
+    // Get user's public lists with polymorphic ownership
+    $lists = UserList::where(function($query) use ($user) {
+            // Check polymorphic ownership
+            $query->where(function($q) use ($user) {
+                $q->where('owner_type', \App\Models\User::class)
+                  ->where('owner_id', $user->id);
+            })
+            // Also check legacy user_id field for backward compatibility
+            ->orWhere(function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->whereNull('owner_type');
+            });
+        })
         ->where('visibility', 'public')
         ->where('is_draft', false)
-        ->with(['category:id,name,slug', 'tags:id,name,slug,color'])
+        ->with(['owner', 'category:id,name,slug', 'tags:id,name,slug,color'])
         ->withCount('items')
-        ->select('id', 'user_id', 'name', 'slug', 'description', 'featured_image', 'featured_image_cloudflare_id', 'is_pinned', 'pinned_at', 'view_count', 'created_at', 'updated_at')
+        ->select('id', 'user_id', 'owner_id', 'owner_type', 'name', 'slug', 'description', 'featured_image', 'featured_image_cloudflare_id', 'is_pinned', 'pinned_at', 'view_count', 'created_at', 'updated_at')
         ->orderBy('is_pinned', 'desc')
         ->orderBy('pinned_at', 'desc')
         ->orderBy('created_at', 'desc')
@@ -695,10 +873,21 @@ public function showBySlug($username, $slug)
         ], 404);
     }
     
-    // Find the list
-    $list = $user->lists()
-        ->where('slug', $slug)
-        ->with(['user', 'category', 'tags', 'items' => function($query) {
+    // Find the list using polymorphic ownership
+    $list = UserList::where('slug', $slug)
+        ->where(function($query) use ($user) {
+            // Check polymorphic ownership
+            $query->where(function($q) use ($user) {
+                $q->where('owner_type', \App\Models\User::class)
+                  ->where('owner_id', $user->id);
+            })
+            // Also check legacy user_id field for backward compatibility
+            ->orWhere(function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->whereNull('owner_type');
+            });
+        })
+        ->with(['owner', 'user', 'category', 'tags', 'items' => function($query) {
             $query->orderBy('order_index')
                   ->with(['place.location', 'place.category']);
         }])
@@ -722,9 +911,42 @@ public function showBySlug($username, $slug)
         $list->incrementViewCount();
     }
     
+    // Add saved status if user is authenticated
+    if (auth()->check()) {
+        $list->is_saved = $list->isSavedBy(auth()->user());
+    }
+    
     return response()->json($list);
 }
 
+    /**
+     * Generate a unique slug for the list
+     */
+    private function generateUniqueSlug($name, $channelId = null)
+    {
+        $slug = Str::slug($name);
+        $originalSlug = $slug;
+        $counter = 1;
 
+        // Check for uniqueness within the same scope (user or channel)
+        while (true) {
+            $query = UserList::where('slug', $slug);
+            
+            if ($channelId) {
+                $query->where('channel_id', $channelId);
+            } else {
+                $query->where('user_id', auth()->id())
+                      ->whereNull('channel_id');
+            }
+            
+            if (!$query->exists()) {
+                break;
+            }
+            
+            $slug = $originalSlug . '-' . $counter;
+            $counter++;
+        }
 
+        return $slug;
+    }
 }

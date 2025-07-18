@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\UserList;
 use App\Models\User;
+use App\Models\Channel;
 use Illuminate\Http\Request;
 
 class ListManagementController extends Controller
 {
     public function index(Request $request)
     {
-        $query = UserList::with(['user', 'items', 'category']);
+        $query = UserList::with(['user', 'owner', 'items', 'category']);
 
         // Search functionality
         if ($request->filled('search')) {
@@ -22,17 +23,33 @@ class ListManagementController extends Controller
                   ->orWhereHas('user', function ($userQuery) use ($search) {
                     $userQuery->where('name', 'like', "%{$search}%")
                               ->orWhere('username', 'like', "%{$search}%");
+                  })
+                  ->orWhere(function ($channelQuery) use ($search) {
+                    $channelQuery->where('owner_type', Channel::class)
+                                 ->whereHas('owner', function ($ownerQuery) use ($search) {
+                                     $ownerQuery->where('name', 'like', "%{$search}%")
+                                                ->orWhere('slug', 'like', "%{$search}%");
+                                 });
                   });
             });
         }
         
-        // Search by user
+        // Search by user or channel
         if ($request->filled('user_search')) {
             $userSearch = $request->user_search;
-            $query->whereHas('user', function ($userQuery) use ($userSearch) {
-                $userQuery->where('name', 'like', "%{$userSearch}%")
-                          ->orWhere('email', 'like', "%{$userSearch}%")
-                          ->orWhere('username', 'like', "%{$userSearch}%");
+            $query->where(function ($q) use ($userSearch) {
+                $q->whereHas('user', function ($userQuery) use ($userSearch) {
+                    $userQuery->where('name', 'like', "%{$userSearch}%")
+                              ->orWhere('email', 'like', "%{$userSearch}%")
+                              ->orWhere('username', 'like', "%{$userSearch}%");
+                })
+                ->orWhere(function ($channelQuery) use ($userSearch) {
+                    $channelQuery->where('owner_type', Channel::class)
+                                 ->whereHas('owner', function ($ownerQuery) use ($userSearch) {
+                                     $ownerQuery->where('name', 'like', "%{$userSearch}%")
+                                                ->orWhere('slug', 'like', "%{$userSearch}%");
+                                 });
+                });
             });
         }
 

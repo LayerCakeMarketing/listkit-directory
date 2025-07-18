@@ -37,7 +37,7 @@
             class="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
           >
             <router-link
-              :to="`/@${user.custom_url || user.username}/${list.slug}`"
+              :to="`/up/@${user.custom_url || user.username}/${list.slug}`"
               class="block p-6"
             >
               <!-- List Image -->

@@ -88,7 +88,23 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ entry.title }}</h1>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h1 class="text-3xl font-bold text-gray-900">{{ entry.title }}</h1>
+                                        <div class="flex items-center space-x-2">
+                                            <SaveButton
+                                                v-if="authStore.isAuthenticated"
+                                                item-type="place"
+                                                :item-id="entry.id"
+                                                :initial-saved="entry.is_saved || false"
+                                            />
+                                            <FollowButton
+                                                v-if="authStore.isAuthenticated && authStore.initialized && entry.id"
+                                                :followable-type="'place'"
+                                                :followable-id="entry.id"
+                                                :initial-following="entry.is_following || false"
+                                            />
+                                        </div>
+                                    </div>
                                     <div v-if="entry.description" class="entry-description text-gray-600 text-lg prose prose-lg max-w-none" v-html="entry.description"></div>
                                 </div>
                             </div>
@@ -253,6 +269,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import FollowButton from '@/components/FollowButton.vue'
+import SaveButton from '@/components/SaveButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -393,6 +411,11 @@ const fetchEntry = async () => {
         const response = await axios.get(apiUrl)
         
         console.log('Entry API response:', response.data)
+        console.log('Auth state:', {
+            isAuthenticated: authStore.isAuthenticated,
+            initialized: authStore.initialized,
+            user: authStore.user
+        })
         
         entry.value = response.data.entry
         relatedEntries.value = response.data.relatedEntries || []
@@ -428,7 +451,12 @@ watch(() => route.params, () => {
 })
 
 // Initialize
-onMounted(() => {
+onMounted(async () => {
+    // Ensure auth store is initialized
+    if (!authStore.initialized && !authStore.loading) {
+        await authStore.fetchUser()
+    }
+    
     fetchEntry()
 })
 </script>

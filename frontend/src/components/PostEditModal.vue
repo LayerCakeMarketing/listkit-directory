@@ -117,6 +117,18 @@
                 />
               </div>
               
+              <!-- Tags -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Tags
+                </label>
+                <TagInput
+                  v-model="editedTags"
+                  placeholder="Add tags..."
+                  :max-tags="5"
+                />
+              </div>
+              
               <!-- Error Message -->
               <div v-if="error" class="mb-4 p-3 bg-red-50 text-red-800 text-sm rounded-lg">
                 {{ error }}
@@ -170,6 +182,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import PostMediaUploader from '@/components/PostMediaUploader.vue'
+import TagInput from '@/components/TagInput.vue'
 import axios from 'axios'
 
 const props = defineProps({
@@ -194,14 +207,17 @@ const editedContent = ref('')
 const currentMedia = ref([])
 const removedMedia = ref([])
 const newMedia = ref(null)
+const editedTags = ref([])
 const isSubmitting = ref(false)
 const error = ref('')
 
 // Computed
 const hasChanges = computed(() => {
+  const tagsChanged = JSON.stringify(editedTags.value) !== JSON.stringify(props.post.tags?.map(t => t.name) || [])
   return editedContent.value !== props.post.content ||
          removedMedia.value.length > 0 ||
-         newMedia.value !== null
+         newMedia.value !== null ||
+         tagsChanged
 })
 
 const canSave = computed(() => {
@@ -281,6 +297,11 @@ const handleSave = async () => {
       }
     }
     
+    // Add tags if they've changed - convert objects to strings
+    updateData.tags = editedTags.value.map(tag => 
+      typeof tag === 'string' ? tag : tag.name
+    )
+    
     const response = await axios.put(`/api/posts/${props.post.id}`, updateData)
     
     emit('updated', response.data.post)
@@ -319,7 +340,8 @@ const handleDelete = async () => {
 watch(() => props.post, (newPost) => {
   if (newPost) {
     editedContent.value = newPost.content || ''
-    currentMedia.value = [...(newPost.media_items || [])]
+    currentMedia.value = [...(newPost.media || [])]
+    editedTags.value = newPost.tags || []
     removedMedia.value = []
     newMedia.value = null
     error.value = ''
@@ -338,6 +360,7 @@ watch(() => props.modelValue, (isOpen) => {
       currentMedia.value = []
       removedMedia.value = []
       newMedia.value = null
+      editedTags.value = []
       error.value = ''
       if (mediaUploader.value) {
         mediaUploader.value.clearAllMedia()

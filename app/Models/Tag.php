@@ -13,13 +13,21 @@ class Tag extends Model
     protected $fillable = [
         'name',
         'slug',
-        'description',
+        'type',
         'color',
-        'is_active',
+        'description',
+        'is_featured',
+        'is_system',
+        'created_by',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_featured' => 'boolean',
+        'is_system' => 'boolean',
+        'usage_count' => 'integer',
+        'places_count' => 'integer',
+        'lists_count' => 'integer',
+        'posts_count' => 'integer',
     ];
 
     protected static function boot()
@@ -37,6 +45,13 @@ class Tag extends Model
                 }
             }
         });
+
+        static::deleting(function ($tag) {
+            // Prevent deletion of system tags
+            if ($tag->is_system) {
+                return false;
+            }
+        });
     }
 
     // Relationships
@@ -45,22 +60,40 @@ class Tag extends Model
         return $this->hasMany(Taggable::class);
     }
 
+    public function places()
+    {
+        return $this->morphedByMany(Place::class, 'taggable');
+    }
+
     public function lists()
     {
         return $this->morphedByMany(UserList::class, 'taggable');
     }
 
-    // Scopes
-    public function scopeActive($query)
+    public function posts()
     {
-        return $query->where('is_active', true);
+        return $this->morphedByMany(Post::class, 'taggable');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // Scopes
+    public function scopeFeatured($query)
+    {
+        return $query->where('is_featured', true);
+    }
+
+    public function scopeOfType($query, $type)
+    {
+        return $query->where('type', $type);
     }
 
     public function scopePopular($query, $limit = 10)
     {
-        return $query->withCount('taggables')
-                    ->orderBy('taggables_count', 'desc')
-                    ->limit($limit);
+        return $query->orderBy('usage_count', 'desc')->limit($limit);
     }
 
     // Accessors & Mutators
@@ -73,32 +106,43 @@ class Tag extends Model
     }
 
     // Helper methods
-    public function getUsageCountAttribute()
+    public function updateCounts()
     {
-        return $this->taggables()->count();
+        $this->places_count = $this->places()->count();
+        $this->lists_count = $this->lists()->count();
+        $this->posts_count = $this->posts()->count();
+        $this->usage_count = $this->places_count + $this->lists_count + $this->posts_count;
+        $this->saveQuietly();
     }
 
-    public function getUsageByTypeAttribute()
+    public function getSuggestedColor()
     {
-        return $this->taggables()
-                   ->select('taggable_type')
-                   ->selectRaw('count(*) as count')
-                   ->groupBy('taggable_type')
-                   ->pluck('count', 'taggable_type');
+        $colors = [
+            'general' => '#6B7280', // gray
+            'category' => '#3B82F6', // blue
+            'location' => '#10B981', // green
+            'event' => '#F59E0B', // amber
+            'trending' => '#EF4444', // red
+        ];
+
+        return $colors[$this->type] ?? $colors['general'];
     }
 
     // Static methods
-    public static function findOrCreateByName($name)
+    public static function findOrCreateByName($name, $userId = null)
     {
         $slug = Str::slug($name);
         
-        return static::firstOrCreate(
-            ['slug' => $slug],
-            [
+        $tag = static::where('slug', $slug)->first();
+        
+        if (!$tag) {
+            $tag = static::create([
                 'name' => $name,
                 'slug' => $slug,
-                'is_active' => true,
-            ]
-        );
+                'created_by' => $userId ?: auth()->id(),
+            ]);
+        }
+        
+        return $tag;
     }
 }
