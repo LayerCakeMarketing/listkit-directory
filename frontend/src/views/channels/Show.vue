@@ -72,20 +72,14 @@
             <!-- Actions -->
             <div class="mt-5 sm:mt-0 sm:ml-4 flex flex-col sm:flex-row gap-2">
               <!-- Follow/Unfollow button -->
-              <button
-                v-if="authStore.isAuthenticated && !isOwner"
-                @click="toggleFollow"
-                :disabled="followLoading"
-                :class="[
-                  'inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium transition-colors',
-                  isFollowing
-                    ? 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                    : 'border-transparent text-white bg-blue-600 hover:bg-blue-700',
-                  followLoading && 'opacity-50 cursor-not-allowed'
-                ]"
-              >
-                {{ isFollowing ? 'Following' : 'Follow' }}
-              </button>
+              <FollowButton
+                v-if="authStore.isAuthenticated && !isOwner && channel"
+                followable-type="channel"
+                :followable-id="channel.slug"
+                :initial-following="isFollowing"
+                @follow="handleFollow"
+                @unfollow="handleUnfollow"
+              />
 
               <!-- Edit button (for owner) -->
               <router-link
@@ -248,6 +242,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import Dropdown from '@/components/Dropdown.vue'
+import FollowButton from '@/components/FollowButton.vue'
 
 const props = defineProps({
   slug: {
@@ -268,7 +263,7 @@ const listsLoading = ref(false)
 const listsPage = ref(1)
 const hasMoreLists = ref(true)
 const isFollowing = ref(false)
-const followLoading = ref(false)
+// Follow loading is now handled by FollowButton component
 
 // Computed
 const isOwner = computed(() => {
@@ -383,33 +378,17 @@ const deleteList = async (list) => {
   }
 }
 
-const toggleFollow = async () => {
-  if (!authStore.isAuthenticated) {
-    // Redirect to login
-    router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
-    return
+const handleFollow = () => {
+  isFollowing.value = true
+  if (channel.value) {
+    channel.value.followers_count++
   }
-  
-  followLoading.value = true
-  
-  try {
-    if (isFollowing.value) {
-      await axios.delete(`/api/channels/${channel.value.slug}/follow`)
-      isFollowing.value = false
-      channel.value.followers_count--
-    } else {
-      await axios.post(`/api/channels/${channel.value.slug}/follow`)
-      isFollowing.value = true
-      channel.value.followers_count++
-    }
-  } catch (error) {
-    console.error('Error toggling follow:', error)
-    // Revert on error
-    if (error.response?.data?.message) {
-      alert(error.response.data.message)
-    }
-  } finally {
-    followLoading.value = false
+}
+
+const handleUnfollow = () => {
+  isFollowing.value = false
+  if (channel.value) {
+    channel.value.followers_count--
   }
 }
 

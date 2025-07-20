@@ -22,11 +22,17 @@ class RegionManagementController extends Controller
         // Add additional relationships if requested
         if ($request->has('with')) {
             $requestedWith = explode(',', $request->with);
-            if (in_array('featuredEntries', $requestedWith)) {
-                $with[] = 'featuredEntries.category';
-            }
-            if (in_array('featuredLists', $requestedWith)) {
-                $with[] = 'featuredLists.user';
+            foreach ($requestedWith as $relation) {
+                // Handle nested parent relationship
+                if ($relation === 'parent.parent') {
+                    $with[] = 'parent.parent';
+                } elseif ($relation === 'featuredEntries') {
+                    $with[] = 'featuredEntries.category';
+                } elseif ($relation === 'featuredLists') {
+                    $with[] = 'featuredLists.user';
+                } elseif (!in_array($relation, $with)) {
+                    $with[] = $relation;
+                }
             }
         }
         
@@ -566,5 +572,114 @@ class RegionManagementController extends Controller
         $region->featuredLists()->detach($listId);
         
         return response()->json(['message' => 'Featured list removed successfully']);
+    }
+    
+    /**
+     * Get duplicate regions
+     */
+    public function duplicates(Request $request)
+    {
+        // Find duplicates
+        $duplicates = Region::select('name', 'type', 'parent_id', DB::raw('COUNT(*) as duplicate_count'))
+            ->groupBy('name', 'type', 'parent_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->orderBy('type')
+            ->orderBy('name')
+            ->get();
+            
+        $results = [];
+        
+        foreach ($duplicates as $duplicate) {
+            // Get all regions matching this duplicate
+            $regions = Region::where('name', $duplicate->name)
+                ->where('type', $duplicate->type)
+                ->when($duplicate->parent_id, function($query) use ($duplicate) {
+                    return $query->where('parent_id', $duplicate->parent_id);
+                }, function($query) {
+                    return $query->whereNull('parent_id');
+                })
+                ->with(['parent', 'children'])
+                ->withCount([
+                    'stateEntries as state_places_count',
+                    'cityEntries as city_places_count', 
+                    'neighborhoodEntries as neighborhood_places_count',
+                    'children'
+                ])
+                ->get()
+                ->map(function($region) {
+                    $region->total_places = $region->state_places_count + 
+                                           $region->city_places_count + 
+                                           $region->neighborhood_places_count;
+                    return $region;
+                });
+                
+            $results[] = [
+                'name' => $duplicate->name,
+                'type' => $duplicate->type,
+                'count' => $duplicate->duplicate_count,
+                'regions' => $regions
+            ];
+        }
+        
+        return response()->json(['duplicates' => $results]);
+    }
+    
+    /**
+     * Merge duplicate regions
+     */
+    public function mergeDuplicates(Request $request)
+    {
+        $validated = $request->validate([
+            'keep_id' => 'required|exists:regions,id',
+            'merge_ids' => 'required|array',
+            'merge_ids.*' => 'exists:regions,id'
+        ]);
+        
+        DB::beginTransaction();
+        
+        try {
+            $keepRegion = Region::findOrFail($validated['keep_id']);
+            $mergeRegions = Region::whereIn('id', $validated['merge_ids'])->get();
+            
+            foreach ($mergeRegions as $mergeRegion) {
+                // Update places that reference this region
+                Place::where('state_region_id', $mergeRegion->id)
+                    ->update(['state_region_id' => $keepRegion->id]);
+                    
+                Place::where('city_region_id', $mergeRegion->id)
+                    ->update(['city_region_id' => $keepRegion->id]);
+                    
+                Place::where('neighborhood_region_id', $mergeRegion->id)
+                    ->update(['neighborhood_region_id' => $keepRegion->id]);
+                
+                // Update child regions
+                Region::where('parent_id', $mergeRegion->id)
+                    ->update(['parent_id' => $keepRegion->id]);
+                
+                // Update place_regions pivot table
+                DB::table('place_regions')
+                    ->where('region_id', $mergeRegion->id)
+                    ->update(['region_id' => $keepRegion->id]);
+                
+                // Update featured places
+                DB::table('region_featured_entries')
+                    ->where('region_id', $mergeRegion->id)
+                    ->update(['region_id' => $keepRegion->id]);
+                
+                // Delete the duplicate region
+                $mergeRegion->delete();
+            }
+            
+            DB::commit();
+            
+            return response()->json([
+                'message' => 'Regions merged successfully',
+                'kept_region' => $keepRegion->fresh()->load(['parent', 'children'])
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to merge regions: ' . $e->getMessage()], 500);
+        }
     }
 }

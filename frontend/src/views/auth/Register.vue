@@ -18,7 +18,8 @@ const checkingStatus = ref(true)
 const waitlistSuccess = ref(false)
 
 const form = reactive({
-    name: '',
+    firstname: '',
+    lastname: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -41,7 +42,8 @@ const submit = async () => {
     try {
         // Use the auth store register method
         const response = await authStore.register({
-            name: form.name,
+            firstname: form.firstname,
+            lastname: form.lastname,
             email: form.email,
             password: form.password,
             password_confirmation: form.password_confirmation
@@ -224,20 +226,38 @@ onMounted(async () => {
 
                 <div v-else class="mt-10">
                     <form @submit.prevent="submit" class="space-y-6">
-                        <div>
-                            <label for="name" class="block text-sm/6 font-medium text-gray-900">Name</label>
-                            <div class="mt-2">
-                                <input 
-                                    type="text" 
-                                    name="name" 
-                                    id="name" 
-                                    v-model="form.name"
-                                    autocomplete="name" 
-                                    required
-                                    autofocus
-                                    class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6" 
-                                />
-                                <InputError class="mt-2" :message="form.errors.name?.[0]" />
+                        <!-- Name Fields (First and Last) -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="firstname" class="block text-sm/6 font-medium text-gray-900">First Name</label>
+                                <div class="mt-2">
+                                    <input 
+                                        type="text" 
+                                        name="firstname" 
+                                        id="firstname" 
+                                        v-model="form.firstname"
+                                        autocomplete="given-name" 
+                                        required
+                                        autofocus
+                                        class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6" 
+                                    />
+                                    <InputError class="mt-2" :message="form.errors.firstname?.[0]" />
+                                </div>
+                            </div>
+                            <div>
+                                <label for="lastname" class="block text-sm/6 font-medium text-gray-900">Last Name</label>
+                                <div class="mt-2">
+                                    <input 
+                                        type="text" 
+                                        name="lastname" 
+                                        id="lastname" 
+                                        v-model="form.lastname"
+                                        autocomplete="family-name" 
+                                        required
+                                        class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6" 
+                                    />
+                                    <InputError class="mt-2" :message="form.errors.lastname?.[0]" />
+                                </div>
                             </div>
                         </div>
 

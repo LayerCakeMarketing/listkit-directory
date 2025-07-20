@@ -26,7 +26,7 @@ class EntityMediaController extends Controller
                 $modelClass = $entityType;
             } else {
                 // Validate entity type
-                $validTypes = ['user', 'list', 'place', 'region', 'channel'];
+                $validTypes = ['user', 'list', 'place', 'region', 'channel', 'directoryentry'];
                 if (!in_array(strtolower($entityType), $validTypes)) {
                     return response()->json(['error' => 'Invalid entity type'], 400);
                 }
@@ -36,6 +36,7 @@ class EntityMediaController extends Controller
                     'user' => 'App\Models\User',
                     'list' => 'App\Models\UserList',
                     'place' => 'App\Models\Place',
+                    'directoryentry' => 'App\Models\Place', // DirectoryEntry is an alias for Place
                     'region' => 'App\Models\Region',
                     'channel' => 'App\Models\Channel',
                 ];

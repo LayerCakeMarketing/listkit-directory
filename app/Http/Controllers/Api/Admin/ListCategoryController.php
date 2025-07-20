@@ -186,7 +186,10 @@ class ListCategoryController extends Controller
     {
         $categories = ListCategory::active()
                                  ->ordered()
-                                 ->select('id', 'name', 'slug', 'color')
+                                 ->select('id', 'name', 'slug', 'color', 'svg_icon')
+                                 ->withCount(['lists' => function ($query) {
+                                     $query->searchable()->notOnHold();
+                                 }])
                                  ->get();
 
         return response()->json($categories);

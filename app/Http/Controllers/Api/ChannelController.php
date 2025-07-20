@@ -304,6 +304,9 @@ class ChannelController extends Controller
         }
 
         $channel->followers()->attach($user->id);
+        
+        // Create notification
+        \App\Models\Notification::createFollowNotification($user, $channel);
 
         return response()->json([
             'message' => 'Successfully followed the channel',

@@ -1,8 +1,8 @@
 <template>
     <div>
         <!-- Breadcrumb -->
-        <nav class="bg-white border-b border-gray-200">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <nav class="bg-white border-b border-gray-200 fixed left-0 right-0 z-40">
+            <div class="px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center space-x-2 py-3 text-sm">
                     <router-link to="/" class="text-gray-500 hover:text-gray-700">Home</router-link>
                     <span class="text-gray-400">/</span>
@@ -29,12 +29,12 @@
         </nav>
 
         <!-- Loading State -->
-        <div v-if="loading" class="flex justify-center items-center py-12">
+        <div v-if="loading" class="flex justify-center items-center py-12 mt-24">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="loadError" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div v-else-if="loadError" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-24">
             <div class="bg-red-50 border border-red-200 rounded-md p-4">
                 <div class="flex">
                     <div class="flex-shrink-0">
@@ -67,37 +67,81 @@
         </div>
 
         <!-- Main Content -->
-        <div v-else-if="entry" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="bg-white rounded-lg shadow-md">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h1 class="text-2xl font-bold text-gray-900">Edit Directory Entry</h1>
-                            <p class="text-gray-600 mt-1">Update information for {{ entry.title }}</p>
+        <div v-else-if="entry" class="min-h-screen bg-gray-50 pt-[2.8rem]">
+            <!-- Header -->
+            <div class="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 fixed left-0 right-0 z-30">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Edit: {{ entry.title }}</h1>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Status: 
+                            <span :class="getStatusClass(entry.status)" class="font-medium">
+                                {{ entry.status.replace('_', ' ').charAt(0).toUpperCase() + entry.status.slice(1).replace('_', ' ') }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <!-- Success Message -->
+                        <div v-if="showSuccessMessage" class="bg-green-50 border border-green-200 rounded-md px-3 py-2">
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span class="text-green-800 text-sm font-medium">Entry updated successfully!</span>
+                            </div>
                         </div>
+                        <!-- Action Buttons -->
+                        <button
+                            @click="showEditPanel = !showEditPanel"
+                            class="bg-gray-200 text-gray-700 px-3 py-2 rounded-md hover:bg-gray-300 transition-colors inline-flex items-center"
+                            :title="showEditPanel ? 'Hide editor' : 'Show editor'"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path v-if="showEditPanel" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                        <router-link
+                            :to="authStore.user?.role === 'admin' || authStore.user?.role === 'manager' ? '/admin/places' : '/myplaces'"
+                            class="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
+                        >
+                            Cancel
+                        </router-link>
+                        <button
+                            @click="submitForm"
+                            :disabled="processing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                            {{ processing ? 'Updating...' : 'Update Entry' }}
+                        </button>
+                        <button
+                            v-if="entry.status === 'draft' || entry.status === 'rejected'"
+                            @click="submitForReview"
+                            :disabled="processing"
+                            class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                            Submit for Review
+                        </button>
                         <a
+                            v-if="entry.status === 'published'"
                             :href="getEntryViewUrl()"
                             target="_blank"
-                            class="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors inline-flex items-center"
+                            class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors inline-flex items-center"
                         >
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
-                            Preview
+                            View Live
                         </a>
                     </div>
-                    
-                    <!-- Success Message -->
-                    <div v-if="showSuccessMessage" class="mt-4 bg-green-50 border border-green-200 rounded-md p-3">
-                        <div class="flex items-center">
-                            <svg class="w-4 h-4 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span class="text-green-800 text-sm font-medium">Entry updated successfully!</span>
-                        </div>
-                    </div>
                 </div>
+            </div>
+
+            <!-- Split View Container -->
+            <div class="flex h-screen pt-[5.3rem]">
+                <!-- Left Side: Edit Form -->
+                <div :class="[showEditPanel ? 'w-5/12' : 'w-0 overflow-hidden']" class="bg-white border-r border-gray-200 overflow-y-auto transition-all duration-300">
+                    <div v-if="showEditPanel" class="p-6">
 
                 <form @submit.prevent="submitForm" class="p-6 space-y-6">
                     <!-- Basic Information Section -->
@@ -117,6 +161,24 @@
                                 <div v-if="errors.title" class="mt-1 text-sm text-red-600">{{ errors.title }}</div>
                             </div>
 
+                            <div>
+                                <label for="slug" class="block text-sm font-medium text-gray-700">
+                                    URL Slug
+                                    <span class="text-gray-500 font-normal text-xs ml-1">(leave blank to auto-generate)</span>
+                                </label>
+                                <input
+                                    v-model="form.slug"
+                                    type="text"
+                                    id="slug"
+                                    placeholder="e.g., my-business-name"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                                <div v-if="errors.slug" class="mt-1 text-sm text-red-600">{{ errors.slug }}</div>
+                                <p class="mt-1 text-xs text-gray-500">This will be used in the URL for your place</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label for="type" class="block text-sm font-medium text-gray-700">Type *</label>
                                 <select
@@ -206,6 +268,50 @@
                                 <div v-if="errors.website_url" class="mt-1 text-sm text-red-600">{{ errors.website_url }}</div>
                             </div>
 
+                            <!-- Links Section -->
+                            <div class="col-span-full">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Additional Links
+                                    <span class="text-gray-500 font-normal text-xs ml-1">(e.g., Menu, Booking, Reviews)</span>
+                                </label>
+                                <div class="space-y-2">
+                                    <div v-for="(link, index) in form.links" :key="index" class="flex gap-2">
+                                        <input
+                                            v-model="link.text"
+                                            type="text"
+                                            placeholder="Link text (e.g., View Menu)"
+                                            class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        />
+                                        <input
+                                            v-model="link.url"
+                                            type="url"
+                                            placeholder="https://example.com"
+                                            class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            @click="removeLink(index)"
+                                            type="button"
+                                            class="p-2 text-red-600 hover:text-red-800"
+                                            title="Remove link"
+                                        >
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <button
+                                        @click="addLink"
+                                        type="button"
+                                        class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    >
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Add Link
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Social Media Fields -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -265,11 +371,33 @@
                                 Logo
                                 <span v-if="logoImages.length > 0" class="text-green-600 font-normal"> - {{ logoImages.length }} image(s) uploaded ✓</span>
                             </label>
+                            
+                            <!-- Show existing logo -->
+                            <div v-if="form.logo_url" class="mb-4">
+                                <p class="text-sm text-gray-500 mb-2">Current Logo:</p>
+                                <div class="relative inline-block">
+                                    <img 
+                                        :src="form.logo_url" 
+                                        alt="Current logo" 
+                                        class="h-32 w-auto rounded border border-gray-300"
+                                    />
+                                    <button
+                                        @click="removeLogo"
+                                        type="button"
+                                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <CloudflareDragDropUploader
                                 :max-files="1"
                                 :max-file-size="2097152"
                                 context="logo"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="entry.id"
                                 @upload-success="handleLogoUpload"
                                 @upload-error="handleUploadError"
@@ -282,11 +410,33 @@
                                 Cover Image
                                 <span v-if="coverImages.length > 0" class="text-green-600 font-normal"> - {{ coverImages.length }} image(s) uploaded ✓</span>
                             </label>
+                            
+                            <!-- Show existing cover image -->
+                            <div v-if="form.cover_image_url" class="mb-4">
+                                <p class="text-sm text-gray-500 mb-2">Current Cover Image:</p>
+                                <div class="relative inline-block">
+                                    <img 
+                                        :src="form.cover_image_url" 
+                                        alt="Current cover image" 
+                                        class="h-48 w-auto rounded border border-gray-300"
+                                    />
+                                    <button
+                                        @click="removeCoverImage"
+                                        type="button"
+                                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <CloudflareDragDropUploader
                                 :max-files="1"
                                 :max-file-size="5242880"
                                 context="cover"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="entry.id"
                                 @upload-success="handleCoverUpload"
                                 @upload-error="handleUploadError"
@@ -303,7 +453,7 @@
                                 :max-files="20"
                                 :max-file-size="14680064"
                                 context="gallery"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="entry.id"
                                 @upload-success="handleGalleryUpload"
                                 @upload-error="handleUploadError"
@@ -331,14 +481,16 @@
 
                     <!-- Location/Address Section -->
                     <AccordionSection 
-                        title="Address / Location" 
-                        v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                        title="Address / Location"
                     >
                         <div class="space-y-4">
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="md:col-span-2">
-                                <label for="address_line1" class="block text-sm font-medium text-gray-700">Address *</label>
+                                <label for="address_line1" class="block text-sm font-medium text-gray-700">
+                                    Address 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.address_line1"
                                     type="text"
@@ -355,7 +507,7 @@
                                     v-model="form.location.city"
                                     type="text"
                                     id="city"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                                    required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
                                 <div v-if="errors['location.city']" class="mt-1 text-sm text-red-600">{{ errors['location.city'] }}</div>
@@ -366,7 +518,7 @@
                                 <select
                                     v-model="form.location.state"
                                     id="state"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                                    required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 >
                                     <option value="">Select a state</option>
@@ -378,7 +530,10 @@
                             </div>
 
                             <div>
-                                <label for="zip_code" class="block text-sm font-medium text-gray-700">ZIP Code *</label>
+                                <label for="zip_code" class="block text-sm font-medium text-gray-700">
+                                    ZIP Code 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.zip_code"
                                     type="text"
@@ -414,7 +569,10 @@
                             </div>
 
                             <div>
-                                <label for="latitude" class="block text-sm font-medium text-gray-700">Latitude *</label>
+                                <label for="latitude" class="block text-sm font-medium text-gray-700">
+                                    Latitude 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.latitude"
                                     type="number"
@@ -427,7 +585,10 @@
                             </div>
 
                             <div>
-                                <label for="longitude" class="block text-sm font-medium text-gray-700">Longitude *</label>
+                                <label for="longitude" class="block text-sm font-medium text-gray-700">
+                                    Longitude 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.longitude"
                                     type="number"
@@ -442,23 +603,24 @@
                         </div>
                     </AccordionSection>
 
-                    <!-- Submit Buttons -->
-                    <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                        <router-link
-                            :to="authStore.user?.role === 'admin' || authStore.user?.role === 'manager' ? '/admin/entries' : entry.url"
-                            class="bg-gray-100 text-gray-700 px-6 py-2 rounded-md hover:bg-gray-200 transition-colors"
-                        >
-                            Cancel
-                        </router-link>
-                        <button
-                            type="submit"
-                            :disabled="processing"
-                            class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-                        >
-                            {{ processing ? 'Updating...' : 'Update Entry' }}
-                        </button>
-                    </div>
                 </form>
+                    </div>
+                </div>
+
+                <!-- Right Side: Preview -->
+                <div :class="[showEditPanel ? 'w-7/12' : 'w-full']" class="bg-gray-100 overflow-hidden transition-all duration-300">
+                    <div class="h-full">
+                        <div class="bg-white border-b border-gray-200 px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-medium text-gray-700">Preview</h3>
+                                <div class="text-xs text-gray-500">Updates as you type</div>
+                            </div>
+                        </div>
+                        <div class="h-[calc(100%-3rem)] overflow-y-auto">
+                            <PlacePreview :place="previewData" />
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -472,6 +634,7 @@ import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.
 import AccordionSection from '@/components/AccordionSection.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import DraggableImageGallery from '@/components/DraggableImageGallery.vue'
+import PlacePreview from '@/components/PlacePreview.vue'
 import { usStates } from '@/data/usStates'
 import { useAuthStore } from '@/stores/auth'
 
@@ -489,12 +652,14 @@ const categories = ref([])
 
 const form = reactive({
     title: '',
+    slug: '',
     description: '',
     type: '',
     category_id: '',
     email: '',
     phone: '',
     website_url: '',
+    links: [],
     logo_url: '',
     cover_image_url: '',
     gallery_images: [],
@@ -658,15 +823,35 @@ const initializeForm = () => {
     if (!entry.value) return
     
     form.title = entry.value.title || ''
+    form.slug = entry.value.slug || ''
     form.description = entry.value.description || ''
     form.type = entry.value.type || ''
     form.category_id = entry.value.category_id || ''
     form.email = entry.value.email || ''
     form.phone = entry.value.phone || ''
     form.website_url = entry.value.website_url || ''
+    form.links = entry.value.links || []
     form.logo_url = entry.value.logo_url || ''
     form.cover_image_url = entry.value.cover_image_url || ''
     form.gallery_images = entry.value.gallery_images || []
+    
+    // Initialize existing logo image
+    if (entry.value.logo_url) {
+        logoImages.value = [{
+            id: 'existing-logo',
+            url: entry.value.logo_url,
+            filename: 'Current Logo'
+        }]
+    }
+    
+    // Initialize existing cover image
+    if (entry.value.cover_image_url) {
+        coverImages.value = [{
+            id: 'existing-cover',
+            url: entry.value.cover_image_url,
+            filename: 'Current Cover Image'
+        }]
+    }
     
     // Initialize existing gallery images for drag-and-drop component
     if (entry.value.gallery_images && entry.value.gallery_images.length > 0) {
@@ -744,6 +929,16 @@ const handleUploadError = (error) => {
     console.error('Upload error:', error)
 }
 
+const removeLogo = () => {
+    form.logo_url = ''
+    logoImages.value = []
+}
+
+const removeCoverImage = () => {
+    form.cover_image_url = ''
+    coverImages.value = []
+}
+
 const geocodeAddress = async () => {
     if (!canGeocode.value) return
     
@@ -805,6 +1000,78 @@ watch(() => route.params.id, (newId) => {
         fetchEntryData()
     }
 })
+
+// Link management methods
+const addLink = () => {
+    form.links.push({ text: '', url: '' })
+}
+
+const removeLink = (index) => {
+    form.links.splice(index, 1)
+}
+
+// Preview related
+const showEditPanel = ref(true)
+
+// Computed property for preview data that combines entry data with form changes
+const previewData = computed(() => {
+    if (!entry.value) return {}
+    
+    return {
+        ...entry.value,
+        ...form,
+        location: {
+            ...entry.value.location,
+            ...form.location
+        },
+        category: categories.value.find(c => c.id === form.category_id) || entry.value.category
+    }
+})
+
+const getStatusClass = (status) => {
+    const classes = {
+        'draft': 'text-gray-600',
+        'pending_review': 'text-yellow-600',
+        'published': 'text-green-600',
+        'rejected': 'text-red-600',
+        'archived': 'text-gray-500'
+    }
+    return classes[status] || 'text-gray-600'
+}
+
+const submitForReview = async () => {
+    if (!confirm('Are you ready to submit this place for review? Once submitted, you will not be able to edit it until it has been reviewed.')) {
+        return
+    }
+
+    processing.value = true
+    
+    try {
+        // First save any pending changes
+        await submitForm()
+        
+        // Then update status to pending_review
+        const response = await axios.patch(`/api/places/${route.params.id}/submit-for-review`)
+        
+        entry.value = response.data
+        showSuccessMessage.value = true
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+            showSuccessMessage.value = false
+        }, 3000)
+        
+        // Redirect to My Places after submission
+        setTimeout(() => {
+            router.push('/myplaces')
+        }, 1000)
+    } catch (error) {
+        console.error('Error submitting for review:', error)
+        alert('Failed to submit for review. Please try again.')
+    } finally {
+        processing.value = false
+    }
+}
 
 // Initialize
 onMounted(() => {

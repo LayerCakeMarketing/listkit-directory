@@ -19,7 +19,9 @@ class UserListController extends Controller
     {
         $userId = auth()->id();
         
-        $query = UserList::with(['owner', 'user', 'items', 'channel'])
+        $query = UserList::with(['owner', // Polymorphic owner
+                                'user:id,name,username,custom_url,avatar', 
+                                'channel:id,name,slug'])
                         ->withCount('items')
                         ->where(function($q) use ($userId) {
                             // Check polymorphic ownership
@@ -508,7 +510,9 @@ public function publicLists(Request $request)
 {
     $query = \App\Models\UserList::searchable()
         ->notOnHold() // Exclude lists with on_hold status
-        ->with(['user', 'owner', 'items', 'category'])
+        ->with(['user:id,name,username,custom_url,avatar', 
+                'owner', // Polymorphic - load full owner
+                'category:id,name,slug,color'])
         ->withCount('items');
     
     // Apply filters

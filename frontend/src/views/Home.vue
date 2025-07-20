@@ -8,7 +8,7 @@
                     <!-- Left Sidebar (Hidden on mobile) -->
                     <aside class="hidden lg:block w-64 sticky top-[6rem] h-[calc(100vh-6rem)] overflow-y-auto z-10">
 
-                        <div class="bg-white rounded-lg shadow p-4 mb-4">
+                        <div v-if="user" class="bg-white rounded-lg shadow p-4 mb-4">
                             <h3 class="font-semibold text-gray-900 mb-4">Your Stats</h3>
                             <div class="space-y-3 text-sm">
                                 <div class="flex justify-between">

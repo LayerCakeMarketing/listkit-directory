@@ -13,13 +13,13 @@
                     </li>
                     <li class="text-gray-400">/</li>
                     <li>
-                        <router-link :to="`/places/${state}`" class="text-gray-500 hover:text-gray-700">
+                        <router-link :to="`/regions/${state}`" class="text-gray-500 hover:text-gray-700">
                             {{ stateData?.name || state }}
                         </router-link>
                     </li>
                     <li class="text-gray-400">/</li>
                     <li>
-                        <router-link :to="`/places/${state}/${city}`" class="text-gray-500 hover:text-gray-700">
+                        <router-link :to="`/regions/${state}/${city}`" class="text-gray-500 hover:text-gray-700">
                             {{ cityData?.name || city }}
                         </router-link>
                     </li>

@@ -119,7 +119,7 @@
               <router-link
                 v-for="city in cities"
                 :key="city.id"
-                :to="`/regions/${state}/${city.slug}`"
+                :to="`/regions/${stateData?.slug || state}/${city.slug}`"
                 class="group block p-4 rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-200"
               >
                 <div class="flex items-center justify-between">

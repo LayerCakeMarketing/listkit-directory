@@ -24,7 +24,7 @@
         >
           <img
             :src="getUserAvatar(post.user)"
-            :alt="post.user?.name"
+            :alt="`${post.user?.name || 'User'}`"
             class="h-10 w-10 rounded-full hover:ring-2 hover:ring-blue-500 transition-all"
           />
         </router-link>
@@ -34,7 +34,7 @@
             :to="`/up/@${post.user?.custom_url || post.user?.username}`"
             class="font-medium text-gray-900 hover:text-blue-600"
           >
-            {{ post.user?.name }}
+            {{ post.user ? (post.user.name || `${post.user.firstname || ''} ${post.user.lastname || ''}`.trim() || 'User') : '' }}
           </router-link>
           <div class="flex items-center text-sm text-gray-500 space-x-2">
             <span>{{ post.formatted_date }}</span>
@@ -384,7 +384,8 @@ const getUserAvatar = (user) => {
   if (user.avatar) {
     return user.avatar
   }
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=3B82F6&color=fff`
+  const fullName = user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'User'
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=3B82F6&color=fff`
 }
 
 // Custom directive for click outside

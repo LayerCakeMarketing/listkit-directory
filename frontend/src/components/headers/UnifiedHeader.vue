@@ -55,10 +55,29 @@
 
         <!-- Right side of navbar -->
         <div class="hidden sm:flex sm:items-center sm:ml-6">
-          <!-- Authenticated: User Profile Dropdown -->
-          <div v-if="isAuthenticated && user" class="ml-3 relative">
-            <UserProfileDropdown :user="user" />
-          </div>
+          <!-- Authenticated: Notifications and User Profile -->
+          <template v-if="isAuthenticated && user">
+            <!-- Notifications -->
+            <router-link
+              :to="{ name: 'Notifications' }"
+              class="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500"
+            >
+              <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <span 
+                v-if="unreadCount > 0"
+                class="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full"
+              >
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+              </span>
+            </router-link>
+            
+            <!-- User Profile Dropdown -->
+            <div class="ml-3 relative">
+              <UserProfileDropdown :user="user" />
+            </div>
+          </template>
 
           <!-- Guest: Sign In/Sign Up Buttons -->
           <div v-else class="flex items-center space-x-4">
@@ -180,6 +199,22 @@
           </div>
 
           <div class="mt-3 space-y-1">
+            <ResponsiveNavLink :to="{ name: 'Notifications' }">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                  <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  Notifications
+                </div>
+                <span 
+                  v-if="unreadCount > 0"
+                  class="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full"
+                >
+                  {{ unreadCount > 99 ? '99+' : unreadCount }}
+                </span>
+              </div>
+            </ResponsiveNavLink>
             <ResponsiveNavLink :to="myPageUrl">
               <div class="flex items-center">
                 <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,9 +282,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import axios from 'axios'
 import ApplicationLogo from '@/components/ApplicationLogo.vue'
 import NavLink from '@/components/NavLink.vue'
 import ResponsiveNavLink from '@/components/ResponsiveNavLink.vue'
@@ -261,6 +297,8 @@ const authStore = useAuthStore()
 const user = computed(() => authStore.user)
 
 const showingNavigationDropdown = ref(false)
+const unreadCount = ref(0)
+let notificationInterval = null
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => user.value?.role === 'admin' || user.value?.role === 'manager')
@@ -408,4 +446,31 @@ const handleLogout = async () => {
   await authStore.logout()
   router.push({ name: 'Welcome' })
 }
+
+// Fetch unread notification count
+const fetchUnreadCount = async () => {
+  if (!isAuthenticated.value) return
+  
+  try {
+    const response = await axios.get('/api/notifications/unread-count')
+    unreadCount.value = response.data.count
+  } catch (error) {
+    console.error('Error fetching notification count:', error)
+  }
+}
+
+// Setup notification polling
+onMounted(() => {
+  if (isAuthenticated.value) {
+    fetchUnreadCount()
+    // Poll for new notifications every 30 seconds
+    notificationInterval = setInterval(fetchUnreadCount, 30000)
+  }
+})
+
+onUnmounted(() => {
+  if (notificationInterval) {
+    clearInterval(notificationInterval)
+  }
+})
 </script>

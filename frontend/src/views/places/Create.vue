@@ -53,6 +53,23 @@
 
             <!-- Form -->
             <div v-else class="bg-white rounded-lg shadow-md">
+                <!-- Info Message -->
+                <div class="bg-blue-50 border-b border-blue-200 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-blue-800">Create your place as a draft</h3>
+                            <div class="mt-2 text-sm text-blue-700">
+                                <p>Your place will be saved as a draft. You can edit it as many times as you need to make it perfect. When you're ready, submit it for review from the edit page.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <form @submit.prevent="submitForm" class="p-6 space-y-6">
                     <!-- Basic Information -->
                     <div class="space-y-4">
@@ -134,7 +151,7 @@
                                 :max-files="1"
                                 :max-file-size="2097152"
                                 context="logo"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="createdEntryId"
                                 @upload-success="handleLogoUpload"
                                 @upload-error="handleUploadError"
@@ -151,7 +168,7 @@
                                 :max-files="1"
                                 :max-file-size="5242880"
                                 context="cover"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="createdEntryId"
                                 @upload-success="handleCoverUpload"
                                 @upload-error="handleUploadError"
@@ -168,7 +185,7 @@
                                 :max-files="20"
                                 :max-file-size="14680064"
                                 context="gallery"
-                                entity-type="App\Models\DirectoryEntry"
+                                entity-type="App\Models\Place"
                                 :entity-id="createdEntryId"
                                 @upload-success="handleGalleryUpload"
                                 @upload-error="handleUploadError"
@@ -225,12 +242,15 @@
                     </div>
 
                     <!-- Location Information -->
-                    <div v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)" class="space-y-4">
+                    <div class="space-y-4">
                         <h2 class="text-lg font-semibold text-gray-900">Location Information</h2>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="md:col-span-2">
-                                <label for="address_line1" class="block text-sm font-medium text-gray-700">Address *</label>
+                                <label for="address_line1" class="block text-sm font-medium text-gray-700">
+                                    Address 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.address_line1"
                                     type="text"
@@ -247,7 +267,7 @@
                                     v-model="form.location.city"
                                     type="text"
                                     id="city"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                                    required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
                                 <div v-if="errors['location.city']" class="mt-1 text-sm text-red-600">{{ errors['location.city'] }}</div>
@@ -258,7 +278,7 @@
                                 <select
                                     v-model="form.location.state"
                                     id="state"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                                    required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 >
                                     <option value="">Select a state</option>
@@ -270,7 +290,10 @@
                             </div>
 
                             <div>
-                                <label for="zip_code" class="block text-sm font-medium text-gray-700">ZIP Code *</label>
+                                <label for="zip_code" class="block text-sm font-medium text-gray-700">
+                                    ZIP Code 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.zip_code"
                                     type="text"
@@ -306,7 +329,10 @@
                             </div>
 
                             <div>
-                                <label for="latitude" class="block text-sm font-medium text-gray-700">Latitude *</label>
+                                <label for="latitude" class="block text-sm font-medium text-gray-700">
+                                    Latitude 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.latitude"
                                     type="number"
@@ -319,7 +345,10 @@
                             </div>
 
                             <div>
-                                <label for="longitude" class="block text-sm font-medium text-gray-700">Longitude *</label>
+                                <label for="longitude" class="block text-sm font-medium text-gray-700">
+                                    Longitude 
+                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                </label>
                                 <input
                                     v-model="form.location.longitude"
                                     type="number"
@@ -533,12 +562,8 @@ const submitForm = async () => {
             // Update image tracking with the new entry ID if there were uploaded images
             await updateImageTracking()
             
-            // Success - redirect based on user role
-            const redirectUrl = authStore.user?.role === 'admin' || authStore.user?.role === 'manager' 
-                ? '/admin/entries' 
-                : '/places'
-            
-            router.push(redirectUrl)
+            // Redirect to the edit page so user can continue working on it
+            router.push(`/places/${response.data.id}/edit`)
         }
     } catch (error) {
         console.error('Form submission error:', error)

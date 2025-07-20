@@ -14,7 +14,8 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, Followable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'username', 'custom_url', 'role', 'bio',
+        'name', 'firstname', 'lastname', 'email', 'password', 'username', 'custom_url', 
+        'role', 'bio', 'gender', 'birthdate',
         'avatar', 'cover_image', 'social_links', 'preferences', 'phone',
         'permissions', 'is_public', 'display_title', 'profile_description',
         'location', 'website', 'birth_date', 'profile_settings',
@@ -41,6 +42,7 @@ class User extends Authenticatable
         'show_followers' => 'boolean',
         'show_following' => 'boolean',
         'birth_date' => 'date',
+        'birthdate' => 'date',
         'last_active_at' => 'datetime',
         'avatar_updated_at' => 'datetime',
         'cover_updated_at' => 'datetime',
@@ -99,6 +101,11 @@ class User extends Authenticatable
     public function posts()
     {
         return $this->hasMany(Post::class);
+    }
+    
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
     }
 
     public function tackedPost()
@@ -234,6 +241,9 @@ class User extends Authenticatable
                 'followable_id' => $user->id,
                 'followable_type' => User::class,
             ]);
+            
+            // Create notification
+            Notification::createFollowNotification($this, $user);
         }
     }
     
@@ -281,6 +291,26 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Place::class, 'directory_entry_follows')
                     ->withTimestamps();
+    }
+
+    /**
+     * Get all places this user manages (polymorphic)
+     */
+    public function managedPlaces()
+    {
+        return $this->morphMany(PlaceManager::class, 'manageable')
+            ->with('place');
+    }
+
+    /**
+     * Get active places this user manages
+     */
+    public function activeManagedPlaces()
+    {
+        return $this->managedPlaces()
+            ->active()
+            ->accepted()
+            ->with('place');
     }
     
     // Backward compatibility
@@ -357,6 +387,27 @@ class User extends Authenticatable
     public function getDisplayName()
     {
         return $this->display_title ?: $this->name;
+    }
+    
+    // Get full name from firstname and lastname
+    public function getFullNameAttribute()
+    {
+        return trim($this->firstname . ' ' . $this->lastname);
+    }
+    
+    // Check if custom URL has been set (immutable check)
+    public function hasCustomUrl()
+    {
+        return !empty($this->custom_url);
+    }
+    
+    // Check if user is at least 18 years old
+    public function isAdult()
+    {
+        if (!$this->birthdate) {
+            return false;
+        }
+        return $this->birthdate->diffInYears(now()) >= 18;
     }
 
     public function incrementProfileViews()

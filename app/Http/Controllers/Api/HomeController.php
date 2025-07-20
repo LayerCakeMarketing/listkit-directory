@@ -79,6 +79,15 @@ class HomeController extends Controller
             $lists->each(function ($list) {
                 $list->feed_type = 'list';
                 $list->feed_timestamp = $list->created_at;
+                
+                // Ensure user has name field populated
+                if ($list->user && !$list->user->name && ($list->user->firstname || $list->user->lastname)) {
+                    $list->user->name = trim($list->user->firstname . ' ' . $list->user->lastname);
+                }
+                // Also check owner if it's different from user
+                if ($list->owner && !$list->owner->name && ($list->owner->firstname || $list->owner->lastname)) {
+                    $list->owner->name = trim($list->owner->firstname . ' ' . $list->owner->lastname);
+                }
             });
             
             $places->each(function ($place) {
@@ -89,6 +98,11 @@ class HomeController extends Controller
             $posts->each(function ($post) {
                 $post->feed_type = 'post';
                 $post->feed_timestamp = $post->created_at;
+                
+                // Ensure user has name field populated
+                if ($post->user && !$post->user->name && ($post->user->firstname || $post->user->lastname)) {
+                    $post->user->name = trim($post->user->firstname . ' ' . $post->user->lastname);
+                }
             });
             
             // Merge and sort by timestamp

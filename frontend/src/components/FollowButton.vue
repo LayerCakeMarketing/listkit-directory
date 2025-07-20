@@ -23,12 +23,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { useNotification } from '@/composables/useNotification'
 
 const props = defineProps({
     followableType: {
         type: String,
         required: true,
-        validator: (value) => ['user', 'place'].includes(value)
+        validator: (value) => ['user', 'place', 'channel'].includes(value)
     },
     followableId: {
         type: [Number, String],
@@ -46,6 +47,7 @@ const props = defineProps({
 
 const emit = defineEmits(['follow', 'unfollow'])
 
+const { showSuccess, showError } = useNotification()
 const isFollowing = ref(props.initialFollowing)
 const loading = ref(false)
 
@@ -61,9 +63,19 @@ const toggleFollow = async () => {
     
     try {
         let response
-        const endpoint = props.followableType === 'user' 
-            ? `/api/users/${props.followableId}/follow`
-            : `/api/places/${props.followableId}/follow`
+        let endpoint
+        
+        switch (props.followableType) {
+            case 'user':
+                endpoint = `/api/users/${props.followableId}/follow`
+                break
+            case 'channel':
+                endpoint = `/api/channels/${props.followableId}/follow`
+                break
+            case 'place':
+                endpoint = `/api/places/${props.followableId}/follow`
+                break
+        }
         
         if (isFollowing.value) {
             response = await axios.delete(endpoint)
@@ -79,9 +91,9 @@ const toggleFollow = async () => {
         
         // Show error message
         if (error.response?.status === 401) {
-            alert('Please login to follow')
+            showError('Authentication Required', 'Please login to follow')
         } else {
-            alert(error.response?.data?.message || 'An error occurred')
+            showError('Error', error.response?.data?.message || 'An error occurred')
         }
     } finally {
         loading.value = false

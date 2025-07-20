@@ -5,7 +5,7 @@
       <div class="flex-shrink-0">
         <img
           :src="getUserAvatar()"
-          :alt="user.name"
+          :alt="`${user?.name || 'User'}`"
           class="h-10 w-10 rounded-full"
         />
       </div>
@@ -162,7 +162,7 @@ const authStore = useAuthStore()
 const feedStore = useFeedStore()
 
 const user = computed(() => authStore.user)
-const placeholder = computed(() => `What's on your mind, ${user.value?.name?.split(' ')[0]}?`)
+const placeholder = computed(() => `What's on your mind, ${user.value?.name?.split(' ')[0] || user.value?.firstname || 'there'}?`)
 
 // Form state
 const content = ref('')
@@ -330,7 +330,8 @@ const getUserAvatar = () => {
   if (user.value?.avatar) {
     return user.value.avatar
   }
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.value?.name || 'User')}&background=3B82F6&color=fff`
+  const fullName = user.value ? (user.value.name || `${user.value.firstname || ''} ${user.value.lastname || ''}`.trim()) : 'User'
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=3B82F6&color=fff`
 }
 
 // Custom directive for click outside

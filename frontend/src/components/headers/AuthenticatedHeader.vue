@@ -127,13 +127,13 @@
                     <div class="flex items-center space-x-3">
                         <img
                             :src="userProfileImage"
-                            :alt="`${user.name} profile`"
+                            :alt="`${user.firstname} ${user.lastname} profile`"
                             class="h-10 w-10 rounded-full object-cover bg-gray-200"
                             @error="handleMobileImageError"
                         />
                         <div class="flex-1 min-w-0">
                             <div class="font-medium text-base text-gray-800 truncate">
-                                {{ user.name }}
+                                {{ user.firstname }} {{ user.lastname }}
                             </div>
                             <div class="font-medium text-sm text-gray-500 truncate">{{ user.email }}</div>
                             <div class="mt-1">

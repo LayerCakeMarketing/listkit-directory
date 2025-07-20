@@ -176,18 +176,18 @@
             <div class="flex-1">
               <h3 class="text-lg font-semibold text-gray-900">
                 <router-link
-                  :to="item.item.url"
+                  :to="item.item?.url || getRegionUrl(item.item)"
                   class="hover:text-blue-600"
                 >
-                  {{ item.item.name }}
+                  {{ item.item?.name || 'Unknown Region' }}
                 </router-link>
               </h3>
-              <p class="text-sm text-gray-500">
+              <p v-if="item.item" class="text-sm text-gray-500">
                 {{ item.item.type }}
                 <span v-if="item.item.parent"> in {{ item.item.parent }}</span>
               </p>
-              <p class="text-sm text-gray-500 mt-1">
-                {{ item.item.place_count }} places
+              <p v-if="item.item" class="text-sm text-gray-500 mt-1">
+                {{ item.item.place_count || item.item.cached_place_count || 0 }} places
               </p>
             </div>
             <button
@@ -235,17 +235,9 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
-// import { useToast } from 'vue-toastification'
+import { useNotification } from '@/composables/useNotification'
 
-// const toast = useToast()
-
-// Simple toast alternative
-const showToast = (message, type = 'success') => {
-  console.log(`${type}: ${message}`)
-  if (type === 'error') {
-    alert(`Error: ${message}`)
-  }
-}
+const { showSuccess, showError } = useNotification()
 
 const activeTab = ref('places')
 const loading = ref(false)
@@ -302,7 +294,7 @@ async function fetchSavedItems() {
     }
   } catch (error) {
     console.error('Error fetching saved items:', error)
-    showToast('Failed to load saved items', 'error')
+    showError('Error', 'Failed to load saved items')
   } finally {
     loading.value = false
   }
@@ -311,7 +303,15 @@ async function fetchSavedItems() {
 // Unsave item
 async function unsaveItem(item) {
   try {
-    await axios.delete(`/api/saved-items/${item.type}/${item.item.id}`)
+    // Use saveable_id if the item has been deleted (item.item is null)
+    const itemId = item.item?.id || item.saveable_id
+    
+    if (!itemId) {
+      showError('Error', 'Cannot remove item: missing ID')
+      return
+    }
+    
+    await axios.delete(`/api/saved-items/${item.type}/${itemId}`)
     
     // Remove from local list
     const index = savedItems.value[activeTab.value].findIndex(i => i.id === item.id)
@@ -320,10 +320,10 @@ async function unsaveItem(item) {
       pagination.value[activeTab.value].total--
     }
     
-    showToast('Item removed from saved')
+    showSuccess('Removed', 'Item removed from saved items')
   } catch (error) {
     console.error('Error unsaving item:', error)
-    showToast('Failed to remove item', 'error')
+    showError('Error', 'Failed to remove item')
   }
 }
 
@@ -339,6 +339,37 @@ function formatDate(date) {
   if (days < 7) return `${days} days ago`
   if (days < 30) return `${Math.floor(days / 7)} weeks ago`
   return d.toLocaleDateString()
+}
+
+// Get region URL based on region type and hierarchy
+function getRegionUrl(region) {
+  if (!region) return '#'
+  
+  // If the region already has a URL property, use it
+  if (region.url) return region.url
+  
+  // Otherwise, construct based on type and hierarchy
+  if (region.type === 'state' || region.level === 1) {
+    return `/regions/${region.slug}`
+  } else if (region.type === 'city' || region.level === 2) {
+    // Need parent state slug
+    const stateSlug = region.parent?.slug || region.parent_state?.slug
+    if (stateSlug) {
+      return `/regions/${stateSlug}/${region.slug}`
+    }
+    // Fallback if no parent info
+    return `/regions/${region.slug}`
+  } else if (region.type === 'neighborhood' || region.level === 3) {
+    // Need parent city and state slugs
+    if (region.parent?.parent?.slug && region.parent?.slug) {
+      return `/regions/${region.parent.parent.slug}/${region.parent.slug}/${region.slug}`
+    }
+    // Fallback
+    return `/regions/${region.slug}`
+  }
+  
+  // Default fallback
+  return `/regions/${region.slug}`
 }
 
 // Watch tab changes

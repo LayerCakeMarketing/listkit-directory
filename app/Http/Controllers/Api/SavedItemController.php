@@ -32,7 +32,7 @@ class SavedItemController extends Controller
             } elseif ($query->getModel() instanceof UserList) {
                 $query->with(['user', 'category'])->withCount('items');
             } elseif ($query->getModel() instanceof Region) {
-                $query->with(['parent']);
+                $query->with(['parent.parent']);
             }
         }]);
 
@@ -43,6 +43,7 @@ class SavedItemController extends Controller
             $data = [
                 'id' => $item->id,
                 'type' => $item->type,
+                'saveable_id' => $item->saveable_id, // Include the ID even if item is deleted
                 'notes' => $item->notes,
                 'saved_at' => $item->created_at,
                 'item' => null,
@@ -80,14 +81,27 @@ class SavedItemController extends Controller
                         break;
                     
                     case 'region':
+                        $region = $item->saveable;
+                        $url = '/regions/' . $region->slug; // Default for state-level
+                        
+                        // Build hierarchical URL for city/neighborhood regions
+                        if ($region->type === 'city' && $region->parent) {
+                            $url = '/regions/' . $region->parent->slug . '/' . $region->slug;
+                        } elseif ($region->type === 'neighborhood' && $region->parent && $region->parent->parent) {
+                            $url = '/regions/' . $region->parent->parent->slug . '/' . $region->parent->slug . '/' . $region->slug;
+                        }
+                        
                         $data['item'] = [
-                            'id' => $item->saveable->id,
-                            'name' => $item->saveable->name,
-                            'full_name' => $item->saveable->full_name,
-                            'type' => $item->saveable->type,
-                            'parent' => $item->saveable->parent?->name,
-                            'place_count' => $item->saveable->cached_place_count ?? 0,
-                            'url' => '/regions/' . $item->saveable->slug,
+                            'id' => $region->id,
+                            'name' => $region->name,
+                            'full_name' => $region->full_name,
+                            'type' => $region->type,
+                            'level' => $region->level,
+                            'slug' => $region->slug,
+                            'parent' => $region->parent?->name,
+                            'parent_slug' => $region->parent?->slug,
+                            'place_count' => $region->cached_place_count ?? 0,
+                            'url' => $url,
                         ];
                         break;
                 }

@@ -40,7 +40,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-// import { useToast } from 'vue-toastification'
+import { useNotification } from '@/composables/useNotification'
 
 const props = defineProps({
   itemType: {
@@ -61,12 +61,7 @@ const props = defineProps({
 const emit = defineEmits(['saved', 'unsaved'])
 
 const authStore = useAuthStore()
-// const toast = useToast()
-
-// Simple toast alternative
-const showToast = (message, type = 'success') => {
-  alert(message)
-}
+const { showSuccess, showError } = useNotification()
 
 const isSaved = ref(props.initialSaved)
 const loading = ref(false)
@@ -92,7 +87,7 @@ onMounted(async () => {
 
 async function toggleSave() {
   if (!isAuthenticated.value) {
-    showToast('Please login to save items', 'warning')
+    showError('Login Required', 'Please login to save items')
     return
   }
   
@@ -103,7 +98,7 @@ async function toggleSave() {
       // Unsave item
       await axios.delete(`/api/saved-items/${props.itemType}/${props.itemId}`)
       isSaved.value = false
-      showToast('Item removed from saved')
+      showSuccess('Removed', `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} removed from saved items`)
       emit('unsaved')
     } else {
       // Save item
@@ -112,12 +107,12 @@ async function toggleSave() {
         id: props.itemId
       })
       isSaved.value = true
-      showToast('Item saved successfully')
+      showSuccess('Saved', `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} saved successfully`)
       emit('saved')
     }
   } catch (error) {
     console.error('Error toggling save:', error)
-    showToast(error.response?.data?.message || 'Failed to save item', 'error')
+    showError('Error', error.response?.data?.message || 'Failed to save item')
   } finally {
     loading.value = false
   }

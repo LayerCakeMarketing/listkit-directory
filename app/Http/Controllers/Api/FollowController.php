@@ -143,18 +143,31 @@ class FollowController extends Controller
         
         if ($type === 'user') {
             $followable = User::find($id);
+            if (!$followable) {
+                return response()->json(['is_following' => false]);
+            }
+            return response()->json([
+                'is_following' => $user->isFollowing($followable)
+            ]);
         } elseif ($type === 'place') {
             $followable = Place::find($id);
+            if (!$followable) {
+                return response()->json(['is_following' => false]);
+            }
+            return response()->json([
+                'is_following' => $user->isFollowing($followable)
+            ]);
+        } elseif ($type === 'channel') {
+            // For channels, check the channel_followers table
+            $channel = \App\Models\Channel::where('slug', $id)->first();
+            if (!$channel) {
+                return response()->json(['is_following' => false]);
+            }
+            return response()->json([
+                'is_following' => $channel->followers()->where('user_id', $user->id)->exists()
+            ]);
         } else {
             return response()->json(['is_following' => false]);
         }
-        
-        if (!$followable) {
-            return response()->json(['is_following' => false]);
-        }
-        
-        return response()->json([
-            'is_following' => $user->isFollowing($followable)
-        ]);
     }
 }

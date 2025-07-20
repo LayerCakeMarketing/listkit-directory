@@ -18,7 +18,7 @@ class Place extends Model
     protected $fillable = [
         'title', 'slug', 'description', 'type', 'category_id', 'region_id',
         'tags', 'owner_user_id', 'created_by_user_id', 'updated_by_user_id',
-        'phone', 'email', 'website_url', 'social_links', 'featured_image',
+        'phone', 'email', 'website_url', 'links', 'social_links', 'featured_image',
         'logo_url', 'cover_image_url', 'gallery_images', 'status', 'is_featured', 
         'is_verified', 'is_claimed', 'meta_title', 'meta_description', 'structured_data', 
         'published_at', 'view_count', 'list_count',
@@ -40,11 +40,16 @@ class Place extends Model
         'cross_streets', 'neighborhood',
         
         // Hierarchical regions
-        'state_region_id', 'city_region_id', 'neighborhood_region_id', 'regions_updated_at'
+        'state_region_id', 'city_region_id', 'neighborhood_region_id', 'regions_updated_at',
+        
+        // Approval/Rejection fields
+        'rejection_reason', 'rejected_at', 'rejected_by',
+        'approval_notes', 'approved_by'
     ];
 
     protected $casts = [
         'tags' => 'array',
+        'links' => 'array',
         'social_links' => 'array',
         'gallery_images' => 'array',
         'structured_data' => 'array',
@@ -72,6 +77,7 @@ class Place extends Model
         'temporarily_closed' => 'boolean',
         'open_24_7' => 'boolean',
         'regions_updated_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     protected $appends = ['canonical_url'];
@@ -172,6 +178,11 @@ class Place extends Model
         return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 
+    public function rejectedBy()
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
     public function location()
     {
         return $this->hasOne(Location::class, 'directory_entry_id');
@@ -192,6 +203,70 @@ class Place extends Model
     public function tags()
     {
         return $this->morphToMany(Tag::class, 'taggable');
+    }
+
+    /**
+     * Get all managers for this place (polymorphic)
+     */
+    public function managers()
+    {
+        return $this->hasMany(PlaceManager::class);
+    }
+
+    /**
+     * Get active managers for this place
+     */
+    public function activeManagers()
+    {
+        return $this->managers()->active()->accepted();
+    }
+
+    /**
+     * Check if a user can manage this place
+     */
+    public function canBeManaged(User $user): bool
+    {
+        // Check if user is the creator
+        if ($this->created_by_user_id === $user->id) {
+            return true;
+        }
+
+        // Check if user is the owner
+        if ($this->owner_user_id === $user->id) {
+            return true;
+        }
+
+        // Check if user is an active manager
+        return $this->activeManagers()
+            ->where('manageable_type', User::class)
+            ->where('manageable_id', $user->id)
+            ->exists();
+    }
+
+    /**
+     * Add a manager to this place
+     */
+    public function addManager($manageable, string $role = 'manager', array $permissions = []): PlaceManager
+    {
+        return $this->managers()->create([
+            'manageable_type' => get_class($manageable),
+            'manageable_id' => $manageable->id,
+            'role' => $role,
+            'permissions' => $permissions,
+            'invited_at' => now(),
+            'invited_by' => auth()->id(),
+        ]);
+    }
+
+    /**
+     * Remove a manager from this place
+     */
+    public function removeManager($manageable): bool
+    {
+        return $this->managers()
+            ->where('manageable_type', get_class($manageable))
+            ->where('manageable_id', $manageable->id)
+            ->delete() > 0;
     }
 
     // Scopes
@@ -374,13 +449,13 @@ class Place extends Model
         // Editor can edit published entries
         if ($user->role === 'editor' && $this->status === 'published') return true;
         
-        // Business owner can edit their own entries
-        if ($user->role === 'business_owner' && $this->owner_user_id === $user->id) return true;
+        // Regular users cannot edit places that are pending review
+        if ($this->status === 'pending_review' && !in_array($user->role, ['admin', 'manager'])) {
+            return false;
+        }
         
-        // Original creator can edit draft entries
-        if ($this->created_by_user_id === $user->id && $this->status === 'draft') return true;
-        
-        return false;
+        // Check if user can manage this place (covers creator, owner, and managers)
+        return $this->canBeManaged($user);
     }
 
     public function publish()

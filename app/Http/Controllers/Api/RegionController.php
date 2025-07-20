@@ -184,10 +184,16 @@ class RegionController extends Controller
         $region = Cache::remember($cacheKey, 3600, function () use ($state, $city, $neighborhood) {
             if ($neighborhood && $city) {
                 // Level 3 - Neighborhood
-                return Region::where('slug', $neighborhood)
+                return Region::where(function($q) use ($neighborhood) {
+                        $q->where('slug', $neighborhood)
+                          ->orWhere('name', $neighborhood);
+                    })
                     ->where('level', 3)
                     ->whereHas('parent', function ($q) use ($city) {
-                        $q->where('slug', $city)->where('level', 2);
+                        $q->where(function($q2) use ($city) {
+                            $q2->where('slug', $city)
+                               ->orWhere('name', $city);
+                        })->where('level', 2);
                     })
                     ->with(['parent.parent', 'parent', 'children'])
                     ->withCount(['neighborhoodEntries as entries_count' => function($q) {
@@ -196,10 +202,16 @@ class RegionController extends Controller
                     ->firstOrFail();
             } elseif ($city) {
                 // Level 2 - City
-                return Region::where('slug', $city)
+                return Region::where(function($q) use ($city) {
+                        $q->where('slug', $city)
+                          ->orWhere('name', $city);
+                    })
                     ->where('level', 2)
                     ->whereHas('parent', function ($q) use ($state) {
-                        $q->where('slug', $state)->where('level', 1);
+                        $q->where(function($q2) use ($state) {
+                            $q2->where('slug', $state)
+                               ->orWhere('name', $state);
+                        })->where('level', 1);
                     })
                     ->with(['parent', 'children'])
                     ->withCount(['neighborhoodEntries as entries_count' => function($q) {
@@ -208,7 +220,10 @@ class RegionController extends Controller
                     ->firstOrFail();
             } else {
                 // Level 1 - State
-                return Region::where('slug', $state)
+                return Region::where(function($q) use ($state) {
+                        $q->where('slug', $state)
+                          ->orWhere('name', $state);
+                    })
                     ->where('level', 1)
                     ->with(['children'])
                     ->withCount(['stateEntries as entries_count' => function($q) {

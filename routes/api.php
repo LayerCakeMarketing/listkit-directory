@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\UserListController;
 use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\ClaimController;
 use App\Http\Controllers\Api\PlaceController;
+use App\Http\Controllers\Api\PublicListController;
 use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\RegionController;
@@ -144,8 +145,11 @@ Route::get('/users/by-username/{username}', [UserProfileController::class, 'show
 Route::get('/users/{username}/lists', [UserListController::class, 'userLists']);
 Route::get('/users/{username}/{slug}', [UserListController::class, 'showBySlug']);
 
-// Public lists
-Route::get('/lists/public', [UserListController::class, 'publicLists']);
+// Public lists (optimized)
+Route::get('/lists/public', [PublicListController::class, 'index']);
+Route::get('/lists/public/categories', [PublicListController::class, 'categories']);
+// Legacy route
+Route::get('/lists/public/legacy', [UserListController::class, 'publicLists']);
 
 // Region search and location
 Route::get('/regions/search', [RegionController::class, 'search']);
@@ -212,7 +216,17 @@ Route::get('/resolve-path', function (Request $request) {
 Route::middleware(['auth'])->group(function () {
     // Return authenticated user info
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $user = $request->user();
+        if ($user) {
+            // Ensure we have the full user data
+            $user->loadCount(['followers', 'following', 'lists']);
+            
+            // Make sure name field is populated from firstname/lastname if needed
+            if (!$user->name && ($user->firstname || $user->lastname)) {
+                $user->name = trim($user->firstname . ' ' . $user->lastname);
+            }
+        }
+        return $user;
     });
     
     // Home feed
@@ -239,9 +253,18 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('profile')->group(function () {
         Route::get('/', [ProfileController::class, 'show']);
         Route::put('/', [ProfileController::class, 'update']);
+        Route::put('/password', [ProfileController::class, 'updatePassword']);
         Route::post('/image', [ProfileController::class, 'updateImage']);
         Route::post('/check-url', [ProfileController::class, 'checkCustomUrl']);
     });
+    
+    // Notifications
+    Route::get('/notifications', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [\App\Http\Controllers\Api\NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Api\NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/mark-all-read', [\App\Http\Controllers\Api\NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{notification}', [\App\Http\Controllers\Api\NotificationController::class, 'destroy']);
+    Route::delete('/notifications/clear-read', [\App\Http\Controllers\Api\NotificationController::class, 'clearRead']);
     
     // User's own lists
     Route::get('/lists', [UserListController::class, 'index']);
@@ -249,6 +272,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/lists/{id}', [UserListController::class, 'show']);
     Route::put('/lists/{id}', [UserListController::class, 'update']);
     Route::delete('/lists/{id}', [UserListController::class, 'destroy']);
+    
+    // User's own places
+    Route::get('/my-places', function (Request $request) {
+        $user = $request->user();
+        
+        $places = $user->createdPlaces()
+            ->with(['location', 'category', 'stateRegion', 'cityRegion'])
+            ->latest()
+            ->paginate(20);
+            
+        return response()->json($places);
+    });
     
     // List items management
     Route::post('/lists/{list}/items', [UserListController::class, 'addItem']);
@@ -362,10 +397,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/entities/{entityType}/{entityId}/media', [\App\Http\Controllers\Api\EntityMediaController::class, 'getEntityMedia']);
     Route::post('/entities/{entityType}/{entityId}/media/clear-cache', [\App\Http\Controllers\Api\EntityMediaController::class, 'clearEntityMediaCache']);
 
-    // Update a place (admin, manager, editor, or business_owner)
-    Route::middleware('role.api:admin,manager,editor,business_owner')->group(function () {
-        Route::put('/places/{place:id}', [PlaceController::class, 'update']);
-    });
+    // Update a place (authenticated users can update their own places)
+    Route::put('/places/{place}', [PlaceController::class, 'update']);
+    Route::patch('/places/{place}/submit-for-review', [PlaceController::class, 'submitForReview']);
 
     // Delete or publish a place, or view places pending review (admin or manager)
     Route::middleware('role.api:admin,manager')->group(function () {
@@ -401,6 +435,8 @@ Route::middleware(['auth'])->group(function () {
         Route::prefix('regions')->group(function () {
             Route::get('/', [RegionManagementController::class, 'index']);
             Route::get('/stats', [RegionManagementController::class, 'stats']);
+            Route::get('/duplicates', [RegionManagementController::class, 'duplicates']);
+            Route::post('/merge-duplicates', [RegionManagementController::class, 'mergeDuplicates']);
             Route::post('/', [RegionManagementController::class, 'store']);
             Route::post('/bulk-import', [\App\Http\Controllers\Api\Admin\RegionBulkImportController::class, 'import']);
             Route::get('/bulk-import/template', [\App\Http\Controllers\Api\Admin\RegionBulkImportController::class, 'downloadTemplate']);
@@ -425,10 +461,13 @@ Route::middleware(['auth'])->group(function () {
         // Place management routes
         Route::get('/places', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'index']);
         Route::get('/places/stats', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'stats']);
+        Route::get('/places/pending', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'pending']);
         Route::post('/places', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'store']);
         Route::get('/places/{place}', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'show']);
         Route::put('/places/{place}', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'update']);
         Route::delete('/places/{place}', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'destroy']);
+        Route::post('/places/{place}/approve', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'approve']);
+        Route::post('/places/{place}/reject', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'reject']);
         Route::post('/places/bulk-update', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'bulkUpdate']);
         Route::post('/places/update-canonical-urls', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'updateCanonicalUrls']);
         

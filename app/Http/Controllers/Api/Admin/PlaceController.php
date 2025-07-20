@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Place;
 use App\Models\Location;
 use App\Services\PlaceRegionService;
+use App\Notifications\PlaceApprovedNotification;
+use App\Notifications\PlaceRejectedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -107,6 +109,9 @@ class PlaceController extends Controller
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'website_url' => 'nullable|url|max:255',
+            'links' => 'nullable|array',
+            'links.*.text' => 'required|string|max:100',
+            'links.*.url' => 'required|url|max:500',
             'social_links' => 'nullable|array',
             'status' => 'nullable|in:draft,pending_review,published',
             
@@ -136,6 +141,7 @@ class PlaceController extends Controller
                 'phone' => $validated['phone'] ?? null,
                 'email' => $validated['email'] ?? null,
                 'website_url' => $validated['website_url'] ?? null,
+                'links' => $validated['links'] ?? [],
                 'social_links' => $validated['social_links'] ?? [],
                 'created_by_user_id' => auth()->id(),
                 'status' => $validated['status'] ?? (auth()->user()->canPublishContent() ? 'published' : 'pending_review'),
@@ -176,17 +182,46 @@ class PlaceController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
+            'slug' => 'nullable|string|max:255|unique:directory_entries,slug,' . $place->id,
             'description' => 'nullable|string',
             'type' => 'sometimes|required|in:business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest,service,online',
             'category_id' => 'sometimes|required|exists:categories,id',
             'status' => 'sometimes|required|in:draft,pending_review,published,archived',
-            // ... other fields
+            'phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'website_url' => 'nullable|url|max:255',
+            'links' => 'nullable|array',
+            'links.*.text' => 'required|string|max:100',
+            'links.*.url' => 'required|url|max:500',
+            'tags' => 'nullable|array',
+            'social_links' => 'nullable|array',
+            'logo_url' => 'nullable|string|max:255',
+            'cover_image_url' => 'nullable|string|max:255',
+            'gallery_images' => 'nullable|array',
+            
+            // Social Media fields
+            'facebook_url' => 'nullable|url|max:255',
+            'instagram_handle' => 'nullable|string|max:100|regex:/^@?[A-Za-z0-9_.]+$/',
+            'twitter_handle' => 'nullable|string|max:100|regex:/^@?[A-Za-z0-9_]+$/',
+            'youtube_channel' => 'nullable|url|max:255',
+            'messenger_contact' => 'nullable|string|max:255',
+            
+            // Business metadata
+            'is_featured' => 'nullable|boolean',
+            'is_verified' => 'nullable|boolean',
+            'is_claimed' => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
         try {
-            if (isset($validated['title']) && $validated['title'] !== $place->title) {
+            // Only auto-generate slug if title changed and no slug provided
+            if (isset($validated['title']) && $validated['title'] !== $place->title && !isset($validated['slug'])) {
                 $validated['slug'] = Str::slug($validated['title']);
+            }
+            
+            // If slug is provided, ensure it's properly formatted
+            if (isset($validated['slug']) && !empty($validated['slug'])) {
+                $validated['slug'] = Str::slug($validated['slug']);
             }
 
             $place->update($validated);
@@ -366,6 +401,151 @@ class PlaceController extends Controller
             'errors' => $errors,
             'total' => $places->count()
         ]);
+    }
+
+    /**
+     * Get all pending places awaiting approval
+     */
+    public function pending(Request $request)
+    {
+        $request->validate([
+            'search' => 'nullable|string|max:255',
+            'sort_by' => 'nullable|in:title,created_at,created_by',
+            'sort_order' => 'nullable|in:asc,desc',
+            'limit' => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $query = Place::with(['category', 'location', 'createdBy', 'stateRegion', 'cityRegion'])
+            ->where('status', 'pending_review');
+
+        // Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhereHas('createdBy', function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Sorting
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+        
+        if ($sortBy === 'created_by') {
+            $query->leftJoin('users', 'directory_entries.created_by_user_id', '=', 'users.id')
+                  ->orderBy('users.name', $sortOrder)
+                  ->select('directory_entries.*');
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
+
+        $entries = $query->paginate($request->get('limit', 20));
+        
+        // Transform the data
+        $entries->getCollection()->transform(function ($place) {
+            $data = $place->toArray();
+            $data['canonical_url'] = $place->getCanonicalUrl();
+            $data['submitted_by'] = $place->createdBy ? $place->createdBy->name : 'Unknown';
+            $data['location_display'] = $place->location ? 
+                "{$place->location->city}, {$place->location->state}" : 
+                'No location';
+            return $data;
+        });
+
+        return response()->json($entries);
+    }
+
+    /**
+     * Approve a pending place
+     */
+    public function approve(Request $request, Place $place)
+    {
+        // Check permission using policy
+        $this->authorize('approve', $place);
+
+        // Only approve if pending
+        if ($place->status !== 'pending_review') {
+            return response()->json(['error' => 'Place is not pending review'], 400);
+        }
+
+        $request->validate([
+            'notes' => 'nullable|string|max:500'
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Update status
+            $place->status = 'published';
+            $place->published_at = now();
+            $place->approval_notes = $request->input('notes');
+            $place->approved_by = auth()->id();
+            $place->save();
+
+            // TODO: Fix notification system - table structure mismatch
+            // Notifications temporarily disabled due to custom table structure
+            // if ($place->createdBy) {
+            //     $place->createdBy->notify(new PlaceApprovedNotification($place, $request->input('notes')));
+            // }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Place approved successfully',
+                'place' => $place->load(['category', 'location'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to approve place: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['error' => 'Failed to approve place: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Reject a pending place
+     */
+    public function reject(Request $request, Place $place)
+    {
+        // Check permission using policy
+        $this->authorize('reject', $place);
+
+        // Only reject if pending
+        if ($place->status !== 'pending_review') {
+            return response()->json(['error' => 'Place is not pending review'], 400);
+        }
+
+        $request->validate([
+            'reason' => 'nullable|string|max:500'
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Update status
+            $place->status = 'rejected';
+            $place->rejection_reason = $request->input('reason');
+            $place->rejected_at = now();
+            $place->rejected_by = auth()->id();
+            $place->save();
+
+            // TODO: Fix notification system - table structure mismatch
+            // Notifications temporarily disabled due to custom table structure
+            // if ($place->createdBy) {
+            //     $place->createdBy->notify(new PlaceRejectedNotification($place, $request->input('reason')));
+            // }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Place rejected',
+                'place' => $place
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to reject place: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['error' => 'Failed to reject place: ' . $e->getMessage()], 500);
+        }
     }
 
 }

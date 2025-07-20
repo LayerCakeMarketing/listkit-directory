@@ -126,8 +126,10 @@ class UserProfileCacheService
         // Clear by username
         Cache::forget($this->getProfileCacheKey($user->username));
         
-        // Clear user's lists cache
-        Cache::tags(['user_lists_' . $user->id])->flush();
+        // Clear user's lists cache only if cache driver supports tagging
+        if ($this->supportsTags()) {
+            Cache::tags(['user_lists_' . $user->id])->flush();
+        }
     }
 
     /**
@@ -135,7 +137,14 @@ class UserProfileCacheService
      */
     public function clearAllProfileCaches()
     {
-        Cache::tags(['user_profiles'])->flush();
+        // Only use tags if supported
+        if ($this->supportsTags()) {
+            Cache::tags(['user_profiles'])->flush();
+        } else {
+            // For drivers that don't support tagging, we can't easily clear all profile caches
+            // This would require tracking all cache keys manually
+            \Log::warning('Cannot clear all profile caches - cache driver does not support tagging');
+        }
     }
 
     /**
@@ -155,5 +164,20 @@ class UserProfileCacheService
             $this->getProfile($user->custom_url);
         }
         $this->getProfile($user->username);
+    }
+    
+    /**
+     * Check if the cache driver supports tagging
+     */
+    private function supportsTags()
+    {
+        try {
+            $store = Cache::getStore();
+            // Check if the store has the tags method
+            return method_exists($store, 'tags');
+        } catch (\Exception $e) {
+            // If we can't determine, assume no tag support
+            return false;
+        }
     }
 }

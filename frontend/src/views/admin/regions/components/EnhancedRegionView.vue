@@ -1309,15 +1309,15 @@ const saveRegion = async (region) => {
     // Update original data
     originalRegions.value[region.id] = JSON.parse(JSON.stringify(region))
     
-    alert('Region updated successfully')
+    showSuccess('Saved', 'Region updated successfully')
   } catch (error) {
     console.error('Error saving region:', error)
     if (error.response) {
       console.error('Error response:', error.response.data)
       console.error('Error status:', error.response.status)
-      alert('Failed to save region: ' + (error.response.data.message || 'Server error'))
+      showError('Save Failed', error.response.data.message || 'Server error')
     } else {
-      alert('Failed to save region: Network error')
+      showError('Network Error', 'Failed to save region')
     }
   }
 }
@@ -1430,15 +1430,15 @@ const deleteRegion = async (region) => {
       expandedRegions.value.splice(expandedIndex, 1)
     }
     
-    alert('Region deleted successfully')
+    showSuccess('Deleted', 'Region deleted successfully')
   } catch (error) {
     console.error('Error deleting region:', error)
     
     // Show more specific error message
     if (error.response && error.response.data && error.response.data.error) {
-      alert(`Failed to delete region: ${error.response.data.error}`)
+      showError('Delete Failed', error.response.data.error)
     } else {
-      alert('Failed to delete region. Check console for details.')
+      showError('Delete Failed', 'Failed to delete region. Check console for details.')
     }
   }
 }

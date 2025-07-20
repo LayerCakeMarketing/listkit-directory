@@ -37,6 +37,12 @@ const routes = [
     component: () => import('@/views/Home.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('@/views/Notifications.vue'),
+    meta: { requiresAuth: true }
+  },
 
   // Dashboard redirects to home
   {
@@ -113,6 +119,15 @@ const routes = [
     props: route => ({ id: route.params.id, isShortUrl: true })
   },
   
+  // Preview route for unpublished places
+  {
+    path: '/places/preview/:id',
+    name: 'PlacePreview',
+    component: () => import('@/views/places/Show.vue'),
+    props: route => ({ id: route.params.id, isPreview: true }),
+    meta: { requiresAuth: true }
+  },
+  
   // Category browsing route (simplified - let API handle disambiguation)
   {
     path: '/places/:slug',
@@ -185,6 +200,17 @@ const routes = [
     component: () => import('@/views/regions/City.vue'),
     props: true
   },
+  {
+    path: '/regions/:state/:city/:neighborhood',
+    name: 'RegionNeighborhood',
+    component: () => import('@/views/regions/City.vue'), // Reuse City component for neighborhoods
+    props: route => ({
+      state: route.params.state,
+      city: route.params.city,
+      neighborhood: route.params.neighborhood,
+      isNeighborhood: true
+    })
+  },
 
   // Profile management (authenticated)
   {
@@ -199,6 +225,13 @@ const routes = [
     path: '/mylists',
     name: 'MyLists',
     component: () => import('@/views/lists/Index.vue'),
+    meta: { requiresAuth: true }
+  },
+  // My Places (authenticated user's places)
+  {
+    path: '/myplaces',
+    name: 'MyPlaces',
+    component: () => import('@/views/places/MyPlaces.vue'),
     meta: { requiresAuth: true }
   },
   
@@ -274,6 +307,12 @@ const routes = [
     path: '/admin/places',
     name: 'AdminPlaces', 
     component: () => import('@/views/admin/places/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/places/pending',
+    name: 'AdminPlacesPending',
+    component: () => import('@/views/admin/places/Pending.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
@@ -419,7 +458,7 @@ const routes = [
     // Only match if it doesn't start with @ and isn't a reserved route
     beforeEnter: (to, from, next) => {
       const reservedPaths = ['admin', 'api', 'places', 'lists', 'regions', 'login', 'register', 
-                            'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 'p'];
+                            'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 'myplaces', 'p'];
       const slug = to.params.slug;
       
       console.log('PublicPage route check:', slug, 'Reserved:', reservedPaths.includes(slug));

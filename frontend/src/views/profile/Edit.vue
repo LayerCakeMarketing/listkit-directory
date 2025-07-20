@@ -7,9 +7,6 @@
           
           <!-- Form Actions (moved to top) -->
           <div v-if="!loading" class="flex items-center space-x-4">
-            <span v-if="profileUpdated" class="text-sm text-green-600 mr-4">
-              Profile updated successfully!
-            </span>
             <router-link
               v-if="profile.username || profile.custom_url"
               :to="{ name: 'UserProfile', params: { username: profile.custom_url || profile.username } }"
@@ -26,14 +23,14 @@
             </button>
             <button
               @click="saveProfile"
-              :disabled="saving || activeTab === 'media'"
+              :disabled="saving || activeTab === 'media' || activeTab === 'password' || activeTab === 'channels'"
               class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
             >
               {{ saving ? 'Saving...' : 'Save Changes' }}
             </button>
             <a
               v-if="profile.username || profile.custom_url"
-              :href="`/${profile.custom_url || profile.username}`"
+              :href="`/up/@${profile.custom_url || profile.username}`"
               target="_blank"
               class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
               title="View Profile"
@@ -82,14 +79,25 @@
             
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <label class="block text-sm font-medium text-gray-700">Name</label>
+                <label class="block text-sm font-medium text-gray-700">First Name</label>
                 <input
-                  v-model="form.name"
+                  v-model="form.firstname"
                   type="text"
                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   required
                 />
-                <p v-if="errors.name" class="mt-1 text-sm text-red-600">{{ errors.name }}</p>
+                <p v-if="errors.firstname" class="mt-1 text-sm text-red-600">{{ errors.firstname }}</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Last Name</label>
+                <input
+                  v-model="form.lastname"
+                  type="text"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                />
+                <p v-if="errors.lastname" class="mt-1 text-sm text-red-600">{{ errors.lastname }}</p>
               </div>
 
               <div>
@@ -103,21 +111,43 @@
                 <p v-if="errors.email" class="mt-1 text-sm text-red-600">{{ errors.email }}</p>
               </div>
 
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Username</label>
+                <input
+                  v-model="form.username"
+                  type="text"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                  placeholder="Letters, numbers, dashes and underscores only"
+                />
+                <p v-if="errors.username" class="mt-1 text-sm text-red-600">{{ errors.username }}</p>
+              </div>
+
               <div class="sm:col-span-2">
                 <label class="block text-sm font-medium text-gray-700">Custom URL</label>
                 <div class="mt-1 flex rounded-md shadow-sm">
                   <span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                    {{ baseUrl }}/
+                    {{ baseUrl }}/up/@
                   </span>
                   <input
                     v-model="form.custom_url"
                     type="text"
-                    class="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                    :disabled="profile.has_custom_url"
+                    :class="[
+                      'flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500',
+                      profile.has_custom_url ? 'bg-gray-100 cursor-not-allowed' : ''
+                    ]"
                     placeholder="your-custom-url"
                     @blur="checkCustomUrl"
                   />
                 </div>
-                <p v-if="urlCheckMessage" :class="urlAvailable ? 'text-green-600' : 'text-red-600'" class="mt-1 text-sm">
+                <p v-if="profile.has_custom_url" class="mt-1 text-sm text-amber-600">
+                  Custom URL has been set and cannot be changed
+                </p>
+                <p v-else class="mt-1 text-sm text-amber-600">
+                  Choose wisely - this cannot be changed once set!
+                </p>
+                <p v-if="urlCheckMessage && !profile.has_custom_url" :class="urlAvailable ? 'text-green-600' : 'text-red-600'" class="mt-1 text-sm">
                   {{ urlCheckMessage }}
                 </p>
                 <p v-if="errors.custom_url" class="mt-1 text-sm text-red-600">{{ errors.custom_url }}</p>
@@ -132,6 +162,30 @@
                   maxlength="500"
                 ></textarea>
                 <p class="mt-1 text-sm text-gray-500">{{ form.bio?.length || 0 }}/500 characters</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Gender (optional)</label>
+                <select 
+                  v-model="form.gender"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="">Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+                <p v-if="errors.gender" class="mt-1 text-sm text-red-600">{{ errors.gender }}</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Date of Birth (optional)</label>
+                <input
+                  v-model="form.birthdate"
+                  type="date"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+                <p v-if="errors.birthdate" class="mt-1 text-sm text-red-600">{{ errors.birthdate }}</p>
               </div>
             </div>
           </div>
@@ -149,7 +203,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-2">Profile Picture</label>
                 <div class="flex items-start space-x-4">
                   <img
-                    :src="profile.avatar_url ? `${profile.avatar_url}?t=${profileImageTimestamp}` : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(form.name)"
+                    :src="profile.avatar_url ? `${profile.avatar_url}?t=${profileImageTimestamp}` : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(form.firstname + ' ' + form.lastname)"
                     alt="Avatar"
                     class="w-20 h-20 rounded-full object-cover"
                   />
@@ -163,7 +217,7 @@
                       :metadata="{
                         entity_id: profile.id,
                         entity_type: 'User',
-                        user_name: profile.name,
+                        user_name: profile.firstname + ' ' + profile.lastname,
                         context: 'avatar'
                       }"
                       @upload-success="handleAvatarUpload"
@@ -198,7 +252,7 @@
                     :metadata="{
                       entity_id: profile.id,
                       entity_type: 'User',
-                      user_name: profile.name,
+                      user_name: profile.firstname + ' ' + profile.lastname,
                       context: 'cover'
                     }"
                     @upload-success="handleCoverUpload"
@@ -301,6 +355,11 @@
               </label>
             </div>
           </div>
+            </div>
+
+            <!-- Password Tab -->
+            <div v-show="activeTab === 'password'" class="space-y-8">
+              <PasswordChangeForm />
             </div>
 
             <!-- Media Tab -->
@@ -614,15 +673,23 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import MediaViewer from '@/components/MediaViewer.vue'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
+import PasswordChangeForm from '@/components/profile/PasswordChangeForm.vue'
+import { useNotification } from '@/composables/useNotification'
 
 const router = useRouter()
+const { showSuccess, showError } = useNotification()
 const loading = ref(true)
 const saving = ref(false)
 const profile = ref({
   username: '',
   custom_url: '',
+  has_custom_url: false,
   name: '',
-  email: ''
+  firstname: '',
+  lastname: '',
+  email: '',
+  gender: '',
+  birthdate: ''
 })
 const errors = reactive({})
 const urlCheckMessage = ref('')
@@ -632,7 +699,6 @@ const userLists = ref([])
 const listImages = ref({})
 const lightboxImage = ref(null)
 const exportingMedia = ref(false)
-const profileUpdated = ref(false)
 const profileImageTimestamp = ref(Date.now())
 const channels = ref([])
 const channelsLoading = ref(false)
@@ -640,19 +706,29 @@ const followedChannels = ref([])
 const followedChannelsLoading = ref(false)
 
 const baseUrl = computed(() => window.location.origin)
+const maxBirthdate = computed(() => {
+  const date = new Date()
+  date.setFullYear(date.getFullYear() - 18)
+  return date.toISOString().split('T')[0]
+})
 
 const tabs = [
   { id: 'basic', name: 'Basic Information' },
   { id: 'images', name: 'Images' },
   { id: 'settings', name: 'Settings' },
+  { id: 'password', name: 'Password' },
   { id: 'media', name: 'Media' },
   { id: 'channels', name: 'Channels' }
 ]
 
 const form = reactive({
-  name: '',
+  firstname: '',
+  lastname: '',
   email: '',
+  username: '',
   custom_url: '',
+  gender: '',
+  birthdate: '',
   bio: '',
   location: '',
   website: '',
@@ -667,7 +743,7 @@ const form = reactive({
   show_join_date: true,
   show_location: true,
   show_website: true,
-  page_logo_option: 'profile'
+  page_logo_option: 'profile' // Required field with default value
 })
 
 // Fetch user profile data
@@ -680,9 +756,22 @@ async function fetchProfile() {
     // Populate form with user data
     Object.keys(form).forEach(key => {
       if (profile.value[key] !== undefined) {
-        form[key] = profile.value[key]
+        // Special handling for birthdate - convert to YYYY-MM-DD format for date input
+        if (key === 'birthdate' && profile.value[key]) {
+          // If it's already a string in YYYY-MM-DD format, use it as is
+          // Otherwise, extract the date part
+          const dateValue = profile.value[key]
+          form[key] = dateValue.split('T')[0] // This handles both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+        } else {
+          form[key] = profile.value[key]
+        }
       }
     })
+    
+    // Ensure page_logo_option has a valid value
+    if (!form.page_logo_option || !['profile', 'custom', 'none'].includes(form.page_logo_option)) {
+      form.page_logo_option = 'profile'
+    }
     
     // Update image timestamp to ensure fresh images
     profileImageTimestamp.value = Date.now()
@@ -697,23 +786,64 @@ async function fetchProfile() {
 async function saveProfile() {
   saving.value = true
   errors.value = {}
-  profileUpdated.value = false
+  
+  // Only send profile-related fields, exclude password fields
+  const profileData = {
+    firstname: form.firstname || '',
+    lastname: form.lastname || '',
+    email: form.email || '',
+    username: form.username || '',
+    gender: form.gender || null,
+    birthdate: form.birthdate || null,
+    bio: form.bio || null,
+    location: form.location || null,
+    website: form.website || null,
+    phone: form.phone || null,
+    page_title: form.page_title || null,
+    display_title: form.display_title || null,
+    profile_description: form.profile_description || null,
+    profile_color: form.profile_color || '#3B82F6',
+    show_activity: Boolean(form.show_activity ?? true),
+    show_followers: Boolean(form.show_followers ?? true),
+    show_following: Boolean(form.show_following ?? true),
+    show_join_date: Boolean(form.show_join_date ?? true),
+    show_location: Boolean(form.show_location ?? true),
+    show_website: Boolean(form.show_website ?? true),
+    page_logo_option: form.page_logo_option || 'profile'
+  }
+  
+  // Only include custom_url if it hasn't been set before
+  if (!profile.value.has_custom_url) {
+    profileData.custom_url = form.custom_url || null
+  }
+  
+  console.log('Saving profile with data:', profileData)
+  
+  // Validate required fields before sending
+  if (!profileData.firstname || !profileData.lastname || !profileData.email || !profileData.username) {
+    showError('First name, last name, email, and username are required fields')
+    saving.value = false
+    return
+  }
+  
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(profileData.email)) {
+    showError('Please enter a valid email address')
+    saving.value = false
+    return
+  }
   
   try {
-    const response = await axios.put('/api/profile', form)
+    const response = await axios.put('/api/profile', profileData)
     
     // If we get a user object in response, update our local data
     if (response.data.user) {
       profile.value = response.data.user
     }
     
-    // Show success message
-    profileUpdated.value = true
-    
-    // Hide message after 3 seconds
-    setTimeout(() => {
-      profileUpdated.value = false
-    }, 3000)
+    // Show success notification
+    showSuccess('Profile updated successfully!')
     
     // Refresh profile data to ensure everything is in sync
     await fetchProfile()
@@ -724,9 +854,25 @@ async function saveProfile() {
     }
   } catch (error) {
     if (error.response?.status === 422) {
-      Object.assign(errors, error.response.data.errors)
+      console.error('Validation errors:', error.response.data.errors)
+      console.error('Data sent:', profileData)
+      console.error('Full error response:', error.response.data)
+      Object.assign(errors.value, error.response.data.errors)
+      // Show all validation errors for debugging
+      const allErrors = []
+      for (const [field, fieldErrors] of Object.entries(error.response.data.errors)) {
+        allErrors.push(`${field}: ${fieldErrors.join(', ')}`)
+      }
+      console.error('All validation errors:', allErrors.join(' | '))
+      // Show the first validation error
+      const firstError = Object.values(error.response.data.errors)[0]
+      if (firstError && firstError[0]) {
+        showError(firstError[0])
+      }
     } else {
-      alert('Failed to update profile. Please try again.')
+      console.error('Profile update error:', error)
+      console.error('Error response:', error.response?.data)
+      showError('Failed to update profile. Please try again.')
     }
   } finally {
     saving.value = false
@@ -769,14 +915,11 @@ async function handleAvatarUpload(result) {
       // Fetch fresh profile data
       await fetchProfile()
       
-      // Show success indicator
-      profileUpdated.value = true
-      setTimeout(() => {
-        profileUpdated.value = false
-      }, 3000)
+      // Show success notification
+      showSuccess('Avatar updated successfully!')
     } catch (error) {
       console.error('Avatar update failed:', error)
-      alert('Failed to update avatar. Please try again.')
+      showError('Failed to update avatar. Please try again.')
     }
   }
 }
@@ -798,14 +941,11 @@ async function handleCoverUpload(result) {
       // Fetch fresh profile data
       await fetchProfile()
       
-      // Show success indicator
-      profileUpdated.value = true
-      setTimeout(() => {
-        profileUpdated.value = false
-      }, 3000)
+      // Show success notification
+      showSuccess('Cover image updated successfully!')
     } catch (error) {
       console.error('Cover update failed:', error)
-      alert('Failed to update cover image. Please try again.')
+      showError('Failed to update cover image. Please try again.')
     }
   }
 }
@@ -828,7 +968,13 @@ async function updateProfileImage(type, cloudflareId, url) {
       // Also update form data to keep in sync
       Object.keys(form).forEach(key => {
         if (response.data.user[key] !== undefined) {
-          form[key] = response.data.user[key]
+          // Special handling for birthdate
+          if (key === 'birthdate' && response.data.user[key]) {
+            const dateValue = response.data.user[key]
+            form[key] = dateValue.split('T')[0]
+          } else {
+            form[key] = response.data.user[key]
+          }
         }
       })
       
@@ -839,7 +985,7 @@ async function updateProfileImage(type, cloudflareId, url) {
     return response.data
   } catch (error) {
     console.error('Failed to update image:', error)
-    alert('Failed to update image. Please try again.')
+    showError('Failed to update image. Please try again.')
     throw error
   }
 }
@@ -986,7 +1132,7 @@ async function exportAllMedia() {
     }
     
     if (mediaUrls.length === 0) {
-      alert('No media to export')
+      showError('No media to export')
       return
     }
     
@@ -1005,11 +1151,11 @@ async function exportAllMedia() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     
-    alert(`Exported ${mediaUrls.length} media URLs to text file`)
+    showSuccess(`Exported ${mediaUrls.length} media URLs to text file`)
     
   } catch (error) {
     console.error('Failed to export media:', error)
-    alert('Failed to export media. Please try again.')
+    showError('Failed to export media. Please try again.')
   } finally {
     exportingMedia.value = false
   }

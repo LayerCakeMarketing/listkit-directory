@@ -170,12 +170,15 @@
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
+import { useNotification } from '@/composables/useNotification'
 
 // State
 const loading = ref(false)
 const processing = ref(false)
 const settings = ref({})
 const backgroundImageFile = ref(null)
+
+const { showSuccess, showError } = useNotification()
 
 // Form
 const form = reactive({
@@ -247,7 +250,7 @@ const handleImagesUploaded = (uploadResult) => {
 
 const handleUploadError = (error) => {
     console.error('Upload error:', error)
-    alert('Failed to upload image. Please try again.')
+    showError('Upload Error', 'Failed to upload image. Please try again.')
 }
 
 const removeBackgroundImage = () => {
@@ -279,10 +282,10 @@ const saveSettings = async () => {
         form.remove_background_image = false
         backgroundImageFile.value = null
         
-        alert('Settings saved successfully!')
+        showSuccess('Saved', 'Settings saved successfully!')
     } catch (error) {
         console.error('Error saving settings:', error)
-        alert('Error saving settings')
+        showError('Error', 'Failed to save settings')
     } finally {
         processing.value = false
     }

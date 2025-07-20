@@ -155,12 +155,15 @@ import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
 import PlaceSelector from './components/PlaceSelector.vue'
 import TestimonialsManager from './components/TestimonialsManager.vue'
+import { useNotification } from '@/composables/useNotification'
 
 // State
 const loading = ref(false)
 const processing = ref(false)
 const settings = ref({})
 const heroImageFile = ref(null)
+
+const { showSuccess, showError } = useNotification()
 
 // Form
 const form = reactive({
@@ -246,10 +249,10 @@ const saveSettings = async () => {
         form.remove_hero_image = false
         heroImageFile.value = null
         
-        alert('Settings saved successfully!')
+        showSuccess('Saved', 'Settings saved successfully!')
     } catch (error) {
         console.error('Error saving settings:', error)
-        alert('Error saving settings')
+        showError('Error', 'Failed to save settings')
     } finally {
         processing.value = false
     }

@@ -568,8 +568,8 @@ const toggleSelectAll = (event) => {
 }
 
 const editPlace = (place) => {
-    // Navigate to edit page or open modal
-    window.location.href = `/admin/places/${place.id}/edit`
+    // Navigate to edit page
+    window.location.href = `/places/${place.id}/edit`
 }
 
 const deletePlace = async (place) => {

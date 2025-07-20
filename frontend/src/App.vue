@@ -22,6 +22,9 @@
         </router-view>
       </main>
     </div>
+    
+    <!-- Global Notification Container -->
+    <NotificationContainer />
   </div>
 </template>
 
@@ -31,6 +34,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import UnifiedHeader from '@/components/headers/UnifiedHeader.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import NotificationContainer from '@/components/ui/NotificationContainer.vue'
 
 const route = useRoute()
 const router = useRouter()

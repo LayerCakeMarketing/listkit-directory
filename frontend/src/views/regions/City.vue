@@ -15,12 +15,30 @@
           <li>
             <router-link :to="`/regions/${state}`" class="hover:text-gray-700">{{ stateData?.display_name || stateData?.full_name || stateData?.name || state }}</router-link>
           </li>
-          <li>
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </li>
-          <li class="font-medium text-gray-900">{{ cityData?.name || city }}</li>
+          <template v-if="isNeighborhood">
+            <li>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </li>
+            <li>
+              <router-link :to="`/regions/${state}/${city}`" class="hover:text-gray-700">{{ cityData?.parent?.name || city }}</router-link>
+            </li>
+            <li>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </li>
+            <li class="font-medium text-gray-900">{{ cityData?.name || neighborhood }}</li>
+          </template>
+          <template v-else>
+            <li>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </li>
+            <li class="font-medium text-gray-900">{{ cityData?.name || city }}</li>
+          </template>
         </ol>
       </nav>
 
@@ -29,7 +47,7 @@
         <div class="flex items-start justify-between">
           <div>
             <h1 class="text-3xl font-bold text-gray-900">
-              {{ cityData?.display_name || cityData?.full_name || cityData?.name || 'Loading...' }}<span v-if="stateData">, {{ stateData.display_name || stateData.full_name || stateData.name }}</span>
+              {{ cityData?.display_name || cityData?.full_name || cityData?.name || 'Loading...' }}<span v-if="isNeighborhood && cityData?.parent">, {{ cityData.parent.name }}</span><span v-if="stateData">, {{ stateData.display_name || stateData.full_name || stateData.name }}</span>
             </h1>
             <p v-if="cityData?.description" class="mt-2 text-lg text-gray-600">{{ cityData.description }}</p>
           </div>
@@ -82,7 +100,7 @@
             <div class="text-sm text-gray-500">Categories</div>
             <div class="text-2xl font-bold text-gray-900">{{ uniqueCategories }}</div>
           </div>
-          <div class="bg-white rounded-lg shadow-sm p-6">
+          <div v-if="!isNeighborhood" class="bg-white rounded-lg shadow-sm p-6">
             <div class="text-sm text-gray-500">Neighborhoods</div>
             <div class="text-2xl font-bold text-gray-900">{{ neighborhoods.length }}</div>
           </div>
@@ -288,6 +306,16 @@ const props = defineProps({
   city: {
     type: String,
     required: true
+  },
+  neighborhood: {
+    type: String,
+    required: false,
+    default: null
+  },
+  isNeighborhood: {
+    type: Boolean,
+    required: false,
+    default: false
   }
 })
 
@@ -313,8 +341,13 @@ const fetchCityData = async () => {
     loading.value = true
     error.value = null
     
-    // Fetch city and state data
-    const response = await axios.get(`/api/regions/by-slug/${props.state}/${props.city}`)
+    // Fetch region data based on whether it's a neighborhood or city
+    let response
+    if (props.isNeighborhood && props.neighborhood) {
+      response = await axios.get(`/api/regions/by-slug/${props.state}/${props.city}/${props.neighborhood}`)
+    } else {
+      response = await axios.get(`/api/regions/by-slug/${props.state}/${props.city}`)
+    }
     cityData.value = response.data.city || response.data.data
     stateData.value = response.data.state
     

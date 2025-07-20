@@ -61,7 +61,7 @@
                 <div v-if="entityType && entityId" class="mt-4">
                     <div class="text-sm text-gray-500 mb-2">or</div>
                     <MediaGallery
-                        :entity-type="entityType"
+                        :entity-type="mediaGalleryEntityType"
                         :entity-id="entityId"
                         button-text="Choose from Gallery"
                         @media-selected="handleMediaSelected"
@@ -238,6 +238,14 @@ const globalProgress = computed(() => {
     if (files.value.length === 0) return 0
     const totalProgress = files.value.reduce((acc, file) => acc + (file.progress || 0), 0)
     return Math.round(totalProgress / files.value.length)
+})
+
+// Transform entity type for MediaGallery component
+const mediaGalleryEntityType = computed(() => {
+    if (props.entityType === 'App\\Models\\DirectoryEntry') {
+        return 'DirectoryEntry'
+    }
+    return props.entityType
 })
 
 const handleDragOver = (e) => {

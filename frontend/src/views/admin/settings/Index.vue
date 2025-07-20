@@ -170,6 +170,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { useNotification } from '@/composables/useNotification'
 
 // State
 const loading = ref(true)
@@ -178,6 +179,8 @@ const activeTab = ref('general')
 const settings = ref({})
 const groups = ref({})
 const formData = ref({})
+
+const { showSuccess, showError } = useNotification()
 
 // Computed
 const sortedGroups = computed(() => {
@@ -242,10 +245,10 @@ const saveSettings = async () => {
             }
         })
         
-        alert('Settings saved successfully!')
+        showSuccess('Saved', 'Settings saved successfully!')
     } catch (error) {
         console.error('Failed to save settings:', error)
-        alert('Failed to save settings. Please try again.')
+        showError('Error', 'Failed to save settings. Please try again.')
     } finally {
         saving.value = false
     }

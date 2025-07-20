@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\RegisterUserRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -49,18 +50,23 @@ class SpaAuthController extends Controller
     /**
      * Handle user registration.
      */
-    public function register(Request $request)
+    public function register(RegisterUserRequest $request)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-        ]);
+        $validated = $request->validated();
+
+        // Generate a unique username if not provided
+        $username = $validated['username'] ?? $this->generateUsername($validated['firstname'], $validated['lastname']);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'firstname' => $validated['firstname'],
+            'lastname' => $validated['lastname'],
+            'name' => $validated['firstname'] . ' ' . $validated['lastname'], // Keep for backward compatibility
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'username' => $username,
+            'custom_url' => $validated['custom_url'] ?? null,
+            'gender' => $validated['gender'] ?? null,
+            'birthdate' => $validated['birthdate'] ?? null,
         ]);
 
         Auth::login($user);
@@ -71,6 +77,25 @@ class SpaAuthController extends Controller
             'user' => $user,
             'redirect' => '/home'
         ]);
+    }
+
+    /**
+     * Generate a unique username from firstname and lastname
+     */
+    private function generateUsername($firstname, $lastname)
+    {
+        $base = strtolower($firstname . $lastname);
+        $base = preg_replace('/[^a-z0-9]/', '', $base); // Remove non-alphanumeric characters
+        
+        $username = $base;
+        $counter = 1;
+        
+        while (User::where('username', $username)->exists()) {
+            $username = $base . $counter;
+            $counter++;
+        }
+        
+        return $username;
     }
 
     /**

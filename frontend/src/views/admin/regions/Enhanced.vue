@@ -1253,68 +1253,125 @@
     </div>
 
     <!-- Create Region Modal -->
-    <Modal v-if="showCreateModal" @close="showCreateModal = false">
+    <Modal :show="showCreateModal" @close="showCreateModal = false" max-width="lg">
       <template #header>
         <h3 class="text-lg font-medium text-gray-900">Create New Region</h3>
       </template>
       <template #default>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              v-model="newRegion.name"
-              type="text"
-              required
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-            <select
-              v-model="newRegion.type"
-              required
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="state">State</option>
-              <option value="city">City</option>
-              <option value="neighborhood">Neighborhood</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Parent Region</label>
-            <select
-              v-model="newRegion.parent_id"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="">No Parent</option>
-              <option v-for="parent in getValidParentsForType(newRegion.type)" :key="parent.id" :value="parent.id">
-                {{ parent.name }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              v-model="newRegion.description"
-              rows="3"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            ></textarea>
+        <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
+          <div class="px-4 py-5 sm:p-6">
+            <form @submit.prevent="createRegion" class="space-y-4">
+              <div>
+                <label for="region-name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  id="region-name"
+                  v-model="newRegion.name"
+                  type="text"
+                  required
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="Enter region name"
+                />
+              </div>
+              
+              <div>
+                <label for="region-type" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  id="region-type"
+                  v-model="newRegion.type"
+                  required
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  @change="newRegion.parent_id = ''; newRegion.state_filter = ''"
+                >
+                  <option value="state">State</option>
+                  <option value="city">City</option>
+                  <option value="neighborhood">Neighborhood</option>
+                </select>
+              </div>
+              
+              <!-- State filter for neighborhoods -->
+              <div v-if="newRegion.type === 'neighborhood'">
+                <label for="state-filter" class="block text-sm font-medium text-gray-700 mb-1">
+                  Filter by State (Optional)
+                </label>
+                <select
+                  id="state-filter"
+                  v-model="newRegion.state_filter"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  @change="newRegion.parent_id = ''"
+                >
+                  <option value="">All States</option>
+                  <option v-for="state in parentRegions.filter(p => p.type === 'state' || p.level === 1)" :key="state.id" :value="state.id">
+                    {{ state.name }}
+                  </option>
+                </select>
+              </div>
+              
+              <div v-if="newRegion.type !== 'state'">
+                <label for="region-parent" class="block text-sm font-medium text-gray-700 mb-1">
+                  Parent {{ newRegion.type === 'city' ? 'State' : 'City' }} <span class="text-red-500">*</span>
+                </label>
+                <select
+                  id="region-parent"
+                  v-model="newRegion.parent_id"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  :required="newRegion.type !== 'state'"
+                >
+                  <option value="">Select Parent Region</option>
+                  <option v-for="parent in getValidParentsForType(newRegion.type)" :key="parent.id" :value="parent.id">
+                    {{ parent.name }}{{ parent.parent && newRegion.type === 'neighborhood' ? ` (${parent.parent.name})` : '' }}
+                  </option>
+                </select>
+                <p v-if="newRegion.type !== 'state' && getValidParentsForType(newRegion.type).length === 0" class="mt-1 text-sm text-red-600">
+                  No {{ newRegion.type === 'city' ? 'states' : 'cities' }} available. Please create a {{ newRegion.type === 'city' ? 'state' : 'city' }} first.
+                </p>
+              </div>
+              
+              <div>
+                <label for="region-description" class="block text-sm font-medium text-gray-700 mb-1">
+                  Description (Optional)
+                </label>
+                <textarea
+                  id="region-description"
+                  v-model="newRegion.description"
+                  rows="3"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="Enter a brief description of this region"
+                ></textarea>
+              </div>
+              
+              <div v-if="newRegion.type === 'state'">
+                <label for="region-abbreviation" class="block text-sm font-medium text-gray-700 mb-1">
+                  State Abbreviation
+                </label>
+                <input
+                  id="region-abbreviation"
+                  v-model="newRegion.abbreviation"
+                  type="text"
+                  maxlength="2"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="e.g., CA, NY"
+                  style="text-transform: uppercase"
+                />
+              </div>
+              
+              <div class="flex justify-end pt-4 space-x-3">
+                <button
+                  type="button"
+                  @click="showCreateModal = false"
+                  class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Create Region
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </template>
-      <template #footer>
-        <button
-          @click="showCreateModal = false"
-          class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 mr-3"
-        >
-          Cancel
-        </button>
-        <button
-          @click="createRegion"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-        >
-          Create Region
-        </button>
       </template>
     </Modal>
     
@@ -1655,6 +1712,7 @@ import axios from 'axios'
 import Modal from '@/components/Modal.vue'
 import Pagination from '@/components/Pagination.vue'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
+import { useNotification } from '@/composables/useNotification'
 
 // State
 const regions = ref([])
@@ -1675,6 +1733,8 @@ const searchedPlaces = ref([])
 const searchListQuery = ref('')
 const searchedLists = ref([])
 const selectedPlaces = ref([])
+
+const { showSuccess, showError } = useNotification()
 const featuredPlacePriorities = ref({})
 const showCategoryPlaceModal = ref(false)
 const selectedCategory = ref('')
@@ -1710,7 +1770,10 @@ const newRegion = reactive({
   name: '',
   type: 'state',
   parent_id: '',
-  intro_text: ''
+  intro_text: '',
+  description: '',
+  abbreviation: '',
+  state_filter: '' // For filtering cities when selecting neighborhood parent
 })
 
 // Tabs configuration
@@ -1783,7 +1846,7 @@ const fetchRegions = async () => {
       search: filters.search,
       type: filters.type,
       parent_id: filters.parentId,
-      with: 'parent,featuredEntries,featuredLists'
+      with: 'parent.parent,featuredEntries,featuredLists'
     }
     
     const response = await axios.get('/api/admin/regions', { params })
@@ -1828,7 +1891,7 @@ const fetchRegions = async () => {
       console.error('Error response:', error.response.data)
       console.error('Error status:', error.response.status)
     }
-    alert('Failed to fetch regions. Check console for details.')
+    showError('Error', 'Failed to fetch regions. Check console for details.')
   } finally {
     loading.value = false
   }
@@ -1836,10 +1899,14 @@ const fetchRegions = async () => {
 
 const fetchParentRegions = async () => {
   try {
-    const response = await axios.get('/api/regions', {
-      params: { type: 'state,city', limit: 100 }
+    const response = await axios.get('/api/admin/regions', {
+      params: { 
+        per_page: 200,  // Get more regions
+        with: 'parent'  // Include parent relationships
+      }
     })
-    parentRegions.value = response.data.data || response.data
+    parentRegions.value = response.data.data || []
+    console.log('Loaded parent regions:', parentRegions.value.length, 'regions')
   } catch (error) {
     console.error('Error fetching parent regions:', error)
   }
@@ -1852,9 +1919,30 @@ const getValidParents = (region) => {
 }
 
 const getValidParentsForType = (type) => {
+  console.log('Getting valid parents for type:', type)
+  console.log('Available parent regions:', parentRegions.value)
+  
   if (type === 'state') return []
-  if (type === 'city') return parentRegions.value.filter(p => p.type === 'state')
-  return parentRegions.value.filter(p => p.type === 'city')
+  
+  if (type === 'city') {
+    const states = parentRegions.value.filter(p => p.type === 'state' || p.level === 1)
+    console.log('Found states:', states)
+    return states
+  }
+  
+  // For neighborhoods, filter cities by selected state if state_filter is set
+  if (type === 'neighborhood') {
+    let cities = parentRegions.value.filter(p => p.type === 'city' || p.level === 2)
+    
+    if (newRegion.state_filter) {
+      cities = cities.filter(city => city.parent_id == newRegion.state_filter)
+    }
+    
+    console.log('Found cities:', cities)
+    return cities
+  }
+  
+  return []
 }
 
 const saveRegion = async (region) => {
@@ -1912,15 +2000,15 @@ const saveRegion = async (region) => {
     // Update original data
     originalRegions.value[region.id] = JSON.parse(JSON.stringify(region))
     
-    alert('Region updated successfully')
+    showSuccess('Saved', 'Region updated successfully')
   } catch (error) {
     console.error('Error saving region:', error)
     if (error.response) {
       console.error('Error response:', error.response.data)
       console.error('Error status:', error.response.status)
-      alert('Failed to save region: ' + (error.response.data.message || 'Server error'))
+      showError('Save Failed', error.response.data.message || 'Server error')
     } else {
-      alert('Failed to save region: Network error')
+      showError('Network Error', 'Failed to save region')
     }
   }
 }
@@ -1941,18 +2029,51 @@ const cancelEdit = (region) => {
 
 const createRegion = async () => {
   try {
-    await axios.post('/api/admin/regions', newRegion)
+    // Don't send state_filter to the server
+    const { state_filter, ...regionData } = newRegion
+    
+    // Add level based on type
+    regionData.level = regionData.type === 'state' ? 1 : (regionData.type === 'city' ? 2 : 3)
+    
+    // Ensure parent_id is null if empty string, or convert to number
+    if (regionData.parent_id === '') {
+      regionData.parent_id = null
+    } else if (regionData.parent_id) {
+      regionData.parent_id = parseInt(regionData.parent_id)
+    }
+    
+    console.log('Sending region data:', regionData)
+    
+    await axios.post('/api/admin/regions', regionData)
     
     showCreateModal.value = false
     newRegion.name = ''
     newRegion.type = 'state'
     newRegion.parent_id = ''
     newRegion.intro_text = ''
+    newRegion.description = ''
+    newRegion.abbreviation = ''
+    newRegion.state_filter = ''
     
+    // Refresh both regions list and parent regions
     fetchRegions()
+    fetchParentRegions()
+    
+    showSuccess('Success', 'Region created successfully')
   } catch (error) {
     console.error('Error creating region:', error)
-    alert('Failed to create region')
+    console.error('Error response:', error.response?.data)
+    
+    if (error.response?.data?.errors) {
+      // Show validation errors
+      const errors = error.response.data.errors
+      const errorMessages = Object.keys(errors).map(field => `${field}: ${errors[field].join(', ')}`)
+      showError('Validation Error', errorMessages.join('\n'))
+    } else if (error.response?.data?.message) {
+      showError('Error', error.response.data.message)
+    } else {
+      showError('Error', 'Failed to create region')
+    }
   }
 }
 
@@ -2037,15 +2158,15 @@ const deleteRegion = async (region) => {
       expandedRegions.value.splice(expandedIndex, 1)
     }
     
-    alert('Region deleted successfully')
+    showSuccess('Deleted', 'Region deleted successfully')
   } catch (error) {
     console.error('Error deleting region:', error)
     
     // Show more specific error message
     if (error.response && error.response.data && error.response.data.error) {
-      alert(`Failed to delete region: ${error.response.data.error}`)
+      showError('Delete Failed', error.response.data.error)
     } else {
-      alert('Failed to delete region. Check console for details.')
+      showError('Delete Failed', 'Failed to delete region. Check console for details.')
     }
   }
 }
@@ -2417,7 +2538,54 @@ const addListsByIds = async () => {
 }
 
 const getRegionUrl = (region) => {
-  // Simple URL format: /regions/{slug}
+  // Debug logging
+  console.log('Building URL for region:', {
+    id: region.id,
+    name: region.name,
+    slug: region.slug,
+    type: region.type,
+    level: region.level,
+    parent: region.parent,
+    parent_state: region.parent_state
+  })
+  
+  // Build hierarchical URL based on region type/level
+  if (region.level === 1 || region.type === 'state') {
+    // State: /regions/{state-slug}
+    return `/regions/${region.slug}`
+  } else if (region.level === 2 || region.type === 'city') {
+    // City: /regions/{state-slug}/{city-slug}
+    const stateSlug = region.parent?.slug || region.parent_state?.slug
+    if (!stateSlug) {
+      console.warn('City region missing parent state:', region)
+      return `/regions/${region.slug}` // Fallback
+    }
+    const url = `/regions/${stateSlug}/${region.slug}`
+    console.log(`City URL: ${url}`)
+    return url
+  } else if (region.level === 3 || region.type === 'neighborhood') {
+    // Neighborhood: /regions/{state-slug}/{city-slug}/{neighborhood-slug}
+    let stateSlug, citySlug
+    
+    // Get city (immediate parent)
+    const city = region.parent
+    if (city) {
+      citySlug = city.slug
+      // Get state (parent's parent)
+      stateSlug = city.parent?.slug
+    }
+    
+    if (!stateSlug || !citySlug) {
+      console.warn('Neighborhood region missing parent hierarchy:', region)
+      return `/regions/${region.slug}` // Fallback
+    }
+    
+    const url = `/regions/${stateSlug}/${citySlug}/${region.slug}`
+    console.log(`Neighborhood URL: ${url}`)
+    return url
+  }
+  
+  // Default fallback
   return `/regions/${region.slug}`
 }
 

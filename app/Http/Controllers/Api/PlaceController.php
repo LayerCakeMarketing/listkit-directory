@@ -84,23 +84,29 @@ class PlaceController extends Controller
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'website_url' => 'nullable|url|max:255',
+            'links' => 'nullable|array',
+            'links.*.text' => 'required|string|max:100',
+            'links.*.url' => 'required|url|max:500',
             'social_links' => 'nullable|array',
+            'logo_url' => 'nullable|string|max:255',
+            'cover_image_url' => 'nullable|string|max:255',
+            'gallery_images' => 'nullable|array',
             
-            // Location data (if physical location)
-            'location' => 'nullable|required_if:type,physical_location|array',
-            'location.address_line1' => 'required_with:location|string|max:255',
-            'location.city' => 'required_with:location|string|max:255',
-            'location.state' => 'required_with:location|string|max:2',
-            'location.zip_code' => 'required_with:location|string|max:10',
+            // Location data (required for all types)
+            'location' => 'required|array',
+            'location.address_line1' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|string|max:255',
+            'location.city' => 'required|string|max:255',
+            'location.state' => 'required|string|max:2',
+            'location.zip_code' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|string|max:10',
             'location.neighborhood' => 'nullable|string|max:255',
-            'location.latitude' => 'required_with:location|numeric|between:-90,90',
-            'location.longitude' => 'required_with:location|numeric|between:-180,180',
+            'location.latitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-90,90',
+            'location.longitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-180,180',
         ]);
 
         DB::beginTransaction();
         try {
-            // Auto-create regions if location is provided
-            if ($request->filled('location') && in_array($validated['type'], ['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'])) {
+            // Auto-create regions for all place types (they all need city/state now)
+            if ($request->filled('location')) {
                 $regionIds = $this->getOrCreateRegions($request->location);
                 $validated = array_merge($validated, $regionIds);
             }
@@ -109,21 +115,22 @@ class PlaceController extends Controller
             $entry = Place::create([
                 ...$validated,
                 'created_by_user_id' => auth()->id(),
-                'status' => auth()->user()?->canPublishContent() ? 'published' : 'pending_review',
-                'published_at' => auth()->user()?->canPublishContent() ? now() : null,
+                'status' => 'draft',
+                'published_at' => null,
             ]);
 
-            // Create location if provided
-            if ($request->filled('location') && in_array($entry->type, ['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'])) {
-                Location::create([
-                    'directory_entry_id' => $entry->id,
-                    ...$request->location,
-                ]);
-            }
+            // Create location (always required now)
+            Location::create([
+                'directory_entry_id' => $entry->id,
+                ...$request->location,
+            ]);
 
             DB::commit();
 
-            return response()->json($entry->load('location'), 201);
+            // Load all necessary relationships for canonical URL generation
+            $entry->load(['location', 'category', 'stateRegion', 'cityRegion', 'neighborhoodRegion']);
+            
+            return response()->json($entry, 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -131,12 +138,10 @@ class PlaceController extends Controller
         }
     }
 
-    public function update(Request $request, Place $directoryEntry)
+    public function update(Request $request, Place $place)
     {
-        // Check permissions
-        if (!$directoryEntry->canBeEdited()) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        // Check permissions using policy
+        $this->authorize('update', $place);
 
         // Debug logging
         \Log::info('Update request data:', $request->all());
@@ -144,12 +149,16 @@ class PlaceController extends Controller
         try {
             $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
+            'slug' => 'nullable|string|max:255|unique:directory_entries,slug,' . $place->id,
             'description' => 'nullable|string',
             'type' => 'sometimes|required|in:business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest,service,online',
             'category_id' => 'sometimes|required|exists:categories,id',
             'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
+            'email' => 'nullable|email:filter|max:255',
             'website_url' => 'nullable|url|max:255',
+            'links' => 'nullable|array',
+            'links.*.text' => 'required|string|max:100',
+            'links.*.url' => 'required|url|max:500',
             'logo_url' => 'nullable|string|max:255',
             'cover_image_url' => 'nullable|string|max:255',
             'gallery_images' => 'nullable|array',
@@ -157,15 +166,22 @@ class PlaceController extends Controller
             'social_links' => 'nullable|array',
             'status' => 'sometimes|required|in:draft,pending_review,published,archived',
             
-            // Location data (if physical location)
+            // Social Media fields
+            'facebook_url' => 'nullable|url|max:255',
+            'instagram_handle' => 'nullable|string|max:100|regex:/^@?[A-Za-z0-9_.]+$/',
+            'twitter_handle' => 'nullable|string|max:100|regex:/^@?[A-Za-z0-9_]+$/',
+            'youtube_channel' => 'nullable|url|max:255',
+            'messenger_contact' => 'nullable|string|max:255',
+            
+            // Location data (city and state required for all types)
             'location' => 'nullable|array',
-            'location.address_line1' => 'nullable|string|max:255',
-            'location.city' => 'nullable|string|max:255',
-            'location.state' => 'nullable|string|max:2',
-            'location.zip_code' => 'nullable|string|max:10',
+            'location.address_line1' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|string|max:255',
+            'location.city' => 'required_with:location|string|max:255',
+            'location.state' => 'required_with:location|string|max:2',
+            'location.zip_code' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|string|max:10',
             'location.neighborhood' => 'nullable|string|max:255',
-            'location.latitude' => 'nullable|numeric|between:-90,90',
-            'location.longitude' => 'nullable|numeric|between:-180,180',
+            'location.latitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-90,90',
+            'location.longitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-180,180',
             ]);
 
             \Log::info('Validated data:', $validated);
@@ -180,27 +196,27 @@ class PlaceController extends Controller
             $entryData = collect($validated)->except(['location'])->toArray();
             \Log::info('Entry data being saved:', $entryData);
             \Log::info('Entry before update:', [
-                'logo_url' => $directoryEntry->logo_url,
-                'cover_image_url' => $directoryEntry->cover_image_url,
-                'updated_at' => $directoryEntry->updated_at
+                'logo_url' => $place->logo_url,
+                'cover_image_url' => $place->cover_image_url,
+                'updated_at' => $place->updated_at
             ]);
             // Check if entry exists and is not read-only
-            \Log::info('Entry exists:', ['exists' => $directoryEntry->exists]);
-            \Log::info('Entry attributes before update:', $directoryEntry->getAttributes());
+            \Log::info('Entry exists:', ['exists' => $place->exists]);
+            \Log::info('Entry attributes before update:', $place->getAttributes());
             
             // Try to update with error catching
             try {
-                $updateResult = $directoryEntry->update($entryData);
+                $updateResult = $place->update($entryData);
                 \Log::info('Update result:', ['success' => $updateResult]);
                 
                 if (!$updateResult) {
                     // If update fails, try to get the underlying reason
                     \Log::error('Update failed - checking for errors');
-                    \Log::info('Model dirty attributes:', $directoryEntry->getDirty());
-                    \Log::info('Model original attributes:', $directoryEntry->getOriginal());
+                    \Log::info('Model dirty attributes:', $place->getDirty());
+                    \Log::info('Model original attributes:', $place->getOriginal());
                 }
                 
-                $fresh = $directoryEntry->fresh();
+                $fresh = $place->fresh();
                 \Log::info('Entry after update:', [
                     'logo_url' => $fresh->logo_url,
                     'cover_image_url' => $fresh->cover_image_url,
@@ -211,34 +227,33 @@ class PlaceController extends Controller
                 throw $e;
             }
 
-            // Handle location update/creation
-            if ($request->has('location') && in_array($directoryEntry->type, ['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'])) {
+            // Handle location update/creation (now required for all types)
+            if ($request->has('location')) {
                 $locationData = array_filter($request->location); // Remove null values
                 
                 if (!empty($locationData)) {
-                    // Auto-create regions if needed
-                    $regionIds = $this->getOrCreateRegions($locationData);
-                    if (!empty($regionIds)) {
-                        $directoryEntry->update($regionIds);
+                    // Auto-create regions if needed (only for physical location types)
+                    if (in_array($place->type, ['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'])) {
+                        $regionIds = $this->getOrCreateRegions($locationData);
+                        if (!empty($regionIds)) {
+                            $place->update($regionIds);
+                        }
                     }
 
-                    if ($directoryEntry->location) {
-                        $directoryEntry->location->update($locationData);
+                    if ($place->location) {
+                        $place->location->update($locationData);
                     } else {
-                        $directoryEntry->location()->create([
-                            'directory_entry_id' => $directoryEntry->id,
+                        $place->location()->create([
+                            'directory_entry_id' => $place->id,
                             ...$locationData
                         ]);
                     }
                 }
-            } elseif ($directoryEntry->location && !in_array($directoryEntry->type, ['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'])) {
-                // Remove location if type changed to non-physical
-                $directoryEntry->location->delete();
             }
 
             DB::commit();
 
-            return response()->json($directoryEntry->load('location'));
+            return response()->json($place->load('location'));
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -511,7 +526,7 @@ class PlaceController extends Controller
      */
     public function show($slug)
     {
-        $entry = Place::with(['category.parent', 'location'])
+        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion'])
             ->where('slug', $slug)
             ->published()
             ->firstOrFail();
@@ -542,7 +557,7 @@ class PlaceController extends Controller
      */
     public function showById($id)
     {
-        $entry = Place::with(['category.parent', 'location'])
+        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion'])
             ->published()
             ->findOrFail($id);
 
@@ -735,5 +750,22 @@ class PlaceController extends Controller
             'category' => $categoryModel,
             'entries' => $entries
         ]);
+    }
+    
+    public function submitForReview(Request $request, Place $place)
+    {
+        // Check permissions using policy
+        $this->authorize('update', $place);
+        
+        // Only allow submission if in draft or rejected status
+        if (!in_array($place->status, ['draft', 'rejected'])) {
+            return response()->json(['error' => 'This place cannot be submitted for review in its current status'], 400);
+        }
+        
+        // Update status
+        $place->status = 'pending_review';
+        $place->save();
+        
+        return response()->json($place->load(['location', 'category', 'stateRegion', 'cityRegion']));
     }
 }

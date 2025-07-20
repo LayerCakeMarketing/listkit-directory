@@ -81,11 +81,11 @@
                   class="flex items-center hover:text-gray-700"
                 >
                   <img 
-                    :src="list.user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(list.user.name)}&size=32`"
-                    :alt="list.user.name"
+                    :src="list.user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(list.user.name || `${list.user.firstname || ''} ${list.user.lastname || ''}`.trim() || 'User')}&size=32`"
+                    :alt="list.user.name || `${list.user.firstname || ''} ${list.user.lastname || ''}`.trim() || 'User'"
                     class="w-8 h-8 rounded-full mr-2"
                   />
-                  <span>{{ list.user.name }}</span>
+                  <span>{{ list.user.name || `${list.user.firstname || ''} ${list.user.lastname || ''}`.trim() || 'User' }}</span>
                 </router-link>
                 
                 <span>•</span>
@@ -111,6 +111,12 @@
 
             <!-- Action Buttons -->
             <div class="flex items-center space-x-3">
+              <!-- Follow Button (for list creator) -->
+              <FollowButton
+                v-if="authStore.isAuthenticated && !isOwnList && listCreatorInfo"
+                :followable-type="listCreatorInfo.type"
+                :followable-id="listCreatorInfo.id"
+              />
               <SaveButton
                 v-if="authStore.isAuthenticated"
                 item-type="list"
@@ -274,6 +280,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
+import FollowButton from '@/components/FollowButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -300,6 +307,38 @@ const isOwnList = computed(() => {
   if (list.value.channel && list.value.channel.user_id === currentUser.value.id) return true
   
   return false
+})
+
+const listCreatorInfo = computed(() => {
+  if (!list.value) return null
+  
+  // Check polymorphic ownership first
+  if (list.value.owner_type === 'App\\Models\\User' && list.value.owner) {
+    return {
+      type: 'user',
+      id: list.value.owner.id
+    }
+  } else if (list.value.owner_type === 'App\\Models\\Channel' && list.value.owner) {
+    return {
+      type: 'channel',
+      id: list.value.owner.slug // Use slug for channels
+    }
+  }
+  
+  // Fallback to legacy fields
+  if (list.value.channel) {
+    return {
+      type: 'channel',
+      id: list.value.channel.slug // Use slug for channels
+    }
+  } else if (list.value.user) {
+    return {
+      type: 'user',
+      id: list.value.user.id
+    }
+  }
+  
+  return null
 })
 
 async function fetchList() {

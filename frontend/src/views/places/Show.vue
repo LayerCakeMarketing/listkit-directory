@@ -7,19 +7,40 @@
                     <router-link to="/" class="text-gray-500 hover:text-gray-700">Home</router-link>
                     <span class="text-gray-400">/</span>
                     <router-link to="/places" class="text-gray-500 hover:text-gray-700">Places</router-link>
-                    <template v-if="parentCategory">
+                    
+                    <!-- State -->
+                    <template v-if="entry?.location?.state">
                         <span class="text-gray-400">/</span>
                         <router-link 
-                            :to="`/places/${parentCategory.slug}`" 
+                            :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}`" 
                             class="text-gray-500 hover:text-gray-700"
                         >
-                            {{ parentCategory.name }}
+                            {{ entry.state_region?.name || entry.location.state }}
                         </router-link>
                     </template>
-                    <template v-if="childCategory">
+                    
+                    <!-- City -->
+                    <template v-if="entry?.location?.city">
                         <span class="text-gray-400">/</span>
-                        <span class="text-gray-500">{{ childCategory.name }}</span>
+                        <router-link 
+                            :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}`" 
+                            class="text-gray-500 hover:text-gray-700"
+                        >
+                            {{ entry.city_region?.name || entry.location.city }}
+                        </router-link>
                     </template>
+                    
+                    <!-- Category -->
+                    <template v-if="entry?.category">
+                        <span class="text-gray-400">/</span>
+                        <router-link 
+                            :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.slug}`" 
+                            class="text-gray-500 hover:text-gray-700"
+                        >
+                            {{ entry.category.name }}
+                        </router-link>
+                    </template>
+                    
                     <span class="text-gray-400">/</span>
                     <span class="text-gray-900">{{ entry?.title }}</span>
                 </div>
@@ -73,7 +94,7 @@
                                             <img
                                                 :src="entry.logo_url"
                                                 :alt="entry.title + ' logo'"
-                                                class="w-auto h-16 rounded-lg object-cover border-2 border-gray-200"
+                                                class="w-auto h-16 rounded-lg object-cover"
                                             />
                                         </div>
                                         <div class="flex flex-wrap gap-2">
@@ -83,9 +104,6 @@
                                             >
                                                 {{ entry.category.name }}
                                             </router-link>
-                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
-                                                {{ formatType(entry.type) }}
-                                            </span>
                                         </div>
                                     </div>
                                     <div class="flex items-center justify-between mb-2">
@@ -113,7 +131,7 @@
                         <!-- Entry Details -->
                         <div class="p-6 space-y-6">
                             <!-- Contact Information -->
-                            <div v-if="entry.email || entry.phone || entry.website" class="border-b border-gray-200 pb-6">
+                            <div v-if="entry.email || entry.phone || entry.website_url || (entry.links && entry.links.length > 0)" class="border-b border-gray-200 pb-6">
                                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
                                 <div class="space-y-3">
                                     <div v-if="entry.email" class="flex items-center">
@@ -132,12 +150,20 @@
                                             {{ entry.phone }}
                                         </a>
                                     </div>
-                                    <div v-if="entry.website" class="flex items-center">
+                                    <div v-if="entry.website_url" class="flex items-center">
                                         <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                         </svg>
-                                        <a :href="entry.website" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">
-                                            {{ formatWebsite(entry.website) }}
+                                        <a :href="entry.website_url" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">
+                                            {{ formatWebsite(entry.website_url) }}
+                                        </a>
+                                    </div>
+                                    <div v-for="(link, index) in entry.links" :key="`link-${index}`" v-if="entry.links && entry.links.length > 0" class="flex items-center">
+                                        <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                        <a :href="link.url" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">
+                                            {{ link.text }}
                                         </a>
                                     </div>
                                 </div>
@@ -156,10 +182,24 @@
                                         <div v-if="entry.location.address_line2" class="text-gray-900">{{ entry.location.address_line2 }}</div>
                                         <div class="text-gray-600">
                                             <template v-if="entry.location.neighborhood">{{ entry.location.neighborhood }}, </template>
-                                            <template v-if="entry.location.city">{{ entry.location.city }}</template>
+                                            <template v-if="entry.location.city">
+                                                <router-link 
+                                                    :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}`"
+                                                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                    {{ entry.city_region?.name || entry.location.city }}
+                                                </router-link>
+                                            </template>
                                             <template v-if="entry.location.city && entry.location.state">, </template>
-                                            <template v-if="entry.location.state">{{ entry.location.state }}</template>
-                                            <template v-if="entry.location.zip_code"> {{ entry.location.zip_code }}</template>
+                                            <template v-if="entry.location.state">
+                                                <router-link 
+                                                    :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}`"
+                                                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                    {{ entry.state_region?.name || entry.location.state }}
+                                                </router-link>
+                                            </template>
+                                            <template v-if="entry.location.zip_code">&nbsp; {{ entry.location.zip_code }}</template>
                                         </div>
                                         <div v-if="entry.location.cross_streets" class="text-gray-500 text-sm mt-1">
                                             Near {{ entry.location.cross_streets }}
@@ -258,6 +298,54 @@
                             </router-link>
                         </div>
                     </div>
+                    
+                    <!-- Explore Region -->
+                    <div v-if="entry?.location" class="bg-white rounded-lg shadow-md p-6 mt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Explore Region</h3>
+                        <div class="space-y-3">
+                            <router-link 
+                                v-if="entry.location.city && entry.city_region"
+                                :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}`"
+                                class="flex items-center justify-between p-3 rounded-md bg-blue-50 hover:bg-blue-100 transition-colors"
+                            >
+                                <div>
+                                    <h4 class="font-medium text-blue-900">Explore {{ entry.location.city }}</h4>
+                                    <p class="text-sm text-blue-700">Discover more about this city</p>
+                                </div>
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </router-link>
+                            
+                            <router-link 
+                                v-if="entry.location.state && entry.state_region"
+                                :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}`"
+                                class="flex items-center justify-between p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <div>
+                                    <h4 class="font-medium text-gray-900">Explore {{ entry.location.state }}</h4>
+                                    <p class="text-sm text-gray-700">Discover the entire state</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </router-link>
+                            
+                            <router-link 
+                                v-if="entry.location.city && entry.category"
+                                :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.slug}`"
+                                class="flex items-center justify-between p-3 rounded-md bg-green-50 hover:bg-green-100 transition-colors"
+                            >
+                                <div>
+                                    <h4 class="font-medium text-green-900">{{ entry.category.name }} in {{ entry.location.city }}</h4>
+                                    <p class="text-sm text-green-700">Browse similar places nearby</p>
+                                </div>
+                                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </router-link>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -331,18 +419,42 @@ const formatType = (type) => {
     ).join(' ')
 }
 
+const slugify = (text) => {
+    if (!text) return ''
+    
+    // If it's a 2-letter state abbreviation, don't use it for URLs
+    // This prevents CA from being used instead of california
+    if (text.length === 2 && text === text.toUpperCase()) {
+        console.warn('Attempting to slugify state abbreviation:', text)
+        return text.toLowerCase()
+    }
+    
+    return text
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-')     // Replace spaces with -
+        .replace(/--+/g, '-')     // Replace multiple - with single -
+        .trim()
+}
+
 const openGallery = (index) => {
     // Simple implementation - open image in new window
     window.open(entry.value.gallery_images[index], '_blank')
 }
 
 const getRelatedEntryUrl = (relatedEntry) => {
-    // Use the same parent and child category as current entry if available
-    if (parentCategory.value && childCategory.value) {
-        return `/${parentCategory.value.slug}/${childCategory.value.slug}/${relatedEntry.slug}`
+    // Build canonical URL: /places/{state}/{city}/{category}/{entry-slug}
+    if (relatedEntry.state_region?.slug && relatedEntry.city_region?.slug && relatedEntry.category?.slug) {
+        return `/places/${relatedEntry.state_region.slug}/${relatedEntry.city_region.slug}/${relatedEntry.category.slug}/${relatedEntry.slug}-${relatedEntry.id}`
     }
-    // Fallback to direct entry URL
-    return `/places/entry/${relatedEntry.slug}`
+    
+    // Fallback to building from location data
+    if (entry.value?.state_region?.slug && entry.value?.city_region?.slug && relatedEntry.category?.slug) {
+        return `/places/${entry.value.state_region.slug}/${entry.value.city_region.slug}/${relatedEntry.category.slug}/${relatedEntry.slug}-${relatedEntry.id}`
+    }
+    
+    // Last resort fallback
+    return `/p/${relatedEntry.id}`
 }
 
 const addToList = () => {

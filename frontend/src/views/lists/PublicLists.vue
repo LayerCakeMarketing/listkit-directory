@@ -209,19 +209,8 @@ const pagination = ref({
 const fetchCategories = async () => {
     try {
         const response = await axios.get('/api/list-categories/public')
-        // Get categories with lists count
-        const categoriesData = await Promise.all(
-            response.data.map(async (category) => {
-                const listsResponse = await axios.get('/api/lists/public', {
-                    params: { category_id: category.id, per_page: 1 }
-                })
-                return {
-                    ...category,
-                    lists_count: listsResponse.data.total || 0
-                }
-            })
-        )
-        categories.value = categoriesData.filter(cat => cat.lists_count > 0)
+        // Categories now include lists_count from the API
+        categories.value = response.data.filter(cat => cat.lists_count > 0)
     } catch (err) {
         console.error('Error fetching categories:', err)
     }
@@ -257,10 +246,13 @@ const fetchLists = async (page = 1) => {
 
 
 // Initialize
-onMounted(() => {
+onMounted(async () => {
     document.title = 'Public Lists - ListKit'
-    fetchCategories()
-    fetchLists()
+    // Fetch both in parallel for better performance
+    await Promise.all([
+        fetchCategories(),
+        fetchLists()
+    ])
 })
 </script>
 

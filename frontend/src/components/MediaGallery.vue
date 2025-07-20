@@ -4,7 +4,8 @@
     <button
       @click="openGallery"
       type="button"
-      class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+      class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      :aria-label="`Open media gallery for ${entityType}`"
     >
       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -13,7 +14,14 @@
     </button>
 
     <!-- Media Gallery Modal -->
-    <div v-if="showGallery" class="fixed inset-0 z-50 overflow-y-auto">
+    <div 
+      v-if="showGallery" 
+      class="fixed inset-0 z-50 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`Media gallery for ${entityType}`"
+      @keydown.esc="closeGallery"
+    >
       <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         <!-- Background overlay -->
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeGallery"></div>
@@ -27,7 +35,8 @@
               </h3>
               <button
                 @click="closeGallery"
-                class="text-gray-400 hover:text-gray-500"
+                class="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md p-1"
+                aria-label="Close media gallery"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -46,12 +55,26 @@
             </div>
 
             <!-- Media Grid -->
-            <div v-else-if="media.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-96 overflow-y-auto">
+            <div 
+              v-else-if="media.length > 0" 
+              class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-96 overflow-y-auto"
+              role="listbox"
+              :aria-label="`Select from ${media.length} images`"
+              @keydown="handleKeyboardNavigation"
+            >
               <div
-                v-for="item in media"
+                v-for="(item, index) in media"
                 :key="item.id"
-                class="relative group cursor-pointer"
+                class="relative group cursor-pointer rounded-lg"
+                :class="{ 'ring-2 ring-blue-500': focusedIndex === index }"
                 @click="selectMedia(item)"
+                @keydown.enter.prevent="selectMedia(item)"
+                @keydown.space.prevent="selectMedia(item)"
+                :tabindex="index === 0 ? 0 : -1"
+                :ref="el => mediaItems[index] = el"
+                role="option"
+                :aria-selected="selectedMedia?.id === item.id"
+                :aria-label="`${item.filename}, ${formatFileSize(item.file_size)}`"
               >
                 <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                   <img
@@ -74,10 +97,12 @@
                 <!-- Delete button -->
                 <button
                   @click.stop="deleteMedia(item)"
-                  class="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  :class="{ 'opacity-100': hoveredItem === item.id }"
+                  class="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  :class="{ 'opacity-100': hoveredItem === item.id || focusedIndex === index }"
                   @mouseenter="hoveredItem = item.id"
                   @mouseleave="hoveredItem = null"
+                  :aria-label="`Delete ${item.filename}`"
+                  tabindex="-1"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -125,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
@@ -151,16 +176,24 @@ const error = ref(null)
 const media = ref([])
 const selectedMedia = ref(null)
 const hoveredItem = ref(null)
+const focusedIndex = ref(0)
+const mediaItems = ref([])
 
 const openGallery = async () => {
   showGallery.value = true
   await fetchMedia()
+  // Focus first item when gallery opens
+  await nextTick()
+  if (mediaItems.value[0]) {
+    mediaItems.value[0].focus()
+  }
 }
 
 const closeGallery = () => {
   showGallery.value = false
   selectedMedia.value = null
   error.value = null
+  focusedIndex.value = 0
 }
 
 const fetchMedia = async () => {
@@ -168,7 +201,19 @@ const fetchMedia = async () => {
   error.value = null
   
   try {
-    const response = await axios.get(`/api/entities/${props.entityType}/${props.entityId}/media`)
+    // Transform entity type to match backend expectations
+    let apiEntityType = props.entityType
+    if (props.entityType === 'App\\Models\\DirectoryEntry' || props.entityType === 'DirectoryEntry') {
+      apiEntityType = 'directoryentry'
+    } else if (props.entityType === 'App\\Models\\Place' || props.entityType === 'Place') {
+      apiEntityType = 'place'
+    } else if (props.entityType === 'App\\Models\\UserList' || props.entityType === 'UserList') {
+      apiEntityType = 'list'
+    } else if (props.entityType === 'App\\Models\\User' || props.entityType === 'User') {
+      apiEntityType = 'user'
+    }
+    
+    const response = await axios.get(`/api/entities/${apiEntityType}/${props.entityId}/media`)
     media.value = response.data.images || []
   } catch (err) {
     console.error('Error fetching media:', err)
@@ -224,5 +269,47 @@ const formatFileSize = (bytes) => {
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+const handleKeyboardNavigation = (event) => {
+  const currentIndex = focusedIndex.value
+  const maxIndex = media.value.length - 1
+  
+  switch (event.key) {
+    case 'ArrowRight':
+      event.preventDefault()
+      focusedIndex.value = currentIndex < maxIndex ? currentIndex + 1 : 0
+      mediaItems.value[focusedIndex.value]?.focus()
+      break
+    case 'ArrowLeft':
+      event.preventDefault()
+      focusedIndex.value = currentIndex > 0 ? currentIndex - 1 : maxIndex
+      mediaItems.value[focusedIndex.value]?.focus()
+      break
+    case 'ArrowDown':
+      event.preventDefault()
+      const itemsPerRow = window.innerWidth >= 1024 ? 4 : window.innerWidth >= 768 ? 3 : 2
+      const newIndex = currentIndex + itemsPerRow
+      focusedIndex.value = newIndex <= maxIndex ? newIndex : currentIndex
+      mediaItems.value[focusedIndex.value]?.focus()
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      const itemsPerRowUp = window.innerWidth >= 1024 ? 4 : window.innerWidth >= 768 ? 3 : 2
+      const newIndexUp = currentIndex - itemsPerRowUp
+      focusedIndex.value = newIndexUp >= 0 ? newIndexUp : currentIndex
+      mediaItems.value[focusedIndex.value]?.focus()
+      break
+    case 'Home':
+      event.preventDefault()
+      focusedIndex.value = 0
+      mediaItems.value[0]?.focus()
+      break
+    case 'End':
+      event.preventDefault()
+      focusedIndex.value = maxIndex
+      mediaItems.value[maxIndex]?.focus()
+      break
+  }
 }
 </script>

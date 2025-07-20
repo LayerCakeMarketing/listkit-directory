@@ -767,20 +767,12 @@ import draggable from 'vuedraggable'
 import { debounce } from 'lodash'
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
 import { XMarkIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
-// import { useToast } from 'vue-toastification'
+import { useNotification } from '@/composables/useNotification'
 
 // Vue Router
 const route = useRoute()
 const router = useRouter()
-// const toast = useToast()
-
-// Simple toast alternative
-const showToast = (message, type = 'success') => {
-  console.log(`${type}: ${message}`)
-  if (type === 'error') {
-    alert(`Error: ${message}`)
-  }
-}
+const { showSuccess, showError } = useNotification()
 
 // Get listId from route params
 const listId = ref(route.params.id)
@@ -947,13 +939,13 @@ const fetchList = async () => {
     } catch (error) {
         console.error('Error fetching list:', error)
         if (error.response?.status === 404) {
-            alert('List not found')
+            showError('Not Found', 'List not found')
             router.push('/lists/my')
         } else if (error.response?.status === 401) {
-            alert('Please log in to edit this list')
+            showError('Authentication Required', 'Please log in to edit this list')
             router.push('/login')
         } else {
-            alert('Error loading list')
+            showError('Error', 'Failed to load list')
         }
     } finally {
         loading.value = false
@@ -963,7 +955,7 @@ const fetchList = async () => {
 const updateList = async () => {
     // Validate required fields
     if (!listForm.category_id) {
-        alert('Please select a category for your list.')
+        showError('Validation Error', 'Please select a category for your list.')
         return
     }
 
@@ -971,9 +963,9 @@ const updateList = async () => {
     try {
         await axios.put(`/api/lists/${listId.value}`, listForm)
         hasSaved.value = true
-        alert('List settings saved successfully')
+        showSuccess('Saved', 'List settings saved successfully')
     } catch (error) {
-        alert('Error saving list: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to save list settings')
     } finally {
         savingList.value = false
     }
@@ -1028,7 +1020,7 @@ const addDirectoryEntry = async (entry) => {
         entrySearch.value = ''
         searchResults.value = []
     } catch (error) {
-        alert('Error adding entry: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to add entry')
     }
 }
 
@@ -1053,15 +1045,15 @@ const addSavedPlace = async (place) => {
         })
         items.value.push(response.data.item)
         showSavedItems.value = false
-        showToast('Place added to list')
+        showSuccess('Added', 'Place added to list')
     } catch (error) {
-        showToast('Error adding place: ' + (error.response?.data?.message || 'Unknown error'), 'error')
+        showError('Error', error.response?.data?.message || 'Failed to add place')
     }
 }
 
 const addTextItem = async () => {
     if (!newItem.title) {
-        alert('Please enter a title')
+        showError('Validation Error', 'Please enter a title')
         return
     }
     
@@ -1075,13 +1067,13 @@ const addTextItem = async () => {
         newItem.title = ''
         newItem.content = ''
     } catch (error) {
-        alert('Error adding text: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to add text item')
     }
 }
 
 const addLocationItem = async () => {
     if (!newItem.title || !newItem.data.latitude || !newItem.data.longitude) {
-        alert('Please fill in all location fields')
+        showError('Validation Error', 'Please fill in all location fields')
         return
     }
     
@@ -1100,13 +1092,13 @@ const addLocationItem = async () => {
         newItem.title = ''
         newItem.data = {}
     } catch (error) {
-        alert('Error adding location: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to add location')
     }
 }
 
 const addEventItem = async () => {
     if (!newItem.title || !newItem.data.start_date) {
-        alert('Please enter event name and start date')
+        showError('Validation Error', 'Please enter event name and start date')
         return
     }
     
@@ -1125,7 +1117,7 @@ const addEventItem = async () => {
         newItem.content = ''
         newItem.data = {}
     } catch (error) {
-        alert('Error adding event: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to add event')
     }
 }
 
@@ -1156,7 +1148,7 @@ const updateItem = async () => {
         
         closeEditModal()
     } catch (error) {
-        alert('Error updating item: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to update item')
     } finally {
         savingItem.value = false
     }
@@ -1169,7 +1161,7 @@ const removeItem = async (item) => {
         await axios.delete(`/api/lists/${listId.value}/items/${item.id}`)
         items.value = items.value.filter(i => i.id !== item.id)
     } catch (error) {
-        alert('Error removing item: ' + error.response?.data?.message)
+        showError('Error', error.response?.data?.message || 'Failed to remove item')
     }
 }
 
@@ -1191,7 +1183,7 @@ const handleReorder = async () => {
         })
     } catch (error) {
         console.error('Error reordering items:', error)
-        alert('Error saving order: ' + (error.response?.data?.message || error.message))
+        showError('Error', error.response?.data?.message || 'Failed to save order')
         // Revert on error
         fetchList()
     }
@@ -1264,7 +1256,7 @@ const updateCombinedGalleryImages = () => {
 
 const handleUploadError = (error) => {
     console.error('Upload error:', error)
-    alert('Error uploading image: ' + (error.message || 'Unknown error'))
+    showError('Upload Error', error.message || 'Failed to upload image')
 }
 
 const truncate = (text, length) => {
@@ -1329,9 +1321,9 @@ const shareList = async () => {
         const response = await axios.post(`/api/lists/${listId.value}/shares`, shareForm)
         shares.value.push(response.data.share)
         clearSelectedUser()
-        alert('List shared successfully!')
+        showSuccess('Shared', 'List shared successfully!')
     } catch (error) {
-        alert('Error sharing list: ' + (error.response?.data?.error || error.message))
+        showError('Error', error.response?.data?.error || error.message || 'Failed to share list')
     } finally {
         sharing.value = false
     }
@@ -1352,7 +1344,7 @@ const removeShare = async (share) => {
         await axios.delete(`/api/lists/${listId.value}/shares/${share.id}`)
         shares.value = shares.value.filter(s => s.id !== share.id)
     } catch (error) {
-        alert('Error removing share: ' + (error.response?.data?.message || error.message))
+        showError('Error', error.response?.data?.message || error.message || 'Failed to remove share')
     }
 }
 
@@ -1384,7 +1376,7 @@ const fetchChannels = async () => {
 // Lifecycle
 onMounted(() => {
     if (!listId.value) {
-        alert('No list ID provided')
+        showError('Error', 'No list ID provided')
         router.push('/lists/my')
         return
     }

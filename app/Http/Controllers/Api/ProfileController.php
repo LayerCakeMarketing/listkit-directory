@@ -9,7 +9,9 @@ use App\Rules\UniqueUrlSlug;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use App\Models\Post;
 use App\Models\UserList;
 use App\Models\Place;
@@ -39,9 +41,14 @@ class ProfileController extends Controller
         $userData = [
             'id' => $user->id,
             'name' => $user->name,
+            'firstname' => $user->firstname,
+            'lastname' => $user->lastname,
             'email' => $user->email,
             'username' => $user->username,
             'custom_url' => $user->custom_url,
+            'has_custom_url' => $user->hasCustomUrl(),
+            'gender' => $user->gender,
+            'birthdate' => $user->birthdate ? $user->birthdate->format('Y-m-d') : null,
             'bio' => $user->bio,
             'avatar_url' => $user->avatar_url,
             'cover_image_url' => $user->cover_image_url,
@@ -87,10 +94,13 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+        $rules = [
+            'firstname' => ['required', 'string', 'max:255'],
+            'lastname' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'custom_url' => ['nullable', 'string', 'max:50', 'alpha_dash', Rule::unique('users')->ignore($user->id), new UniqueUrlSlug('user', $user->id)],
+            'username' => ['required', 'string', 'max:255', 'alpha_dash', Rule::unique('users')->ignore($user->id)],
+            'gender' => ['nullable', 'in:male,female,prefer_not_to_say'],
+            'birthdate' => ['nullable', 'date'],
             'bio' => ['nullable', 'string', 'max:500'],
             'location' => ['nullable', 'string', 'max:100'],
             'website' => ['nullable', 'url', 'max:255'],
@@ -106,7 +116,19 @@ class ProfileController extends Controller
             'show_location' => ['boolean'],
             'show_website' => ['boolean'],
             'page_logo_option' => ['required', 'in:profile,custom,none'],
-        ]);
+        ];
+        
+        // Only allow custom_url to be set if it hasn't been set before
+        if (!$user->hasCustomUrl()) {
+            $rules['custom_url'] = ['nullable', 'string', 'max:50', 'alpha_dash', Rule::unique('users')->ignore($user->id), new UniqueUrlSlug('user', $user->id)];
+        }
+        
+        $validated = $request->validate($rules);
+        
+        // Update name field for backward compatibility
+        if (isset($validated['firstname']) && isset($validated['lastname'])) {
+            $validated['name'] = $validated['firstname'] . ' ' . $validated['lastname'];
+        }
 
         $user->update($validated);
         
@@ -120,9 +142,14 @@ class ProfileController extends Controller
         $userData = [
             'id' => $user->id,
             'name' => $user->name,
+            'firstname' => $user->firstname,
+            'lastname' => $user->lastname,
             'email' => $user->email,
             'username' => $user->username,
             'custom_url' => $user->custom_url,
+            'has_custom_url' => $user->hasCustomUrl(),
+            'gender' => $user->gender,
+            'birthdate' => $user->birthdate ? $user->birthdate->format('Y-m-d') : null,
             'bio' => $user->bio,
             'avatar_url' => $user->avatar_url,
             'cover_image_url' => $user->cover_image_url,
@@ -223,9 +250,14 @@ class ProfileController extends Controller
         $userData = [
             'id' => $user->id,
             'name' => $user->name,
+            'firstname' => $user->firstname,
+            'lastname' => $user->lastname,
             'email' => $user->email,
             'username' => $user->username,
             'custom_url' => $user->custom_url,
+            'has_custom_url' => $user->hasCustomUrl(),
+            'gender' => $user->gender,
+            'birthdate' => $user->birthdate ? $user->birthdate->format('Y-m-d') : null,
             'bio' => $user->bio,
             'avatar_url' => $user->avatar_url,
             'cover_image_url' => $user->cover_image_url,
@@ -291,6 +323,48 @@ class ProfileController extends Controller
         $profileData = $cacheService->getProfile($username);
         
         return response()->json($profileData);
+    }
+
+    /**
+     * Update user's password
+     */
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+        
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'confirmed', Password::min(8)
+                ->mixedCase()
+                ->numbers()
+                ->uncompromised()],
+        ]);
+        
+        // Verify current password
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'The provided password does not match your current password.',
+                'errors' => [
+                    'current_password' => ['Current password is incorrect']
+                ]
+            ], 401);
+        }
+        
+        // Update password
+        $user->update([
+            'password' => Hash::make($validated['password'])
+        ]);
+        
+        // Log password change event (without the password)
+        \Log::info('Password changed for user', [
+            'user_id' => $user->id,
+            'timestamp' => now(),
+            'ip_address' => $request->ip()
+        ]);
+        
+        return response()->json([
+            'message' => 'Password updated successfully'
+        ]);
     }
 
     /**
