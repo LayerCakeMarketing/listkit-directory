@@ -57,31 +57,35 @@ jobs:
           
           # Restart containers to pick up any docker-compose changes
           echo "🐳 Updating Docker containers..."
-          docker-compose pull
-          docker-compose up -d
+          docker-compose -f docker-compose.production.yml pull
+          docker-compose -f docker-compose.production.yml up -d
           
           # Wait for services to be ready
           sleep 10
           
+          # Get the app container name
+          APP_CONTAINER=$(docker ps --filter "name=app" --format "{{.Names}}" | head -1)
+          echo "Using app container: $APP_CONTAINER"
+          
           # Run migrations
           echo "🔄 Running database migrations..."
-          docker exec -w /app listerino_app php artisan migrate --force
+          docker exec -w /app $APP_CONTAINER php artisan migrate --force
           
           # Clear and rebuild caches
           echo "🧹 Clearing caches..."
-          docker exec -w /app listerino_app php artisan config:clear
-          docker exec -w /app listerino_app php artisan cache:clear
-          docker exec -w /app listerino_app php artisan route:clear
-          docker exec -w /app listerino_app php artisan view:clear
+          docker exec -w /app $APP_CONTAINER php artisan config:clear
+          docker exec -w /app $APP_CONTAINER php artisan cache:clear
+          docker exec -w /app $APP_CONTAINER php artisan route:clear
+          docker exec -w /app $APP_CONTAINER php artisan view:clear
           
           echo "🔧 Rebuilding caches..."
-          docker exec -w /app listerino_app php artisan config:cache
-          docker exec -w /app listerino_app php artisan route:cache
-          docker exec -w /app listerino_app php artisan view:cache
+          docker exec -w /app $APP_CONTAINER php artisan config:cache
+          docker exec -w /app $APP_CONTAINER php artisan route:cache
+          docker exec -w /app $APP_CONTAINER php artisan view:cache
           
           # Set permissions
           echo "🔐 Setting permissions..."
-          docker exec listerino_app chown -R www-data:www-data /app/storage /app/bootstrap/cache
+          docker exec $APP_CONTAINER chown -R www-data:www-data /app/storage /app/bootstrap/cache
           
           echo "✅ Deployment completed successfully!"
           
@@ -109,8 +113,10 @@ jobs:
         port: 22
         script: |
           cd /var/www/listerino
+          # Get the app container name
+          APP_CONTAINER=$(docker ps --filter "name=app" --format "{{.Names}}" | head -1)
           # Copy built frontend to the Docker container
-          docker cp frontend/dist/. listerino_app:/app/frontend/dist/
+          docker cp frontend/dist/. $APP_CONTAINER:/app/frontend/dist/
           echo "✅ Frontend deployed!"
 
     - name: Notify deployment status
