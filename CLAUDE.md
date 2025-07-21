@@ -766,6 +766,37 @@ CACHE_DRIVER=redis
 
 ---
 
-**Last Updated**: July 2025
+## Recent Updates (July 20, 2025)
+
+### Place Creation and Review Workflow
+- **Draft System**: All new places now start as 'draft' status regardless of user type
+- **Review Process**: 
+  - Places can be edited multiple times while in draft status
+  - Users can submit for review when ready
+  - Editing is locked for regular users when status is 'pending_review'
+  - Admin/managers can still edit pending places
+
+### UI/UX Improvements
+- **Place Preview Component**: Created `PlacePreview.vue` for real-time, non-navigable preview
+- **Edit Page Layout**: 
+  - Split view with edit form (5/12) and preview (7/12)
+  - Fixed positioning for breadcrumbs and headers
+  - Toggle button to show/hide edit panel
+- **Admin Navigation**: Added "Pending Approval" submenu under Places
+- **MyPlaces Page**: Hide "View" button for draft/pending places
+
+### Technical Changes
+- **Model Updates**: Modified `Place.php` to enforce editing restrictions based on status
+- **Controller Updates**: `PlaceController` always creates places with 'draft' status
+- **Notification System**: Temporarily disabled due to table structure mismatch with Laravel's expected schema
+
+### Known Issues
+- **Notifications**: Custom notifications table doesn't match Laravel's structure
+  - Need to either migrate to Laravel's standard or create custom handling
+  - Currently disabled to prevent 500 errors
+
+---
+
+**Last Updated**: July 20, 2025
 **Maintained By**: Development Team
-**Version**: 2.1
+**Version**: 2.2
