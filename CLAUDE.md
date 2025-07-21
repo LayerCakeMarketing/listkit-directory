@@ -231,35 +231,42 @@ DELETE /api/resource/{id}  → destroy
 
 ## Development Setup
 
-### Database Configuration
-
-#### Important: Hybrid Setup
-- **Local PostgreSQL**: Application data in `illum_local` database
-- **Docker PostgreSQL**: Container included but NOT used for data
+### Local Development Configuration
+- **Database**: PostgreSQL 15+ (native installation)
+- **PHP**: 8.3+ (native installation)
+- **Node.js**: 18+ (for frontend development)
+- **Redis**: Optional for local development
 
 #### Configuration Files
-1. **`.env`** - Local development
-   ```env
-   DB_HOST=localhost
-   DB_DATABASE=illum_local
-   SESSION_DRIVER=database
-   SPA_MODE=true
-   ```
+**`.env`** - Local development settings
+```env
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+SPA_MODE=true
 
-2. **`.env.docker`** - Docker containers
-   ```env
-   DB_HOST=docker.for.mac.localhost  # macOS
-   DB_DATABASE=illum_local
-   ```
+# Local PostgreSQL
+DB_CONNECTION=pgsql
+DB_HOST=localhost
+DB_PORT=5432
+DB_DATABASE=illum_local
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
+# Development settings
+SESSION_DRIVER=database
+CACHE_STORE=array
+QUEUE_CONNECTION=database
+```
 
 ### Development Commands
 ```bash
-# Start all services
+# Start all services (recommended)
 composer dev
 
 # Individual services
-php artisan serve              # Laravel server
-npm run dev                    # Vite dev server
+php artisan serve              # Laravel server (port 8000)
+npm run dev --prefix frontend  # Vite dev server (port 5173)
 php artisan queue:listen       # Queue worker
 php artisan pail               # Log viewer
 
@@ -273,6 +280,17 @@ php artisan migrate:fresh --seed  # Reset and seed
 ./vendor/bin/phpstan analyse # Static analysis
 php artisan test             # Run tests
 ```
+
+### Production Environment
+Production uses Docker containers managed via docker-compose:
+- **listerino_app**: Laravel application (webdevops/php-nginx:8.3)
+- **listerino_db**: PostgreSQL database (postgis/postgis:15-3.4)
+- **listerino_redis**: Cache and sessions (redis:7-alpine)
+- **nginx**: Reverse proxy (native installation)
+
+**Important**: Production uses `docker-compose.production.yml` as the primary configuration.
+
+See [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md) for detailed infrastructure documentation.
 
 ## Important Patterns
 
@@ -480,74 +498,155 @@ public function test_user_can_create_list()
 ## Deployment & Infrastructure
 
 ### Production Stack
-- **Hosting**: Cloudways/DigitalOcean VPS
-- **Database**: PostgreSQL 15+ with pgBouncer
-- **Cache**: Redis with persistence
-- **Queue**: Redis + Laravel Horizon
+- **Hosting**: DigitalOcean VPS (137.184.113.161)
+- **Architecture**: Docker Compose with multiple containers
+- **Database**: PostgreSQL 15+ with PostGIS (Docker container)
+- **Cache**: Redis (Docker container)
+- **Web Server**: Nginx (native) as reverse proxy
+- **SSL**: Let's Encrypt with auto-renewal
 - **Storage**: Local + Cloudflare Images
 - **CDN**: Cloudflare
-- **Monitoring**: Laravel Telescope + Sentry
 
-### Deployment Process
-```bash
-# GitHub Actions workflow
-1. Run tests
-2. Build assets (npm run build)
-3. Deploy to staging
-4. Run migrations
-5. Clear caches
-6. Warm caches
-7. Health checks
-8. Deploy to production
+### Docker Services (Production)
+```yaml
+# docker-compose.yml services
+listerino_app:     # Laravel application (port 8001)
+listerino_db:      # PostgreSQL database (port 5432)
+listerino_redis:   # Cache and sessions (port 6379)
+listerino_frontend: # Development only (port 5174)
 ```
 
-### Environment Variables
+### Deployment Process
+
+#### Automated Deployment (GitHub Actions)
+```bash
+# Push to main branch triggers automatic deployment
+git add .
+git commit -m "feat: your feature description"
+git push listerino main
+
+# Monitor deployment at:
+https://github.com/lcreative777/listerino/actions
+```
+
+#### Manual Deployment
+```bash
+# Using deploy-simple.sh script
+1. Build frontend locally (npm run build)
+2. Create deployment archive
+3. Transfer files to production
+4. Update Docker environment
+5. Run migrations
+6. Clear and rebuild caches
+7. Restart services
+
+# Quick deployment command
+./deploy-simple.sh
+```
+
+#### Database Migrations
+```bash
+# Migrations run automatically via GitHub Actions
+# For manual migration:
+ssh root@137.184.113.161
+cd /var/www/listerino
+docker exec -w /app listerino_app php artisan migrate --force
+```
+
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed procedures.
+
+### Production Environment Variables
 ```env
-# Production essentials
+# Application settings
 APP_ENV=production
 APP_DEBUG=false
+APP_URL=https://listerino.com
+SPA_MODE=true
+
+# Database (Docker internal network)
+DB_CONNECTION=pgsql
+DB_HOST=listerino_db
+DB_PORT=5432
+DB_DATABASE=listerino
+DB_USERNAME=listerino
+DB_PASSWORD=securepassword123
+
+# Redis (Docker internal network)
+REDIS_HOST=listerino_redis
+SESSION_DRIVER=redis
+CACHE_STORE=redis
+
+# Security
+SESSION_DOMAIN=.listerino.com
 SESSION_SECURE_COOKIE=true
+SANCTUM_STATEFUL_DOMAINS=listerino.com,www.listerino.com
 FORCE_HTTPS=true
 
 # Services
 CLOUDFLARE_ACCOUNT_ID=xxx
-REDIS_HOST=xxx
-QUEUE_CONNECTION=redis
-CACHE_DRIVER=redis
+CLOUDFLARE_IMAGES_TOKEN=xxx
 ```
 
-### Monitoring & Alerts
-- **Application**: Laravel Telescope
-- **Errors**: Sentry integration
-- **Uptime**: Cloudflare Analytics
-- **Database**: PostgreSQL slow query log
-- **Queue**: Horizon metrics
+### Monitoring & Maintenance
+- **Logs**: Docker logs + Laravel logs
+- **Monitoring**: `docker stats` for resource usage
+- **Backups**: Automated PostgreSQL dumps
+- **Updates**: Docker image updates via docker-compose pull
 
 ## Common Issues & Solutions
 
 ### 1. Authentication Issues
 ```bash
 # Session not persisting
-- Check SESSION_DRIVER=database
-- Verify session cookie not encrypted
-- Check SANCTUM_STATEFUL_DOMAINS
+- Check SESSION_DRIVER (redis in production, database in dev)
+- Verify SANCTUM_STATEFUL_DOMAINS includes all domains
+- Ensure SESSION_DOMAIN starts with dot (.listerino.com)
+- Check Redis connectivity in production
 ```
 
 ### 2. Performance Issues
 ```bash
 # Slow page loads
-- Check for N+1 queries
-- Verify indexes exist
-- Enable query caching
-- Optimize eager loading
+- Check for N+1 queries with Laravel Debugbar
+- Verify database indexes exist
+- Enable Redis caching in production
+- Use eager loading: with(['relation'])
+- Check Docker container resources
 ```
 
-### 3. Docker Issues
+### 3. Production Docker Issues
 ```bash
-# Database connection errors
-- Use docker.for.mac.localhost on macOS
-- Check .env.docker is used
-- Verify PostgreSQL accepts connections
+# Container connectivity
+- Use service names for inter-container communication
+  DB_HOST=listerino_db (not localhost)
+  REDIS_HOST=listerino_redis (not 127.0.0.1)
+
+# Permission errors
+- Ensure www-data owns application files
+- Storage directories must be writable: chmod -R 775 storage
+
+# Configuration cache issues
+- Clear bootstrap cache: rm -rf bootstrap/cache/*.php
+- Rebuild config: php artisan config:cache
+
+# Container not running (502 errors)
+- Check running containers: docker ps
+- Start missing container: docker start <container-id>
+- Use production config: docker-compose -f docker-compose.production.yml up -d
+- If ContainerConfig error: restart individual containers
+```
+
+### 4. Deployment Issues
+```bash
+# Frontend not updating
+- Ensure npm run build completes locally
+- Check frontend/dist exists in deployment
+- Clear browser cache or use incognito
+
+# Database migrations fail
+- Verify database credentials match Docker environment
+- Check if database exists: docker exec listerino_db psql -U listerino -l
+- Run migrations manually: docker exec -w /app listerino_app php artisan migrate
 ```
 
 ## Future Development Goals
@@ -797,6 +896,32 @@ CACHE_DRIVER=redis
 
 ---
 
-**Last Updated**: July 20, 2025
+## Deployment Summary (July 21, 2025)
+
+### Current Production Setup
+- **URL**: https://listerino.com
+- **Server**: DigitalOcean VPS (137.184.113.161)
+- **Architecture**: Hybrid Docker/Native
+  - Docker: Laravel app, PostgreSQL, Redis
+  - Native: Nginx (reverse proxy with SSL)
+- **Database**: Successfully migrated from local development
+- **Deployment Method**: Direct file transfer via `deploy-simple.sh`
+
+### Key Configuration Files
+- **Production**: See [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md)
+- **Development**: See [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)
+- **Deployment**: See [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Important Notes
+- Frontend must be built locally before deployment (manual) or via GitHub Actions (automatic)
+- Docker containers use internal networking (service names)
+- All sensitive files have been cleaned from production
+- SSL certificates are managed by Let's Encrypt
+- Production uses `docker-compose.production.yml` configuration
+- GitHub Actions handles automated deployments on push to main branch
+
+---
+
+**Last Updated**: July 21, 2025
 **Maintained By**: Development Team
-**Version**: 2.2
+**Version**: 2.3

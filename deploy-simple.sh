@@ -1,116 +1,221 @@
 #!/bin/bash
-
-# Simple deployment script for Listerino to Digital Ocean
-# Uses existing docker-compose configuration
+# Direct file transfer deployment for Listerino production
+# This bypasses git issues by directly transferring files
 
 set -e
 
-echo "🚀 Starting simple deployment to Digital Ocean..."
+echo "🚀 Direct Deployment to Listerino Production"
+echo "=========================================="
 
-# Variables
-DO_IP="137.184.113.161"
-DO_USER="root"
-LOCAL_DIR="/Users/ericslarson/directory-app"
+# Configuration
+SERVER="root@137.184.113.161"
+LOCAL_PATH="/Users/ericslarson/directory-app"
+REMOTE_PATH="/var/www/listerino"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${YELLOW}This will deploy your local development to production${NC}"
-echo "Target: $DO_USER@$DO_IP"
-read -p "Continue? (y/n): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    exit 1
+echo -e "${GREEN}✓${NC} Preparing deployment package..."
+
+# Create deployment directory
+cd $LOCAL_PATH
+mkdir -p deployment_temp
+
+# Ensure frontend is built
+if [ ! -d "frontend/dist" ]; then
+    echo -e "${YELLOW}Building frontend first...${NC}"
+    cd frontend && npm run build && cd ..
 fi
 
-# Step 1: Copy project files
-echo -e "\n${GREEN}📦 Copying project files to server...${NC}"
-rsync -avz --exclude 'node_modules' \
-    --exclude 'vendor' \
-    --exclude '.git' \
-    --exclude 'storage/logs/*' \
-    --exclude 'storage/app/public/*' \
-    --exclude '.env' \
-    --exclude 'hot' \
-    --exclude 'frontend/node_modules' \
-    --exclude 'frontend/dist' \
-    --exclude '.DS_Store' \
-    $LOCAL_DIR/ $DO_USER@$DO_IP:/var/www/listerino/
+# Create deployment archive (excluding unnecessary files)
+echo -e "${GREEN}✓${NC} Creating deployment archive..."
+tar -czf deployment_temp/app_${TIMESTAMP}.tar.gz \
+    --exclude='node_modules' \
+    --exclude='vendor' \
+    --exclude='.git' \
+    --exclude='storage/app/*' \
+    --exclude='storage/logs/*' \
+    --exclude='storage/framework/cache/*' \
+    --exclude='storage/framework/sessions/*' \
+    --exclude='storage/framework/views/*' \
+    --exclude='deployment_temp' \
+    --exclude='tests' \
+    --exclude='.env' \
+    --exclude='.env.local' \
+    --exclude='*.log' \
+    --exclude='database/*.sql' \
+    --exclude='*.tar.gz' \
+    --exclude='deploy-*.sh' \
+    --exclude='check-*.sh' \
+    --exclude='fix-*.sh' \
+    --exclude='*.md' \
+    .
 
-# Step 2: Copy environment files
-echo -e "\n${GREEN}🔧 Setting up environment...${NC}"
-scp $LOCAL_DIR/.env.docker $DO_USER@$DO_IP:/var/www/listerino/.env.docker
+# Copy files to server
+echo -e "${GREEN}✓${NC} Transferring files to server..."
+scp deployment_temp/app_${TIMESTAMP}.tar.gz $SERVER:/tmp/
+scp database/production_deploy.sql $SERVER:/tmp/
+scp .env.production $SERVER:/tmp/
 
-# Step 3: Create production environment file
-ssh $DO_USER@$DO_IP << 'EOF'
-cd /var/www/listerino
+# Deploy on server
+echo -e "${GREEN}✓${NC} Executing deployment on server..."
+ssh $SERVER << REMOTE_COMMANDS
+set -e
 
-# Copy local env as template if production env doesn't exist
-if [ ! -f .env ]; then
-    cp .env.example .env 2>/dev/null || true
+echo "→ Creating backup of current deployment..."
+mkdir -p /backups
+if [ -d "$REMOTE_PATH" ]; then
+    tar -czf /backups/listerino_backup_${TIMESTAMP}.tar.gz -C $REMOTE_PATH .
 fi
 
-# Update key production settings
-sed -i 's/APP_ENV=local/APP_ENV=production/g' .env
-sed -i 's/APP_DEBUG=true/APP_DEBUG=false/g' .env
-sed -i "s|APP_URL=.*|APP_URL=http://137.184.113.161|g" .env
+echo "→ Extracting new deployment..."
+mkdir -p $REMOTE_PATH
+cd $REMOTE_PATH
 
-# Frontend env
-cat > frontend/.env << 'FRONTEND_ENV'
-VITE_APP_NAME=Listerino
-VITE_API_URL=http://137.184.113.161:8001
-FRONTEND_ENV
+# Extract new files
+tar -xzf /tmp/app_${TIMESTAMP}.tar.gz
 
-echo "✅ Environment files created"
-EOF
+# Copy environment file
+cp /tmp/.env.production .env
 
-# Step 4: Deploy with Docker
-echo -e "\n${GREEN}🐳 Starting Docker deployment...${NC}"
-ssh $DO_USER@$DO_IP << 'EOF'
-cd /var/www/listerino
+# Install PHP dependencies
+echo "→ Installing PHP dependencies..."
+composer install --optimize-autoloader --no-dev
 
-# Stop existing containers
-docker-compose down || true
-
-# Build and start containers
-docker-compose up -d --build
-
-# Wait for services
-echo "⏳ Waiting for services to start..."
-sleep 15
-
-# Run Laravel setup
-echo "🔧 Running Laravel setup..."
-docker-compose exec -T app composer install --optimize-autoloader
-docker-compose exec -T app php artisan key:generate
-docker-compose exec -T app php artisan migrate --force
-docker-compose exec -T app php artisan db:seed --force
-docker-compose exec -T app php artisan storage:link
-docker-compose exec -T app php artisan optimize:clear
-docker-compose exec -T app php artisan config:cache
-docker-compose exec -T app php artisan route:cache
-
-# Build frontend
-echo "📦 Building frontend..."
-docker-compose exec -T frontend npm install
-docker-compose exec -T frontend npm run build || echo "Frontend build optional"
+# Create necessary directories
+mkdir -p storage/app/public
+mkdir -p storage/framework/{cache,sessions,views}
+mkdir -p storage/logs
+mkdir -p bootstrap/cache
 
 # Set permissions
-docker-compose exec -T app chown -R www-data:www-data storage bootstrap/cache
+echo "→ Setting permissions..."
+chown -R www-data:www-data .
+chmod -R 775 storage bootstrap/cache
 
-echo "✅ Docker deployment complete!"
-docker-compose ps
-EOF
+# Import database
+echo "→ Importing database..."
+# Check if PostgreSQL is running in Docker
+if docker ps | grep -q listerino_db; then
+    echo "  Using Docker PostgreSQL..."
+    docker exec -i listerino_db psql -U listerino listerino < /tmp/production_deploy.sql || {
+        echo "  Database might not exist, creating it..."
+        docker exec listerino_db psql -U listerino postgres -c "CREATE DATABASE listerino;" || true
+        docker exec -i listerino_db psql -U listerino listerino < /tmp/production_deploy.sql
+    }
+else
+    echo "  Using local PostgreSQL..."
+    sudo -u postgres psql listerino < /tmp/production_deploy.sql || {
+        echo "  Database might not exist, creating it..."
+        sudo -u postgres createdb listerino || true
+        sudo -u postgres psql listerino < /tmp/production_deploy.sql
+    }
+fi
 
-echo -e "\n${GREEN}✅ Deployment complete!${NC}"
-echo "🌐 Your site is available at:"
-echo "   Main: http://$DO_IP:8001"
-echo "   Frontend Dev: http://$DO_IP:5174"
+# Run migrations
+echo "→ Running migrations..."
+php artisan migrate --force
+
+# Clear and optimize
+echo "→ Optimizing application..."
+php artisan cache:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan storage:link || true
+
+# Ensure frontend dist has correct permissions
+chown -R www-data:www-data frontend/dist
+
+# Configure Nginx if needed
+if [ ! -f /etc/nginx/sites-available/listerino.com ]; then
+    echo "→ Configuring Nginx..."
+    cat > /etc/nginx/sites-available/listerino.com << 'NGINX_CONF'
+server {
+    listen 80;
+    server_name listerino.com www.listerino.com 137.184.113.161;
+    root $REMOTE_PATH/public;
+
+    index index.php;
+    charset utf-8;
+
+    # SPA support for frontend routes
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    # Cache static assets
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+NGINX_CONF
+
+    ln -sf /etc/nginx/sites-available/listerino.com /etc/nginx/sites-enabled/
+    nginx -t
+fi
+
+# Restart services
+echo "→ Restarting services..."
+systemctl restart php8.3-fpm || systemctl restart php-fpm || true
+systemctl reload nginx || true
+
+# Cleanup
+rm -f /tmp/app_${TIMESTAMP}.tar.gz
+rm -f /tmp/production_deploy.sql
+rm -f /tmp/.env.production
+
+echo "✅ Deployment complete!"
+
+# Show status
 echo ""
-echo "📝 Next steps:"
-echo "1. SSH into server: ssh $DO_USER@$DO_IP"
-echo "2. Update .env with production values"
-echo "3. Set up domain and SSL"
-echo "4. Configure firewall: ufw allow 8001 && ufw allow 5174"
+echo "Service Status:"
+systemctl status nginx --no-pager | head -5 || true
+echo ""
+if docker ps | grep -q listerino; then
+    docker ps --format "table {{.Names}}\t{{.Status}}" | grep listerino || true
+fi
+
+REMOTE_COMMANDS
+
+# Cleanup local files
+rm -rf deployment_temp
+
+echo ""
+echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
+echo ""
+echo "Important next steps:"
+echo "1. Test the site: https://listerino.com"
+echo "2. Set up SSL if needed: ssh $SERVER 'certbot --nginx -d listerino.com -d www.listerino.com'"
+echo "3. Monitor logs: ssh $SERVER 'tail -f $REMOTE_PATH/storage/logs/laravel.log'"
+echo ""
+
+# Quick health check
+echo -e "${YELLOW}Running health check...${NC}"
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://137.184.113.161 || echo "Failed")
+if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "302" ]; then
+    echo -e "${GREEN}✓ Site is responding (HTTP $HTTP_STATUS)${NC}"
+else
+    echo -e "${RED}✗ Site health check failed (HTTP $HTTP_STATUS)${NC}"
+    echo "  Check server logs for details"
+fi

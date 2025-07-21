@@ -1,128 +1,191 @@
-# ListKit - Directory Application
+# Listerino - Directory Application
 
-A powerful Laravel-based directory application with custom user URLs, list management, and advanced search capabilities.
+A modern directory and list management application built with Laravel 11, Vue.js 3, and PostgreSQL.
 
-**Last Deployment Test**: July 16, 2025 - GitHub Actions CI/CD Working! 🚀
+## 🚀 Features
 
-## Features
+- **Custom User URLs** - Clean URLs like `/@username/list-name`
+- **List Management** - Create and organize lists with drag-and-drop
+- **Rich Content Editor** - Full-featured text editing with Tiptap
+- **Advanced Search** - PostgreSQL full-text search capabilities
+- **Image Management** - Cloudflare Images integration
+- **Role-Based Access** - Admin, manager, and user roles
+- **Responsive Design** - Mobile-first with Tailwind CSS
+- **API-First** - RESTful API with Laravel Sanctum
 
-- 🔗 **Custom User URLs** - Clean URLs like `/yourusername/your-list`
-- 📝 **List Management** - Create, edit, and organize lists with drag-and-drop reordering
-- 🔍 **Advanced Search** - Full-text search with PostgreSQL
-- 👥 **User Management** - Role-based permissions (admin, manager, user)
-- 🌐 **Public/Private Lists** - Control list visibility
-- 📱 **Responsive Design** - Works on all devices
-- 🚀 **Production Ready** - Optimized for scalability
+## 📚 Documentation
 
-## Tech Stack
+- **[Development Setup](./DEVELOPMENT_SETUP.md)** - Get started with local development
+- **[Production Setup](./PRODUCTION_SETUP.md)** - Production infrastructure and deployment
+- **[Deployment Overview](./DEPLOYMENT.md)** - Quick reference for both environments
+- **[Coding Guidelines](./CLAUDE.md)** - Project conventions and architecture
+
+## 🛠️ Tech Stack
 
 - **Backend**: Laravel 11, PHP 8.3+
-- **Database**: PostgreSQL 15
-- **Frontend**: Vue.js 3, Inertia.js, Tailwind CSS
+- **Database**: PostgreSQL 15+ with PostGIS
+- **Frontend**: Vue.js 3, Vite, Tailwind CSS
 - **Caching**: Redis
-- **Search**: PostgreSQL Full-Text Search
-- **Deployment**: DigitalOcean, Nginx
+- **Infrastructure**: Docker (production), Nginx, SSL
+- **Services**: Cloudflare Images, ImageKit.io
 
-## Local Development
+## 🚦 Quick Start
 
-### Requirements
-- PHP 8.3+
-- Composer
-- Node.js 20+
-- PostgreSQL 15+
-- Redis
-
-### Setup
-
-1. Clone the repository:
+### Development
 ```bash
-git clone https://github.com/yourusername/listkit-directory.git
-cd listkit-directory
-```
+# Clone and setup
+git clone [repository-url]
+cd directory-app
 
-2. Install dependencies:
-```bash
+# Install dependencies
 composer install
-npm install
-```
+npm install --prefix frontend
 
-3. Configure environment:
-```bash
+# Configure environment
 cp .env.example .env
-# Update database credentials and other settings
 php artisan key:generate
-```
 
-4. Set up database:
-```bash
+# Setup database
+createdb illum_local
 php artisan migrate
-php artisan db:seed
+
+# Start development servers
+composer dev
 ```
 
-5. Build assets:
+Visit http://localhost:8000
+
+### Production Deployment
 ```bash
-npm run dev
-# or for production:
-npm run build
+# Build frontend assets
+npm run build --prefix frontend
+
+# Deploy to production
+./deploy-simple.sh
 ```
 
-6. Start development server:
-```bash
-php artisan serve
+## 🏗️ Project Structure
+
+```
+├── app/                    # Laravel application
+│   ├── Http/Controllers/   # API controllers
+│   │   ├── Api/           # Public API endpoints
+│   │   └── Api/Admin/     # Admin endpoints
+│   └── Models/            # Eloquent models
+├── frontend/              # Vue.js SPA
+│   ├── src/              
+│   │   ├── components/    # Reusable components
+│   │   ├── views/        # Page components
+│   │   └── router/       # Vue Router config
+│   └── dist/             # Production build
+├── database/             
+│   ├── migrations/       # Database migrations
+│   └── seeders/         # Sample data
+├── routes/              
+│   ├── api.php          # API routes
+│   └── web.php          # SPA entry point
+└── docs/                # Additional documentation
 ```
 
-## Deployment
+## 🔧 Key Features Implementation
 
-### DigitalOcean Deployment
+### Custom URLs
+- Users can set custom URLs in their profile
+- Format: `/@username/list-slug`
+- Automatic slug generation from list names
 
-See `/deploy/setup-digitalocean.md` for complete deployment instructions.
+### List Management
+- Drag-and-drop reordering
+- Public/private visibility
+- Rich text descriptions
+- Multiple items per list
 
-Quick setup:
-```bash
-# On your DigitalOcean server (as root)
-curl -O https://raw.githubusercontent.com/yourusername/listkit-directory/main/deploy/setup-ubuntu.sh
-chmod +x setup-ubuntu.sh
-./setup-ubuntu.sh
-```
+### Search System
+- PostgreSQL full-text search
+- Search across lists, items, and descriptions
+- Faceted search with categories
 
-### Production Environment
+## 🔒 Security
 
-The application is optimized for production with:
-- PostgreSQL performance tuning
-- Redis caching and sessions
-- Queue workers via Supervisor
-- Nginx with HTTP/2 and SSL
-- Automated backups
-- Log rotation
+- Laravel Sanctum for API authentication
+- Environment-based configuration
+- HTTPS enforced in production
+- CORS properly configured
+- Input validation and sanitization
 
-## Custom URL System
+## 📦 API Documentation
 
-Users can set custom URLs in their profile:
-- `/eric/my-awesome-list` instead of `/user/123/list/456`
-- Fallback system: `custom_url` → `username` → `user_id`
-- SEO-friendly and memorable URLs
-
-## API Endpoints
+### Authentication
+- `POST /sanctum/csrf-cookie` - Get CSRF token
+- `POST /api/login` - User login
+- `POST /api/register` - User registration
+- `POST /api/logout` - User logout
 
 ### Lists
-- `GET /data/my-lists` - User's lists
-- `POST /data/lists` - Create list
-- `PUT /data/lists/{id}` - Update list
-- `DELETE /data/lists/{id}` - Delete list
+- `GET /api/lists` - Get public lists
+- `GET /api/user-lists` - Get user's lists
+- `POST /api/lists` - Create new list
+- `PUT /api/lists/{id}` - Update list
+- `DELETE /api/lists/{id}` - Delete list
 
-### List Items
-- `POST /data/lists/{id}/items` - Add item
-- `PUT /data/lists/{id}/items/reorder` - Reorder items
-- `DELETE /data/lists/{id}/items/{item}` - Remove item
+### Admin
+- `GET /api/admin/users` - Manage users
+- `GET /api/admin/categories` - Manage categories
+- `GET /api/admin/settings` - System settings
 
-## Contributing
+## 🚀 Production Information
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+- **URL**: https://listerino.com
+- **Server**: DigitalOcean (137.184.113.161)
+- **Architecture**: Docker containers with Nginx reverse proxy
+- **SSL**: Let's Encrypt with auto-renewal
+- **Monitoring**: Laravel logs, Docker stats
 
-## License
+## 📤 Deployment
 
-This project is proprietary software.
+### Quick Deploy (Code Changes Only)
+```bash
+# Commit your changes
+git add .
+git commit -m "feat: your feature description"
+
+# Push to trigger automatic deployment
+git push listerino main
+
+# Monitor at: https://github.com/lcreative777/listerino/actions
+```
+
+### Deploy with Database Changes
+```bash
+# Create and test migration locally
+php artisan make:migration your_migration_name
+php artisan migrate
+
+# Commit and push
+git add .
+git commit -m "feat: feature with migration"
+git push listerino main
+```
+
+### Manual Deployment
+```bash
+./deploy-simple.sh
+```
+
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed deployment procedures.
+
+## 🤝 Contributing
+
+1. Review [CLAUDE.md](./CLAUDE.md) for coding standards
+2. Create feature branch from `main`
+3. Write tests for new features
+4. Submit pull request with clear description
+
+## 📝 License
+
+This project is proprietary software. All rights reserved.
+
+---
+
+For deployment issues, see [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md).  
+For development questions, see [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md).
