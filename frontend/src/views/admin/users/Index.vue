@@ -238,15 +238,27 @@
 
                 <form @submit.prevent="saveUser">
                     <div class="grid grid-cols-1 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Name</label>
-                            <input
-                                v-model="form.name"
-                                type="text"
-                                required
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                            />
-                            <div v-if="errors.name" class="text-red-500 text-sm mt-1">{{ errors.name }}</div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">First Name</label>
+                                <input
+                                    v-model="form.firstname"
+                                    type="text"
+                                    required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                                <div v-if="errors.firstname" class="text-red-500 text-sm mt-1">{{ errors.firstname }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Last Name</label>
+                                <input
+                                    v-model="form.lastname"
+                                    type="text"
+                                    required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                                <div v-if="errors.lastname" class="text-red-500 text-sm mt-1">{{ errors.lastname }}</div>
+                            </div>
                         </div>
 
                         <div>
@@ -348,7 +360,8 @@ const filters = reactive({
 
 // Form
 const form = reactive({
-    name: '',
+    firstname: '',
+    lastname: '',
     email: '',
     role: 'user',
     password: '',
@@ -399,7 +412,15 @@ const toggleSelectAll = (event) => {
 
 const editUser = (user) => {
     editingUser.value = user
-    form.name = user.name
+    // Split name into firstname and lastname if separate fields not available
+    if (user.firstname && user.lastname) {
+        form.firstname = user.firstname
+        form.lastname = user.lastname
+    } else if (user.name) {
+        const nameParts = user.name.split(' ')
+        form.firstname = nameParts[0] || ''
+        form.lastname = nameParts.slice(1).join(' ') || ''
+    }
     form.email = user.email
     form.role = user.role
     form.password = ''
@@ -458,10 +479,23 @@ const saveUser = async () => {
     errors.value = {}
 
     try {
+        const userData = {
+            firstname: form.firstname,
+            lastname: form.lastname,
+            email: form.email,
+            role: form.role
+        }
+
+        // Only include password fields for new users
+        if (!editingUser.value) {
+            userData.password = form.password
+            userData.password_confirmation = form.password_confirmation
+        }
+
         if (editingUser.value) {
-            await axios.put(`/api/admin/users/${editingUser.value.id}`, form)
+            await axios.put(`/api/admin/users/${editingUser.value.id}`, userData)
         } else {
-            await axios.post('/api/admin/users', form)
+            await axios.post('/api/admin/users', userData)
         }
         closeModal()
         fetchUsers()
@@ -470,7 +504,7 @@ const saveUser = async () => {
         if (error.response?.data?.errors) {
             errors.value = error.response.data.errors
         } else {
-            alert('Error saving user')
+            alert('Error saving user: ' + (error.response?.data?.message || error.message))
         }
     } finally {
         processing.value = false
@@ -481,7 +515,8 @@ const closeModal = () => {
     showModal.value = false
     showCreateModal.value = false
     editingUser.value = null
-    form.name = ''
+    form.firstname = ''
+    form.lastname = ''
     form.email = ''
     form.role = 'user'
     form.password = ''

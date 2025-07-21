@@ -80,13 +80,21 @@ class UserManagementController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
+            'firstname' => 'sometimes|required|string|max:255',
+            'lastname' => 'sometimes|required|string|max:255',
             'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
             'username' => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
             'role' => 'sometimes|required|in:admin,manager,editor,business_owner,user',
             'is_public' => 'sometimes|boolean',
             'bio' => 'nullable|string|max:1000',
         ]);
+
+        // Update the name field if firstname or lastname is provided
+        if (isset($validated['firstname']) || isset($validated['lastname'])) {
+            $firstname = $validated['firstname'] ?? $user->firstname;
+            $lastname = $validated['lastname'] ?? $user->lastname;
+            $validated['name'] = trim($firstname . ' ' . $lastname);
+        }
 
         // Prevent removing the last admin
         if ($user->role === 'admin' && isset($validated['role']) && $validated['role'] !== 'admin') {
@@ -167,15 +175,21 @@ class UserManagementController extends Controller
     public function store(Request $request)
 {
     $validated = $request->validate([
-        'name' => 'required|string|max:255',
+        'firstname' => 'required|string|max:255',
+        'lastname' => 'required|string|max:255',
         'email' => 'required|email|unique:users',
         'password' => 'required|string|min:8|confirmed',
         'role' => 'required|in:admin,manager,editor,business_owner,user',
         'username' => 'nullable|string|max:255|unique:users',
     ]);
 
+    // Create the name field from firstname and lastname
+    $name = trim($validated['firstname'] . ' ' . $validated['lastname']);
+
     $user = User::create([
-        'name' => $validated['name'],
+        'name' => $name,
+        'firstname' => $validated['firstname'],
+        'lastname' => $validated['lastname'],
         'email' => $validated['email'],
         'password' => Hash::make($validated['password']),
         'role' => $validated['role'],

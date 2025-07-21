@@ -415,6 +415,7 @@ Route::middleware(['auth'])->group(function () {
         
         // User management - THESE are the correct paths the Vue components use
         Route::get('/users', [UserManagementController::class, 'index']);
+        Route::post('/users', [UserManagementController::class, 'store']);
         Route::get('/users/stats', [UserManagementController::class, 'stats']);
         Route::get('/users/{user}', [UserManagementController::class, 'show']);
         Route::put('/users/{user}', [UserManagementController::class, 'update']);
