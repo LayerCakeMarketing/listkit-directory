@@ -1,0 +1,131 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production Server
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+        cd ..
+
+    - name: Deploy to Digital Ocean
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          set -e
+          echo "🚀 Starting deployment..."
+          
+          cd /var/www/listerino
+          
+          # Backup current state
+          echo "📦 Creating backup..."
+          docker exec listerino_db pg_dump -U listerino listerino > /backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql || true
+          
+          # Pull latest code
+          echo "📥 Pulling latest code from GitHub..."
+          git fetch origin main
+          git reset --hard origin/main
+          
+          # Update Docker environment file if needed
+          if [ -f .env.production ]; then
+            cp .env.production .env
+          fi
+          
+          # Restart containers to pick up any docker-compose changes
+          echo "🐳 Updating Docker containers..."
+          docker-compose pull
+          docker-compose up -d
+          
+          # Wait for services to be ready
+          sleep 10
+          
+          # Run migrations
+          echo "🔄 Running database migrations..."
+          docker exec -w /app listerino_app php artisan migrate --force
+          
+          # Clear and rebuild caches
+          echo "🧹 Clearing caches..."
+          docker exec -w /app listerino_app php artisan config:clear
+          docker exec -w /app listerino_app php artisan cache:clear
+          docker exec -w /app listerino_app php artisan route:clear
+          docker exec -w /app listerino_app php artisan view:clear
+          
+          echo "🔧 Rebuilding caches..."
+          docker exec -w /app listerino_app php artisan config:cache
+          docker exec -w /app listerino_app php artisan route:cache
+          docker exec -w /app listerino_app php artisan view:cache
+          
+          # Set permissions
+          echo "🔐 Setting permissions..."
+          docker exec listerino_app chown -R www-data:www-data /app/storage /app/bootstrap/cache
+          
+          echo "✅ Deployment completed successfully!"
+          
+          # Health check
+          sleep 5
+          curl -f https://listerino.com/api/health || echo "⚠️ Health check failed"
+
+    - name: Upload frontend build
+      uses: appleboy/scp-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        source: "frontend/dist"
+        target: "/var/www/listerino"
+        strip_components: 0
+
+    - name: Copy frontend to Docker container
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          cd /var/www/listerino
+          # Copy built frontend to the Docker container
+          docker cp frontend/dist/. listerino_app:/app/frontend/dist/
+          echo "✅ Frontend deployed!"
+
+    - name: Notify deployment status
+      if: always()
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+            docker exec -w /app listerino_app php artisan about
+          else
+            echo "❌ Deployment failed!"
+            tail -20 /var/www/listerino/storage/logs/laravel.log || true
+          fi
