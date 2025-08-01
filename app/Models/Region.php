@@ -34,6 +34,20 @@ class Region extends Model
         'meta_title',
         'meta_description',
         'custom_fields',
+        // Park-specific fields
+        'park_system',
+        'park_designation',
+        'area_acres',
+        'established_date',
+        'park_features',
+        'park_activities',
+        'park_website',
+        'park_phone',
+        'operating_hours',
+        'entrance_fees',
+        'reservations_required',
+        'difficulty_level',
+        'accessibility_features',
         'display_priority',
         'facts',
         'state_symbols',
@@ -454,18 +468,11 @@ class Region extends Model
         // Then check if we have a Cloudflare image ID
         if ($this->cloudflare_image_id) {
             // Use the Cloudflare image delivery URL from config
-            $deliveryUrl = config('services.cloudflare.delivery_url', 'https://imagedelivery.net');
+            $deliveryUrl = config('services.cloudflare.delivery_url', 'https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A');
             
-            // If deliveryUrl already contains the account hash, use it directly
-            if (strpos($deliveryUrl, 'imagedelivery.net/') !== false) {
-                return "{$deliveryUrl}/{$this->cloudflare_image_id}/public";
-            }
-            
-            // Otherwise, extract the account hash from the URL
-            if (preg_match('/imagedelivery\.net\/([^\/]+)/', $deliveryUrl, $matches)) {
-                $accountHash = $matches[1];
-                return "https://imagedelivery.net/{$accountHash}/{$this->cloudflare_image_id}/public";
-            }
+            // Ensure we have a trailing slash before appending the image ID
+            $deliveryUrl = rtrim($deliveryUrl, '/');
+            return "{$deliveryUrl}/{$this->cloudflare_image_id}/public";
         }
         
         if ($this->cover_image) {

@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 use App\Traits\HasTags;
+use App\Traits\Likeable;
+use App\Traits\Commentable;
+use App\Traits\Repostable;
 
 class Post extends Model
 {
-    use HasFactory, SoftDeletes, HasTags;
+    use HasFactory, SoftDeletes, HasTags, Likeable, Commentable, Repostable;
 
     protected $fillable = [
         'user_id',

@@ -38,15 +38,20 @@
                 </div>
 
                 <!-- Right side of navbar (user dropdown, etc.) -->
-                <div class="hidden sm:flex sm:items-center sm:ml-6">
+                <div class="hidden sm:flex sm:items-center sm:ml-6 space-x-4">
+                    <!-- Notification Bell -->
+                    <NotificationBell />
+                    
                     <!-- User Profile Dropdown -->
-                    <div class="ml-3 relative">
+                    <div class="relative">
                         <UserProfileDropdown :user="user" />
                     </div>
                 </div>
 
-                <!-- Hamburger -->
-                <div class="-mr-2 flex items-center sm:hidden">
+                <!-- Mobile notification bell and hamburger -->
+                <div class="-mr-2 flex items-center sm:hidden space-x-2">
+                    <!-- Mobile Notification Bell -->
+                    <NotificationBell />
                     <button
                         @click="showingNavigationDropdown = !showingNavigationDropdown"
                         class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out"
@@ -187,6 +192,7 @@ import ApplicationLogo from '@/components/ApplicationLogo.vue'
 import NavLink from '@/components/NavLink.vue'
 import ResponsiveNavLink from '@/components/ResponsiveNavLink.vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const route = useRoute()
 const router = useRouter()

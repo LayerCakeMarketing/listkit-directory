@@ -43,6 +43,12 @@ const routes = [
     component: () => import('@/views/Notifications.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/messages',
+    name: 'Messages',
+    component: () => import('@/views/Messages.vue'),
+    meta: { requiresAuth: true }
+  },
 
   // Dashboard redirects to home
   {
@@ -63,32 +69,25 @@ const routes = [
   {
     path: '/local/:state/:city/:neighborhood',
     name: 'Neighborhood',
-    component: () => import('@/views/region/Show.vue'),
+    component: () => import('@/views/regions/City.vue'),
     props: route => ({
       state: route.params.state,
       city: route.params.city,
       neighborhood: route.params.neighborhood,
-      level: 3
+      isNeighborhood: true
     })
   },
   {
     path: '/local/:state/:city',
     name: 'City',
-    component: () => import('@/views/region/Show.vue'),
-    props: route => ({
-      state: route.params.state,
-      city: route.params.city,
-      level: 2
-    })
+    component: () => import('@/views/regions/City.vue'),
+    props: true
   },
   {
     path: '/local/:state',
     name: 'State',
-    component: () => import('@/views/region/Show.vue'),
-    props: route => ({
-      state: route.params.state,
-      level: 1
-    })
+    component: () => import('@/views/regions/State.vue'),
+    props: true
   },
 
   // Places routes (new canonical URL structure)
@@ -96,6 +95,12 @@ const routes = [
     path: '/places',
     name: 'Places',
     component: () => import('@/views/places/Index.vue')
+  },
+  {
+    path: '/my-places',
+    name: 'MyPlaces',
+    component: () => import('@/views/MyPlaces.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/places/create',
@@ -162,6 +167,24 @@ const routes = [
     })
   },
   
+  // Business claiming route
+  {
+    path: '/places/:slug/claim',
+    name: 'ClaimBusiness',
+    component: () => import('@/views/places/ClaimBusiness.vue'),
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  
+  // Claim success route
+  {
+    path: '/places/:slug/claim-success',
+    name: 'ClaimSuccess',
+    component: () => import('@/views/places/ClaimSuccess.vue'),
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  
   // Legacy routes (for backward compatibility)
   {
     path: '/places/category/:slug',
@@ -182,34 +205,29 @@ const routes = [
     props: true
   },
 
-  // Regions routes
+  // Regions index route (redirects to local)
   {
     path: '/regions',
-    name: 'Regions',
-    component: () => import('@/views/regions/Index.vue')
+    redirect: '/local'
   },
   {
     path: '/regions/:state',
-    name: 'RegionState',
-    component: () => import('@/views/regions/State.vue'),
-    props: true
+    redirect: to => `/local/${to.params.state}`
   },
   {
     path: '/regions/:state/:city',
-    name: 'RegionCity', 
-    component: () => import('@/views/regions/City.vue'),
-    props: true
+    redirect: to => `/local/${to.params.state}/${to.params.city}`
   },
   {
     path: '/regions/:state/:city/:neighborhood',
-    name: 'RegionNeighborhood',
-    component: () => import('@/views/regions/City.vue'), // Reuse City component for neighborhoods
-    props: route => ({
-      state: route.params.state,
-      city: route.params.city,
-      neighborhood: route.params.neighborhood,
-      isNeighborhood: true
-    })
+    redirect: to => `/local/${to.params.state}/${to.params.city}/${to.params.neighborhood}`
+  },
+  
+  // Local index route
+  {
+    path: '/local',
+    name: 'LocalIndex',
+    component: () => import('@/views/regions/Index.vue')
   },
 
   // Profile management (authenticated)
@@ -227,6 +245,28 @@ const routes = [
     component: () => import('@/views/lists/Index.vue'),
     meta: { requiresAuth: true }
   },
+  
+  // List Chains
+  {
+    path: '/chains/create',
+    name: 'ChainCreate',
+    component: () => import('@/views/chains/Create.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chains/:id',
+    name: 'ChainView',
+    component: () => import('@/views/chains/Show.vue'),
+    props: true
+  },
+  {
+    path: '/chains/:id/edit',
+    name: 'ChainEdit',
+    component: () => import('@/views/chains/Edit.vue'),
+    meta: { requiresAuth: true },
+    props: true
+  },
+  
   // My Places (authenticated user's places)
   {
     path: '/myplaces',
@@ -284,6 +324,13 @@ const routes = [
     meta: { requiresAuth: true },
     props: true
   },
+  {
+    path: '/channels/:channelId/chains/create',
+    name: 'ChannelChainCreate',
+    component: () => import('@/views/channels/chains/Create.vue'),
+    meta: { requiresAuth: true },
+    props: true
+  },
   
   // Public lists exploration
   {
@@ -310,6 +357,12 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/admin/places/bulk-import-export',
+    name: 'AdminPlacesBulkImportExport',
+    component: () => import('@/views/admin/places/BulkImportExport.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/admin/places/pending',
     name: 'AdminPlacesPending',
     component: () => import('@/views/admin/places/Pending.vue'),
@@ -325,6 +378,24 @@ const routes = [
     path: '/admin/regions',
     name: 'AdminRegions',
     component: () => import('@/views/admin/regions/Enhanced.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/notifications/send',
+    name: 'AdminSendNotification',
+    component: () => import('@/views/admin/notifications/SendNotification.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/claimed-places',
+    name: 'AdminClaimedPlaces',
+    component: () => import('@/views/admin/claims/ClaimedPlaces.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/claim-subscriptions',
+    name: 'AdminClaimSubscriptions',
+    component: () => import('@/views/admin/claims/ClaimSubscriptions.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   // Legacy routes - redirect to consolidated view
@@ -385,6 +456,12 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/admin/marketing-pages/local',
+    name: 'AdminLocalPageSettings',
+    component: () => import('@/views/admin/marketing-pages/LocalPageEditor.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/admin/waitlist',
     name: 'AdminWaitlist',
     component: () => import('@/views/admin/waitlist/Index.vue'),
@@ -394,6 +471,12 @@ const routes = [
     path: '/admin/tags',
     name: 'AdminTags',
     component: () => import('@/views/admin/tags/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/claims',
+    name: 'AdminClaims',
+    component: () => import('@/views/admin/claims/Index.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   // User profile routes (with /up/ prefix)
@@ -432,6 +515,16 @@ const routes = [
       channelSlug: route.params.channelSlug,
       slug: route.params.listSlug,
       isChannelList: true
+    })
+  },
+  {
+    path: '/@:channelSlug/chains/:chainSlug',
+    name: 'ChannelChain',
+    component: () => import('@/views/chains/Show.vue'),
+    props: route => ({ 
+      channelSlug: route.params.channelSlug,
+      slug: route.params.chainSlug,
+      isChannelChain: true
     })
   },
   

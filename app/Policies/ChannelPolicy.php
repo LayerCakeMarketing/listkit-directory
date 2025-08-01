@@ -4,25 +4,17 @@ namespace App\Policies;
 
 use App\Models\Channel;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ChannelPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
-    public function viewAny(?User $user): bool
-    {
-        // Anyone can view the list of public channels
-        return true;
-    }
+    use HandlesAuthorization;
 
     /**
-     * Determine whether the user can view the model.
+     * Determine whether the user can view the channel.
      */
     public function view(?User $user, Channel $channel): bool
     {
-        // Use the channel's built-in visibility check
         return $channel->canBeViewedBy($user);
     }
 
@@ -31,67 +23,54 @@ class ChannelPolicy
      */
     public function create(User $user): bool
     {
-        // All authenticated users can create channels
-        return true;
+        return true; // All authenticated users can create channels
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Determine whether the user can update the channel.
      */
     public function update(User $user, Channel $channel): bool
     {
-        // Only the owner can update their channel
         return $user->id === $channel->user_id;
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Determine whether the user can delete the channel.
      */
     public function delete(User $user, Channel $channel): bool
     {
-        // Only the owner can delete their channel
         return $user->id === $channel->user_id;
     }
 
     /**
-     * Determine whether the user can manage lists for the channel.
+     * Determine whether the user can view the channel's chains.
      */
-    public function manageLists(User $user, Channel $channel): bool
+    public function viewChains(?User $user, Channel $channel): bool
     {
-        // Only the owner can manage lists for their channel
+        return $channel->canBeViewedBy($user);
+    }
+
+    /**
+     * Determine whether the user can create a chain for the channel.
+     */
+    public function createChain(User $user, Channel $channel): bool
+    {
         return $user->id === $channel->user_id;
     }
 
     /**
-     * Determine whether the user can follow the channel.
+     * Determine whether the user can view the channel's lists.
      */
-    public function follow(User $user, Channel $channel): bool
+    public function viewLists(?User $user, Channel $channel): bool
     {
-        // Users cannot follow their own channels
-        if ($user->id === $channel->user_id) {
-            return false;
-        }
-
-        // Users can follow public channels or private channels they already follow
-        return $channel->is_public || $channel->followers()->where('user_id', $user->id)->exists();
+        return $channel->canBeViewedBy($user);
     }
 
     /**
-     * Determine whether the user can view followers of the channel.
+     * Determine whether the user can create a list for the channel.
      */
-    public function viewFollowers(?User $user, Channel $channel): bool
+    public function createList(User $user, Channel $channel): bool
     {
-        // Public channels: anyone can view followers
-        // Private channels: only owner and followers can view
-        if ($channel->is_public) {
-            return true;
-        }
-
-        if (!$user) {
-            return false;
-        }
-
-        return $user->id === $channel->user_id || 
-               $channel->followers()->where('user_id', $user->id)->exists();
+        return $user->id === $channel->user_id;
     }
 }

@@ -8,10 +8,12 @@ use Illuminate\Support\Str;
 use App\Traits\HasTags;
 use App\Traits\Followable;
 use App\Traits\Saveable;
+use App\Traits\Likeable;
+use App\Traits\Commentable;
 
 class Place extends Model
 {
-    use HasFactory, HasTags, Followable, Saveable;
+    use HasFactory, HasTags, Followable, Saveable, Likeable, Commentable;
     
     protected $table = 'directory_entries';
 
@@ -44,7 +46,11 @@ class Place extends Model
         
         // Approval/Rejection fields
         'rejection_reason', 'rejected_at', 'rejected_by',
-        'approval_notes', 'approved_by'
+        'approval_notes', 'approved_by',
+        
+        // Ownership and subscription fields
+        'subscription_tier', 'subscription_expires_at', 'stripe_customer_id', 'stripe_subscription_id',
+        'claimed_at', 'ownership_transferred_at', 'ownership_transferred_by'
     ];
 
     protected $casts = [
@@ -78,9 +84,14 @@ class Place extends Model
         'open_24_7' => 'boolean',
         'regions_updated_at' => 'datetime',
         'rejected_at' => 'datetime',
+        
+        // Ownership fields
+        'claimed_at' => 'datetime',
+        'subscription_expires_at' => 'datetime',
+        'ownership_transferred_at' => 'datetime',
     ];
 
-    protected $appends = ['canonical_url'];
+    protected $appends = ['canonical_url', 'name'];
 
     protected static function boot()
     {
@@ -197,7 +208,12 @@ class Place extends Model
 
     public function claims()
     {
-        return $this->hasMany(Claim::class);
+        return $this->hasMany(Claim::class, 'place_id');
+    }
+
+    public function ownerUser()
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
     }
 
     public function tags()
@@ -387,6 +403,14 @@ class Place extends Model
     {
         return $this->getCanonicalUrl();
     }
+    
+    /**
+     * Get name attribute (alias for title)
+     */
+    public function getNameAttribute()
+    {
+        return $this->title;
+    }
 
     /**
      * Get the short URL for this entry
@@ -543,5 +567,120 @@ class Place extends Model
         return !$this->regions_updated_at || 
                $this->regions_updated_at->lt(now()->subDays(7)) ||
                (!$this->state_region_id && !$this->city_region_id && $this->hasPhysicalLocation());
+    }
+
+    // Ownership and subscription methods
+    
+    /**
+     * Check if the place has an active claim request
+     */
+    public function hasActiveClaim(): bool
+    {
+        return $this->claims()->pending()->exists();
+    }
+
+    /**
+     * Get the active claim if any
+     */
+    public function activeClaim()
+    {
+        return $this->claims()->pending()->first();
+    }
+
+    /**
+     * Check if a user can claim this place
+     */
+    public function canBeClaimedBy(User $user): bool
+    {
+        // Can't claim if already owned
+        if ($this->owner_user_id) {
+            return false;
+        }
+
+        // Can't claim if user already has a pending claim
+        if ($this->claims()->where('user_id', $user->id)->pending()->exists()) {
+            return false;
+        }
+
+        // Can't claim if another claim is pending
+        if ($this->hasActiveClaim()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the owner who transferred ownership
+     */
+    public function ownershipTransferredBy()
+    {
+        return $this->belongsTo(User::class, 'ownership_transferred_by');
+    }
+
+    /**
+     * Check if subscription is active
+     */
+    public function hasActiveSubscription(): bool
+    {
+        return $this->subscription_tier !== 'free' && 
+               $this->subscription_expires_at && 
+               $this->subscription_expires_at->isFuture();
+    }
+
+    /**
+     * Get subscription tier label
+     */
+    public function getSubscriptionTierLabelAttribute(): string
+    {
+        return match($this->subscription_tier) {
+            'tier1' => 'Professional',
+            'tier2' => 'Premium',
+            default => 'Free'
+        };
+    }
+
+    /**
+     * Check if user has access to tier features
+     */
+    public function hasTierAccess(string $feature): bool
+    {
+        $tierFeatures = [
+            'free' => ['basic_edits', 'respond_reviews', 'update_hours'],
+            'tier1' => ['basic_edits', 'respond_reviews', 'update_hours', 'analytics', 'featured_badge', 'priority_support'],
+            'tier2' => ['basic_edits', 'respond_reviews', 'update_hours', 'analytics', 'featured_badge', 'priority_support', 'multi_location', 'team_access', 'custom_branding']
+        ];
+
+        $currentTier = $this->hasActiveSubscription() ? $this->subscription_tier : 'free';
+        
+        return in_array($feature, $tierFeatures[$currentTier] ?? []);
+    }
+
+    /**
+     * Scope for claimed places
+     */
+    public function scopeClaimed($query)
+    {
+        return $query->where('is_claimed', true)->whereNotNull('owner_user_id');
+    }
+
+    /**
+     * Scope for unclaimed places
+     */
+    public function scopeUnclaimed($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_claimed', false)
+              ->orWhereNull('owner_user_id');
+        });
+    }
+
+    /**
+     * Scope for places with active subscriptions
+     */
+    public function scopeWithActiveSubscription($query)
+    {
+        return $query->where('subscription_tier', '!=', 'free')
+                    ->where('subscription_expires_at', '>', now());
     }
 }

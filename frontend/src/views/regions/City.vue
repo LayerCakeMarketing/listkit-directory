@@ -5,7 +5,7 @@
       <nav class="mb-4">
         <ol class="flex items-center space-x-2 text-sm text-gray-500">
           <li>
-            <router-link to="/regions" class="hover:text-gray-700">Regions</router-link>
+            <router-link to="/local" class="hover:text-gray-700">Local</router-link>
           </li>
           <li>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -13,7 +13,7 @@
             </svg>
           </li>
           <li>
-            <router-link :to="`/regions/${state}`" class="hover:text-gray-700">{{ stateData?.display_name || stateData?.full_name || stateData?.name || state }}</router-link>
+            <router-link :to="`/local/${state}`" class="hover:text-gray-700">{{ stateData?.display_name || stateData?.full_name || stateData?.name || state }}</router-link>
           </li>
           <template v-if="isNeighborhood">
             <li>
@@ -22,7 +22,7 @@
               </svg>
             </li>
             <li>
-              <router-link :to="`/regions/${state}/${city}`" class="hover:text-gray-700">{{ cityData?.parent?.name || city }}</router-link>
+              <router-link :to="`/local/${state}/${city}`" class="hover:text-gray-700">{{ cityData?.parent?.name || city }}</router-link>
             </li>
             <li>
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,6 +105,13 @@
             <div class="text-2xl font-bold text-gray-900">{{ neighborhoods.length }}</div>
           </div>
         </div>
+
+        <!-- Region Details Tab -->
+        <RegionDetailsTab
+          v-if="cityData"
+          :region="cityData"
+          class="mb-8"
+        />
 
         <!-- Featured Places -->
         <div v-if="featuredPlaces.length > 0" class="mb-8 bg-white shadow-sm rounded-lg">
@@ -287,6 +294,24 @@
           </div>
         </div>
       </div>
+
+      <!-- Admin Edit Button -->
+      <button
+        v-if="authStore.user && (authStore.user.role === 'admin' || authStore.user.role === 'manager')"
+        @click="isDrawerOpen = true"
+        class="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        <CogIcon class="h-6 w-6" />
+      </button>
+
+      <!-- Admin Edit Drawer -->
+      <RegionEditDrawer
+        v-if="authStore.user && (authStore.user.role === 'admin' || authStore.user.role === 'manager')"
+        :is-open="isDrawerOpen"
+        :region="cityData"
+        @close="isDrawerOpen = false"
+        @updated="handleRegionUpdated"
+      />
     </div>
   </div>
 </template>
@@ -296,6 +321,9 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
+import RegionDetailsTab from '@/components/regions/RegionDetailsTab.vue'
+import RegionEditDrawer from '@/components/regions/RegionEditDrawer.vue'
+import { CogIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
@@ -330,6 +358,7 @@ const neighborhoods = ref([])
 const categories = ref([])
 const featuredPlaces = ref([])
 const featuredLists = ref([])
+const isDrawerOpen = ref(false)
 
 const uniqueCategories = computed(() => {
   const cats = new Set(places.value.filter(p => p.category).map(p => p.category.id))
@@ -401,6 +430,13 @@ const fetchCityData = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleRegionUpdated = (updatedRegion) => {
+  cityData.value = updatedRegion
+  isDrawerOpen.value = false
+  // Optionally refresh other data that might have changed
+  fetchCityData()
 }
 
 onMounted(() => {

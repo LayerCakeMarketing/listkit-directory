@@ -1,0 +1,20 @@
+# Add these lines to your .env file for claiming test mode:
+
+# Business Claiming Test Mode
+CLAIMING_TEST_MODE=true
+CLAIMING_TEST_OTP=123456
+CLAIMING_AUTO_APPROVE=false
+
+# Stripe Configuration
+STRIPE_KEY=your_stripe_publishable_key
+STRIPE_SECRET=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+
+# Stripe Price IDs
+STRIPE_VERIFICATION_FEE_PRICE_ID=price_1Rp9ovQ22X1sgf4dVeQsBiVu
+STRIPE_PRICE_TIER1=your_tier1_monthly_price_id
+STRIPE_PRICE_TIER2=your_tier2_monthly_price_id
+
+# Add to frontend/.env:
+VITE_CLAIMING_TEST_MODE=true
+VITE_STRIPE_PUBLIC_KEY=your_stripe_publishable_key

@@ -29,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
         // Register Place policy
         Gate::policy(\App\Models\Place::class, \App\Policies\PlacePolicy::class);
         
+        // Register Channel policy
+        Gate::policy(\App\Models\Channel::class, \App\Policies\ChannelPolicy::class);
+        
         // Register custom gates
         Gate::define('manage-regions', function ($user) {
             return in_array($user->role, ['admin', 'manager']);

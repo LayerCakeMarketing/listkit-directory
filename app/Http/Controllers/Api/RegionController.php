@@ -70,17 +70,21 @@ class RegionController extends Controller
         
         // If no featured regions, get regions with most places
         if ($regions->isEmpty()) {
-            $regions = Region::where('level', 2)
-                ->with(['parent'])
-                ->withCount([
-                    'cityEntries as places_count' => function ($q) {
+            $regions = Cache::remember('popular_regions_fallback', 3600, function () {
+                return Region::where('level', 2)
+                    ->with(['parent'])
+                    ->withCount([
+                        'cityEntries as places_count' => function ($q) {
+                            $q->where('status', 'published');
+                        }
+                    ])
+                    ->whereHas('cityEntries', function ($q) {
                         $q->where('status', 'published');
-                    }
-                ])
-                ->having('places_count', '>', 0)
-                ->orderBy('places_count', 'desc')
-                ->limit(10)
-                ->get();
+                    })
+                    ->orderBy('places_count', 'desc')
+                    ->limit(10)
+                    ->get();
+            });
         }
         
         return response()->json([
@@ -94,8 +98,7 @@ class RegionController extends Controller
     public function index(Request $request)
     {
         $query = Region::query()
-            ->with(['parent'])
-            ->withCount('entries');
+            ->with(['parent']);
 
         // Filter by level
         if ($request->has('level')) {
@@ -121,12 +124,33 @@ class RegionController extends Controller
 
         // Filter by has_entries
         if ($request->has('has_entries') && $request->has_entries) {
-            $query->having('entries_count', '>', 0);
+            // Use whereHas instead of having for PostgreSQL compatibility
+            if ($request->get('level') == 1) {
+                $query->whereHas('stateEntries');
+            } elseif ($request->get('level') == 2) {
+                $query->whereHas('cityEntries');
+            } elseif ($request->get('level') == 3) {
+                $query->whereHas('neighborhoodEntries');
+            } else {
+                $query->whereHas('entries');
+            }
         }
 
         // Include counts
         if ($request->has('with_counts') && $request->with_counts) {
             $query->withCount('children');
+            
+            // Add entries count based on level
+            $level = $request->get('level');
+            if ($level == 1) {
+                $query->withCount(['stateEntries as entries_count']);
+            } elseif ($level == 2) {
+                $query->withCount(['cityEntries as entries_count']);
+            } elseif ($level == 3) {
+                $query->withCount(['neighborhoodEntries as entries_count']);
+            } else {
+                $query->withCount(['entries']);
+            }
         }
 
         // Sorting
@@ -164,9 +188,21 @@ class RegionController extends Controller
         }
 
         $region = Cache::remember("region.{$id}", 3600, function () use ($id) {
-            return Region::with(['parent', 'children'])
-                ->withCount('entries')
+            $region = Region::with(['parent', 'children'])
                 ->findOrFail($id);
+                
+            // Add appropriate entries count based on level
+            if ($region->level == 1) {
+                $region->loadCount(['stateEntries as entries_count']);
+            } elseif ($region->level == 2) {
+                $region->loadCount(['cityEntries as entries_count']);
+            } elseif ($region->level == 3) {
+                $region->loadCount(['neighborhoodEntries as entries_count']);
+            } else {
+                $region->loadCount(['entries']);
+            }
+            
+            return $region;
         });
 
         return response()->json(['data' => $region]);
@@ -366,6 +402,44 @@ class RegionController extends Controller
         }
         
         return implode('/', $segments);
+    }
+    
+    /**
+     * Get region by slug (single slug lookup)
+     */
+    public function getBySlug($slug)
+    {
+        $region = Cache::remember("region.by-slug.{$slug}", 3600, function () use ($slug) {
+            return Region::where('slug', $slug)
+                ->with([
+                    'parent', 
+                    'children',
+                    'featuredEntries' => function($query) {
+                        $query->with(['category', 'stateRegion', 'cityRegion', 'neighborhoodRegion']);
+                    },
+                    'featuredLists' => function($query) {
+                        $query->with(['user', 'category']);
+                    }
+                ])
+                ->withCount([
+                    'stateEntries as entries_count' => function($q) {
+                        $q->where('status', 'published');
+                    },
+                    'cityEntries as entries_count' => function($q) {
+                        $q->where('status', 'published');
+                    },
+                    'neighborhoodEntries as entries_count' => function($q) {
+                        $q->where('status', 'published');
+                    }
+                ])
+                ->firstOrFail();
+        });
+
+        // Add display_name and other computed properties
+        $region->display_name = $region->display_name;
+        $region->cover_image_url = $region->getCoverImageUrl();
+        
+        return response()->json(['data' => $region]);
     }
     
     /**

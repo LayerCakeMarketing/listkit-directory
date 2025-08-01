@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 8. [Performance Optimization](#performance-optimization)
 9. [Testing Strategy](#testing-strategy)
 10. [Deployment & Infrastructure](#deployment--infrastructure)
+11. [Common Commands](#common-commands)
 
 ## Project Overview
 
@@ -277,8 +278,10 @@ php artisan migrate:fresh --seed  # Reset and seed
 
 # Code quality
 ./vendor/bin/pint            # Format code
-./vendor/bin/phpstan analyse # Static analysis
 php artisan test             # Run tests
+
+# Frontend build
+cd frontend && npm run build && cd ..  # Build frontend for production
 ```
 
 ### Production Environment
@@ -920,8 +923,198 @@ CLOUDFLARE_IMAGES_TOKEN=xxx
 - Production uses `docker-compose.production.yml` configuration
 - GitHub Actions handles automated deployments on push to main branch
 
+## Common Commands
+
+### Development Commands
+```bash
+# Start all development services at once (RECOMMENDED)
+composer dev
+# This runs Laravel server, queue worker, log viewer, and Vite concurrently
+
+# Individual services if needed
+php artisan serve              # Laravel on http://localhost:8000
+npm run dev --prefix frontend  # Vite dev server on http://localhost:5173
+php artisan queue:listen       # Process queued jobs
+php artisan pail               # Real-time log viewer
+
+# Database management
+php artisan migrate                    # Run pending migrations
+php artisan migrate:rollback          # Rollback last migration
+php artisan migrate:fresh --seed      # Reset DB with seeders
+php artisan db:seed                   # Run seeders only
+php artisan tinker                    # Interactive PHP shell
+
+# Code quality
+./vendor/bin/pint                     # Format PHP code (Laravel Pint)
+php artisan test                      # Run all tests
+php artisan test --filter=FeatureName # Run specific test
+php artisan test tests/Feature/Lists  # Run tests in directory
+
+# Cache management
+php artisan cache:clear               # Clear application cache
+php artisan config:clear              # Clear config cache
+php artisan route:clear               # Clear route cache
+php artisan view:clear                # Clear compiled views
+php artisan optimize:clear            # Clear all caches
+
+# Frontend commands
+cd frontend
+npm install                           # Install frontend dependencies
+npm run build                        # Build for production
+npm run preview                      # Preview production build
+cd ..
+```
+
+### Production Commands
+```bash
+# SSH to production
+ssh root@137.184.113.161
+
+# Docker container management
+docker ps                                              # List running containers
+docker-compose -f docker-compose.production.yml up -d  # Start all containers
+docker-compose -f docker-compose.production.yml down   # Stop all containers
+docker-compose -f docker-compose.production.yml logs   # View logs
+docker stats                                           # Monitor resource usage
+
+# Execute commands in containers
+docker exec -w /app listerino_app php artisan migrate --force
+docker exec -w /app listerino_app php artisan cache:clear
+docker exec -w /app listerino_app php artisan about
+
+# Database backup
+docker exec listerino_db pg_dump -U listerino listerino > backup.sql
+
+# View Laravel logs
+docker exec listerino_app tail -f /app/storage/logs/laravel.log
+```
+
+### Deployment Commands
+```bash
+# Automated deployment (push to main branch)
+git add .
+git commit -m "feat: description"
+git push listerino main
+# Monitor at: https://github.com/lcreative777/listerino/actions
+
+# Manual deployment
+./deploy-simple.sh
+
+# Deploy with specific environment
+./deploy-simple.sh staging
+./deploy-simple.sh production
+```
+
+### Testing Specific Features
+```bash
+# Run specific test suite
+php artisan test --testsuite=Feature
+php artisan test --testsuite=Unit
+
+# Test with coverage
+php artisan test --coverage
+
+# Test in parallel
+php artisan test --parallel
+
+# Database testing
+php artisan test --env=testing
+```
+
+### Business Claiming Setup (New Feature)
+```bash
+# Install required packages
+composer require laravel/cashier
+composer require twilio/sdk  # Optional for SMS
+
+# Setup database
+php artisan vendor:publish --tag="cashier-migrations"
+php artisan migrate
+
+# Test Stripe webhooks locally
+stripe listen --forward-to localhost:8000/stripe/webhook
+```
+
 ---
 
-**Last Updated**: July 21, 2025
+## Recent Updates (July 25, 2025)
+
+### Business Claiming & Subscription System
+- **New Feature**: Complete business claiming workflow with verification
+- **Database**: Added tables for claims, verification codes, documents
+- **Payment**: Stripe integration with subscription tiers
+- **API**: Full REST API for claiming and subscription management
+- See [CLAIMING_SETUP.md](./CLAIMING_SETUP.md) for detailed setup
+
+### Key Files for Claiming Feature
+```
+app/Http/Controllers/Api/ClaimController.php
+app/Http/Controllers/Api/SubscriptionController.php
+app/Models/Claim.php
+app/Models/ClaimDocument.php
+database/migrations/2025_07_24_*_claims_*.php
+```
+
+---
+
+### GitHub Actions
+
+The project uses GitHub Actions for automated deployment:
+
+**Workflow Files**:
+- `.github/workflows/deploy.yml` - Production deployment workflow
+- Triggers on push to `main` branch or manual dispatch
+- Automatically builds frontend, runs migrations, and deploys to production
+
+**GitHub Secrets Required**:
+```
+SERVER_HOST      # Production server IP (137.184.113.161)
+SERVER_USER      # SSH user (root)
+SERVER_SSH_KEY   # Private SSH key for deployment
+```
+
+### Required Packages & Dependencies
+
+**PHP Dependencies** (composer.json):
+- Laravel 12.0
+- Laravel Sanctum 4.0 (SPA authentication)
+- Intervention/Image 3.11 (image processing)
+- ImageKit SDK 4.0 (CDN integration)
+- Doctrine DBAL 4.3 (database migrations)
+
+**Frontend Dependencies** (frontend/package.json):
+- Vue 3.4 (Composition API)
+- Vue Router 4.5
+- Pinia 3.0 (state management)
+- Tailwind CSS 3.2
+- Tiptap 2.23 (rich text editor)
+- Leaflet 1.9.4 (maps)
+- VueDraggable 4.1 (drag & drop)
+
+### Testing Commands
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test class
+php artisan test --filter=UserListTest
+
+# Run tests with coverage (requires PCOV or Xdebug)
+php artisan test --coverage
+
+# Run tests in parallel
+php artisan test --parallel
+
+# Run only unit tests
+php artisan test --testsuite=Unit
+
+# Run only feature tests  
+php artisan test --testsuite=Feature
+```
+
+---
+
+**Last Updated**: July 26, 2025
 **Maintained By**: Development Team
-**Version**: 2.3
+**Version**: 2.5

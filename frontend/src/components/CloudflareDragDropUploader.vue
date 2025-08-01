@@ -193,7 +193,7 @@ const props = defineProps({
     },
     maxFileSize: {
         type: Number,
-        default: 10485760 // 10MB in bytes (Cloudflare Images max)
+        default: 14680064 // 14MB in bytes
     },
     acceptedTypes: {
         type: String,
@@ -202,7 +202,7 @@ const props = defineProps({
     context: {
         type: String,
         default: null,
-        validator: (value) => !value || ['avatar', 'cover', 'gallery', 'logo', 'item', 'post', 'avatar_temp', 'banner_temp', 'banner'].includes(value)
+        validator: (value) => !value || ['avatar', 'cover', 'gallery', 'logo', 'item', 'post', 'avatar_temp', 'banner_temp', 'banner', 'region_cover'].includes(value)
     },
     entityType: {
         type: String,
@@ -301,7 +301,8 @@ const addFiles = async (newFiles) => {
                 processedFile = await compressImage(file, {
                     maxWidth: 2048,
                     maxHeight: 2048,
-                    quality: 0.85
+                    quality: 0.85,
+                    outputType: file.type  // Preserve original file type
                 })
                 console.log(`Compressed ${file.name}: ${file.size} -> ${processedFile.size} bytes`)
             } catch (err) {
@@ -434,11 +435,23 @@ const uploadFile = async (fileObj, uploadURL) => {
             throw new Error(`Invalid file type: ${fileType || 'unknown'}. Allowed types: JPEG, PNG, WebP, GIF, SVG`)
         }
         
-        // For Cloudflare direct upload, create FormData with the file
+        // For Cloudflare direct upload, use FormData
+        const xhr = new XMLHttpRequest()
         const formData = new FormData()
         formData.append('file', fileObj.file)
         
-        const xhr = new XMLHttpRequest()
+        // Add requireSignedURLs parameter as suggested in the reference
+        formData.append('requireSignedURLs', 'false')
+        
+        // Debug logging
+        console.log('FormData being sent to Cloudflare:')
+        for (let [key, value] of formData.entries()) {
+            if (value instanceof File) {
+                console.log(`${key}: File { name: "${value.name}", type: "${value.type}", size: ${value.size} }`)
+            } else {
+                console.log(`${key}: ${value}`)
+            }
+        }
         
         return new Promise((resolve, reject) => {
             xhr.upload.addEventListener('progress', (e) => {
@@ -452,9 +465,13 @@ const uploadFile = async (fileObj, uploadURL) => {
             })
             
             xhr.addEventListener('load', () => {
-                if (xhr.status === 200) {
+                console.log('Cloudflare response status:', xhr.status)
+                console.log('Cloudflare response:', xhr.responseText)
+                
+                if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         const response = JSON.parse(xhr.responseText)
+                        console.log('Parsed Cloudflare response:', response)
                         
                         // Check if upload was successful
                         if (!response.success || !response.result) {
@@ -464,8 +481,8 @@ const uploadFile = async (fileObj, uploadURL) => {
                         fileObj.status = 'success'
                         fileObj.progress = 100
                         
-                        // Extract ID from the response - it might be in different places
-                        const imageId = response.result?.id || response.imageId || uploadData.imageId
+                        // Extract ID from the response
+                        const imageId = response.result?.id || response.imageId
                         
                         fileObj.result = {
                             id: imageId,
@@ -480,8 +497,6 @@ const uploadFile = async (fileObj, uploadURL) => {
                         
                         // Emit v-model update for single file uploads
                         if (props.maxFiles === 1) {
-                            // Check if the parent component needs the ID (cloudflare_image_id binding)
-                            // This is a bit of a hack but works for now
                             const valueToEmit = props.modelValue === null || typeof props.modelValue === 'string' && props.modelValue.includes('http') 
                                 ? fileObj.result.url 
                                 : fileObj.result.id
@@ -497,35 +512,27 @@ const uploadFile = async (fileObj, uploadURL) => {
                         resolve(response)
                     } catch (parseError) {
                         console.error('JSON parse error:', parseError)
-                        console.error('Full response text:', xhr.responseText)
-                        console.error('Response status:', xhr.status)
-                        console.error('Response headers:', xhr.getAllResponseHeaders())
-                        
-                        // Sometimes Cloudflare returns HTML error pages instead of JSON
-                        if (xhr.responseText.includes('<html>') || xhr.responseText.includes('<!DOCTYPE')) {
-                            throw new Error('Server returned HTML error page - likely authentication or configuration issue')
-                        } else if (xhr.responseText.trim() === '') {
-                            throw new Error('Empty response from server')
-                        } else {
-                            throw new Error(`Invalid JSON response: ${parseError.message}. Response: ${xhr.responseText.substring(0, 200)}`)
-                        }
+                        reject(new Error('Invalid response from Cloudflare'))
                     }
                 } else {
                     console.error('Upload failed:', xhr.status, xhr.responseText)
-                    throw new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`)
+                    
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText)
+                        reject(new Error(errorResponse.errors?.[0]?.message || `Upload failed with status ${xhr.status}`))
+                    } catch {
+                        reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`))
+                    }
                 }
             })
             
             xhr.addEventListener('error', () => {
-                reject(new Error('Upload failed'))
+                reject(new Error('Network error during upload'))
             })
             
             xhr.open('POST', uploadURL)
-            
-            // For Cloudflare direct upload with FormData, don't set any headers
-            // The browser will automatically set the correct Content-Type with boundary
-            
-            // Send the FormData
+            // Important: Do NOT set any headers. Let the browser set them automatically for FormData
+            // This ensures the correct Content-Type with boundary is set
             xhr.send(formData)
         })
         

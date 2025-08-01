@@ -94,9 +94,41 @@
         </div>
       </div>
 
-      <!-- Channel Lists -->
-      <div class="mt-8 pb-12">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Lists</h2>
+      <!-- Content Tabs -->
+      <div class="mt-8">
+        <!-- Tab Navigation -->
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-8">
+            <button
+              @click="activeTab = 'lists'"
+              :class="[
+                'py-2 px-1 border-b-2 font-medium text-sm',
+                activeTab === 'lists'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ]"
+            >
+              Lists ({{ channel.lists_count || 0 }})
+            </button>
+            <button
+              @click="activeTab = 'chains'"
+              :class="[
+                'py-2 px-1 border-b-2 font-medium text-sm',
+                activeTab === 'chains'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ]"
+            >
+              Chains ({{ channel.chains_count || 0 }})
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="pb-12">
+        <!-- Lists Tab -->
+        <div v-show="activeTab === 'lists'" class="mt-6">
         
         <!-- Loading -->
         <div v-if="listsLoading" class="flex justify-center py-8">
@@ -231,13 +263,73 @@
           </button>
         </div>
       </div>
+
+      <!-- Chains Tab -->
+      <div v-show="activeTab === 'chains'" class="mt-6">
+        <!-- Loading -->
+        <div v-if="chainsLoading" class="flex justify-center py-8">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+
+        <!-- Chains grid -->
+        <div v-else-if="chains.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            v-for="chain in chains"
+            :key="chain.id"
+            class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
+          >
+            <router-link :to="`/@${channel.slug}/chains/${chain.slug}`">
+              <div v-if="chain.featured_image" class="h-48 bg-gray-200">
+                <img
+                  :src="chain.featured_image"
+                  :alt="chain.name"
+                  class="w-full h-full object-cover"
+                />
+              </div>
+              <div class="p-4">
+                <h3 class="text-lg font-semibold text-gray-900">{{ chain.name }}</h3>
+                <p v-if="chain.description" class="mt-1 text-sm text-gray-600 line-clamp-2">
+                  {{ chain.description }}
+                </p>
+                <div class="mt-2 flex items-center justify-between text-sm text-gray-500">
+                  <div class="flex items-center space-x-4">
+                    <span>{{ chain.lists_count }} lists</span>
+                    <span>{{ chain.visibility === 'public' ? 'Public' : 'Private' }}</span>
+                  </div>
+                </div>
+              </div>
+            </router-link>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else class="text-center py-12">
+          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No chains yet</h3>
+          <p class="mt-1 text-sm text-gray-500">This channel hasn't created any chains yet.</p>
+        </div>
+
+        <!-- Load more -->
+        <div v-if="hasMoreChains" class="mt-8 text-center">
+          <button
+            @click="loadMoreChains"
+            :disabled="chainsLoading"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Load More
+          </button>
+        </div>
+      </div>
+    </div>
     </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -264,6 +356,11 @@ const listsPage = ref(1)
 const hasMoreLists = ref(true)
 const isFollowing = ref(false)
 // Follow loading is now handled by FollowButton component
+const activeTab = ref('lists')
+const chains = ref([])
+const chainsLoading = ref(false)
+const chainsPage = ref(1)
+const hasMoreChains = ref(true)
 
 // Computed
 const isOwner = computed(() => {
@@ -345,6 +442,41 @@ const loadMoreLists = () => {
   fetchLists(listsPage.value + 1)
 }
 
+const fetchChains = async (page = 1) => {
+  if (!channel.value) return
+  
+  chainsLoading.value = true
+  
+  try {
+    console.log('Fetching chains for channel:', channel.value.slug)
+    const response = await axios.get(`/api/channels/${channel.value.slug}/chains`, {
+      params: {
+        page,
+        per_page: 12
+      }
+    })
+    
+    console.log('Channel chains response:', response.data)
+    
+    if (page === 1) {
+      chains.value = response.data.data || []
+    } else {
+      chains.value.push(...(response.data.data || []))
+    }
+    
+    hasMoreChains.value = response.data.current_page < response.data.last_page
+    chainsPage.value = response.data.current_page
+  } catch (error) {
+    console.error('Error fetching chains:', error)
+  } finally {
+    chainsLoading.value = false
+  }
+}
+
+const loadMoreChains = () => {
+  fetchChains(chainsPage.value + 1)
+}
+
 const shareList = (list) => {
   // Copy link to clipboard
   const listUrl = `${window.location.origin}/@${channel.value.slug}/${list.slug}`
@@ -391,6 +523,13 @@ const handleUnfollow = () => {
     channel.value.followers_count--
   }
 }
+
+// Watch for tab changes
+watch(activeTab, (newTab) => {
+  if (newTab === 'chains' && chains.value.length === 0 && channel.value) {
+    fetchChains()
+  }
+})
 
 // Lifecycle
 onMounted(() => {

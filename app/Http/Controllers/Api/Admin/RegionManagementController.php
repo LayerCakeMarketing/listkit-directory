@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Region;
 use App\Models\Place;
+use App\Services\CloudflareImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -141,6 +142,7 @@ class RegionManagementController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:regions,slug',
+            'type' => 'nullable|string|in:state,city,county,neighborhood,district,custom,national_park,state_park,regional_park,local_park',
             'level' => 'required|in:1,2,3',
             'parent_id' => 'nullable|exists:regions,id',
             'intro_text' => 'nullable|string',
@@ -152,6 +154,20 @@ class RegionManagementController extends Controller
             'state_symbols' => 'nullable|array',
             'geojson' => 'nullable|array',
             'polygon_coordinates' => 'nullable|string',
+            // Park-specific fields
+            'park_system' => 'nullable|string|max:255',
+            'park_designation' => 'nullable|string|max:255',
+            'area_acres' => 'nullable|numeric|min:0',
+            'established_date' => 'nullable|date',
+            'park_features' => 'nullable|array',
+            'park_activities' => 'nullable|array',
+            'park_website' => 'nullable|url',
+            'park_phone' => 'nullable|string|max:20',
+            'operating_hours' => 'nullable|array',
+            'entrance_fees' => 'nullable|array',
+            'reservations_required' => 'boolean',
+            'difficulty_level' => 'nullable|string|in:easy,moderate,difficult,varies',
+            'accessibility_features' => 'nullable|array',
         ]);
 
         // Validate parent relationship
@@ -177,13 +193,15 @@ class RegionManagementController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
         }
 
-        // Set type based on level
-        $validated['type'] = match($validated['level']) {
-            1 => 'state',
-            2 => 'city',
-            3 => 'neighborhood',
-            default => 'custom'
-        };
+        // Set type based on level if not explicitly provided
+        if (empty($validated['type'])) {
+            $validated['type'] = match($validated['level']) {
+                1 => 'state',
+                2 => 'city',
+                3 => 'neighborhood',
+                default => 'custom'
+            };
+        }
 
         $region = Region::create($validated);
 
@@ -209,22 +227,51 @@ class RegionManagementController extends Controller
     {
         $region = Region::findOrFail($id);
 
-        $validated = $request->validate([
+        // Prepare validation rules
+        $validationRules = [
             'name' => 'sometimes|required|string|max:255',
-            'slug' => 'sometimes|required|string|max:255|unique:regions,slug,' . $id,
-            'type' => 'sometimes|string|in:state,city,county,neighborhood,district,custom',
+            'type' => 'sometimes|string|in:state,city,county,neighborhood,district,custom,national_park,state_park,regional_park,local_park',
             'level' => 'sometimes|required|in:1,2,3',
             'parent_id' => 'nullable|exists:regions,id',
             'intro_text' => 'nullable|string',
             'is_featured' => 'boolean',
             'display_priority' => 'nullable|integer|min:0',
-            'cover_image' => 'nullable|string',
+            'cover_image' => 'nullable|string', // Can be URL or file upload
             'cloudflare_image_id' => 'nullable|string',
             'facts' => 'nullable|array',
             'state_symbols' => 'nullable|array',
             'geojson' => 'nullable|array',
             'polygon_coordinates' => 'nullable|string',
-        ]);
+            // Park-specific fields
+            'park_system' => 'nullable|string|max:255',
+            'park_designation' => 'nullable|string|max:255',
+            'area_acres' => 'nullable|numeric|min:0',
+            'established_date' => 'nullable|date',
+            'park_features' => 'nullable|array',
+            'park_activities' => 'nullable|array',
+            'park_website' => 'nullable|url',
+            'park_phone' => 'nullable|string|max:20',
+            'operating_hours' => 'nullable|array',
+            'entrance_fees' => 'nullable|array',
+            'reservations_required' => 'boolean',
+            'difficulty_level' => 'nullable|string|in:easy,moderate,difficult,varies',
+            'accessibility_features' => 'nullable|array',
+        ];
+
+        // Handle slug validation conditionally
+        if ($request->has('slug')) {
+            $requestedSlug = $request->input('slug');
+            
+            // Only apply unique validation if the slug is actually being changed
+            if ($requestedSlug !== $region->slug) {
+                $validationRules['slug'] = 'required|string|max:255|unique:regions,slug,' . $id;
+            } else {
+                // If slug is the same, just validate format but skip uniqueness
+                $validationRules['slug'] = 'required|string|max:255';
+            }
+        }
+
+        $validated = $request->validate($validationRules);
 
         // Validate parent relationship if level is being changed
         if (isset($validated['level']) && $validated['level'] > 1 && empty($validated['parent_id']) && empty($region->parent_id)) {
@@ -245,8 +292,8 @@ class RegionManagementController extends Controller
             }
         }
 
-        // Update type if level is changed
-        if (isset($validated['level'])) {
+        // Update type if level is changed and type is not explicitly provided
+        if (isset($validated['level']) && !isset($validated['type'])) {
             $validated['type'] = match($validated['level']) {
                 1 => 'state',
                 2 => 'city',
@@ -254,6 +301,9 @@ class RegionManagementController extends Controller
                 default => 'custom'
             };
         }
+
+        // No need for image upload handling since CloudflareDragDropUploader handles it directly
+        // Images are uploaded via the frontend component and we just receive the cloudflare_image_id
 
         // Log the cloudflare_image_id for debugging
         if (isset($validated['cloudflare_image_id'])) {
@@ -275,6 +325,15 @@ class RegionManagementController extends Controller
         
         // Refresh the model to get the latest data including casts
         $region->refresh();
+        
+        // Clear the cache for this region
+        \Cache::forget("region.by-slug.{$region->slug}");
+        \Cache::forget("region.{$region->id}");
+        
+        // Also clear any parent region caches if this is a child
+        if ($region->parent) {
+            \Cache::forget("region.{$region->parent->id}.children");
+        }
 
         return response()->json($region->load('parent'));
     }

@@ -8,10 +8,13 @@ use Illuminate\Support\Str;
 use App\Models\Place;
 use App\Traits\HasTags;
 use App\Traits\Saveable;
+use App\Traits\Likeable;
+use App\Traits\Commentable;
+use App\Traits\Repostable;
 
 class UserList extends Model
 {
-    use HasFactory, HasTags, Saveable;
+    use HasFactory, HasTags, Saveable, Likeable, Commentable, Repostable;
 
     protected $table = 'lists';
 
@@ -181,6 +184,15 @@ class UserList extends Model
     // {
     //     return $this->hasMany(ListMedia::class, 'list_id')->orderBy('order_index');
     // }
+
+    // Chains this list belongs to
+    public function chains()
+    {
+        return $this->belongsToMany(ListChain::class, 'list_chain_items', 'list_id', 'list_chain_id')
+                    ->withPivot(['order_index', 'label', 'description'])
+                    ->withTimestamps()
+                    ->orderBy('list_chain_items.order_index');
+    }
 
     // Visibility scopes
     public function scopePublic($query)

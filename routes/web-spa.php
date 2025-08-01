@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Route;
 // Include authentication routes (for API endpoints)
 require __DIR__.'/auth.php';
 
+// Stripe webhook endpoint (must be before catch-all)
+Route::post('/stripe/webhook', [\App\Http\Controllers\StripeWebhookController::class, 'handleWebhook'])
+    ->name('cashier.webhook')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
 // Catch-all route for SPA - let Vue Router handle client-side routing
 Route::get('/{any}', function () {
     return view('spa');

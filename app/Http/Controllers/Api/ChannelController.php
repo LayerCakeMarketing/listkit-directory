@@ -370,6 +370,37 @@ class ChannelController extends Controller
     }
 
     /**
+     * Get chains of a channel.
+     */
+    public function chains(Channel $channel, Request $request)
+    {
+        // Use policy to check authorization
+        $this->authorize('viewChains', $channel);
+
+        $query = $channel->chains()
+            ->with(['owner', 'lists' => function($query) {
+                $query->select('lists.id', 'lists.name', 'lists.slug', 'lists.visibility', 'lists.featured_image')
+                    ->withCount('items');
+            }])
+            ->withCount('lists');
+
+        // Only show public chains to non-owners
+        if (!auth()->check() || $channel->user_id !== auth()->id()) {
+            $query->where('visibility', 'public')
+                  ->where('status', 'published');
+        }
+
+        // Sort
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $chains = $query->paginate($request->input('per_page', 12));
+        
+        return \App\Http\Resources\ChannelChainResource::collection($chains);
+    }
+
+    /**
      * Show a specific list belonging to a channel.
      */
     public function showList(Channel $channel, $listSlug)

@@ -22,7 +22,7 @@ class User extends Authenticatable
         'show_activity', 'show_followers', 'show_following', 'page_title',
         'profile_color', 'custom_css', 'show_join_date', 'show_location', 'show_website',
         'avatar_cloudflare_id', 'cover_cloudflare_id', 'page_logo_cloudflare_id', 'page_logo_option',
-        'avatar_updated_at', 'cover_updated_at'
+        'avatar_updated_at', 'cover_updated_at', 'stripe_customer_id'
     ];
 
     protected $hidden = [
@@ -102,6 +102,11 @@ class User extends Authenticatable
     {
         return $this->hasMany(Post::class);
     }
+
+    public function appNotifications()
+    {
+        return $this->hasMany(AppNotification::class, 'recipient_id');
+    }
     
     public function notifications()
     {
@@ -139,6 +144,13 @@ class User extends Authenticatable
     {
         // Use hasMany relationship for polymorphic owned lists
         return $this->hasMany(UserList::class, 'owner_id')
+            ->where('owner_type', self::class);
+    }
+
+    public function chains()
+    {
+        // User's chains (polymorphic)
+        return $this->hasMany(ListChain::class, 'owner_id')
             ->where('owner_type', self::class);
     }
     
@@ -196,6 +208,17 @@ class User extends Authenticatable
     public function claims()
     {
         return $this->hasMany(Claim::class);
+    }
+    
+    // Social interaction relationships
+    public function likes()
+    {
+        return $this->hasMany(Like::class);
+    }
+    
+    public function reposts()
+    {
+        return $this->hasMany(Repost::class);
     }
     
     // Polymorphic following relationships

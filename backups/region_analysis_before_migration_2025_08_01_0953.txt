@@ -1,0 +1,38 @@
+REGION MIGRATION ANALYSIS - Fri Aug  1 09:53:29 PDT 2025
+========================================
+
+DUPLICATE REGIONS IDENTIFIED:
+-----------------------------
+california: IDs 82 (keep - 39 dir entries, 10 children) vs 90 (remove - 1 dir entry, 2 children)
+mammoth-lakes: IDs 86 (keep - 31 dir entries) vs 92 (remove - 30 place_regions)
+irvine: IDs 6 (keep - 5 dir entries, 6 children) vs 91 (remove - 1 dir entry)
+florida: IDs 84 (keep - 1 dir entry, 1 child) vs 94 (remove - 1 place_region)
+miami: IDs 85 (keep - 1 dir entry) vs 95 (remove - 1 place_region)
+
+TOTAL RECORDS BY TABLE:
+----------------------
+ lists with region_id: 0
+
+
+REGION TYPES:
+-------------
+ state: 53
+ city: 15
+ neighborhood: 14
+
+
+FOREIGN KEY CONSTRAINTS:
+------------------------
+ directory_entries        | city_region_id         | regions            | id
+ directory_entries        | neighborhood_region_id | regions            | id
+ directory_entries        | region_id              | regions            | id
+ directory_entries        | state_region_id        | regions            | id
+ lists                    | region_id              | regions            | id
+ local_page_settings      | region_id              | regions            | id
+ place_regions            | region_id              | regions            | id
+ region_featured_entries  | region_id              | regions            | id
+ region_featured_lists    | region_id              | regions            | id
+ region_featured_metadata | region_id              | regions            | id
+ regions                  | parent_id              | regions            | id
+ users                    | default_region_id      | regions            | id
+

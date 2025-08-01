@@ -49,4 +49,32 @@ return [
         'id' => env('IMAGEKIT_ID', 'listerinolistkit'),
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook' => [
+            'secret' => env('STRIPE_WEBHOOK_SECRET'),
+            'tolerance' => env('STRIPE_WEBHOOK_TOLERANCE', 300),
+        ],
+        'prices' => [
+            'tier1' => env('STRIPE_PRICE_TIER1'),
+            'tier2' => env('STRIPE_PRICE_TIER2'),
+            'verification_fee' => env('STRIPE_VERIFICATION_FEE_PRICE_ID'),
+        ],
+    ],
+
+    'twilio' => [
+        'sid' => env('TWILIO_SID'),
+        'token' => env('TWILIO_TOKEN'),
+        'from' => env('TWILIO_FROM'),
+    ],
+
+    'claiming' => [
+        'test_mode' => env('CLAIMING_TEST_MODE', false),
+        'test_otp' => env('CLAIMING_TEST_OTP', '123456'),
+        'auto_approve' => env('CLAIMING_AUTO_APPROVE', false),
+        'auto_approve_after_payment' => env('CLAIMING_AUTO_APPROVE_AFTER_PAYMENT', false),
+        'auto_approve_free' => env('CLAIMING_AUTO_APPROVE_FREE', false),
+    ],
+
 ];

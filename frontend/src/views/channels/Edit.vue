@@ -348,6 +348,85 @@
               </div>
             </div>
 
+            <!-- Chains Tab -->
+            <div v-show="activeTab === 'chains'" class="space-y-8">
+              <div class="bg-white shadow rounded-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                  <h2 class="text-lg font-medium">Channel Chains</h2>
+                  <router-link
+                    :to="`/channels/${channel.id}/chains/create`"
+                    class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                  >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
+                    </svg>
+                    Create Chain
+                  </router-link>
+                </div>
+                
+                <!-- Chains Grid -->
+                <div v-if="chainsLoading" class="flex justify-center py-8">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+                
+                <div v-else-if="channelChains.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    v-for="chain in channelChains"
+                    :key="chain.id"
+                    class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+                  >
+                    <div class="flex justify-between items-start">
+                      <div class="flex-1">
+                        <h3 class="font-medium text-gray-900">{{ chain.name }}</h3>
+                        <p v-if="chain.description" class="text-sm text-gray-600 mt-1">{{ chain.description }}</p>
+                        <div class="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                          <span>{{ chain.lists_count || 0 }} lists</span>
+                          <span>{{ chain.visibility === 'public' ? 'Public' : 'Private' }}</span>
+                          <span v-if="chain.status === 'draft'" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Draft
+                          </span>
+                        </div>
+                      </div>
+                      <div class="flex items-center space-x-2 ml-4">
+                        <router-link
+                          :to="`/@${channel.slug}/chains/${chain.slug}`"
+                          class="text-gray-400 hover:text-gray-600"
+                          title="View Chain"
+                        >
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </router-link>
+                        <router-link
+                          :to="`/chains/${chain.id}/edit`"
+                          class="text-gray-400 hover:text-gray-600"
+                          title="Edit Chain"
+                        >
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </router-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div v-else class="text-center py-8 bg-gray-50 rounded-lg">
+                  <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
+                  </svg>
+                  <p class="mt-2 text-sm text-gray-900">No chains created yet</p>
+                  <router-link 
+                    :to="`/channels/${channel.id}/chains/create`"
+                    class="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                  >
+                    Create Your First Chain
+                  </router-link>
+                </div>
+              </div>
+            </div>
+
             <!-- Owner Tab -->
             <div v-show="activeTab === 'owner'" class="space-y-8">
               <div class="bg-white shadow rounded-lg p-6">
@@ -440,6 +519,7 @@ const tabs = [
   { id: 'basic', name: 'Basic Information' },
   { id: 'images', name: 'Images' },
   { id: 'lists', name: 'Lists' },
+  { id: 'chains', name: 'Chains' },
   { id: 'owner', name: 'Owner' }
 ]
 
@@ -463,6 +543,8 @@ const slugError = ref(null)
 const channelUpdated = ref(false)
 const channelLists = ref([])
 const listsLoading = ref(false)
+const channelChains = ref([])
+const chainsLoading = ref(false)
 
 // Methods
 const fetchChannel = async () => {
@@ -486,6 +568,10 @@ const fetchChannel = async () => {
     if (activeTab.value === 'lists') {
       await fetchChannelLists()
     }
+    // Fetch chains if on chains tab
+    if (activeTab.value === 'chains') {
+      await fetchChannelChains()
+    }
   } catch (err) {
     console.error('Error fetching channel:', err)
     if (err.response?.status === 404) {
@@ -506,6 +592,19 @@ const fetchChannelLists = async () => {
     console.error('Error fetching channel lists:', err)
   } finally {
     listsLoading.value = false
+  }
+}
+
+const fetchChannelChains = async () => {
+  chainsLoading.value = true
+  
+  try {
+    const response = await axios.get(`/api/channels/${channel.value.slug}/chains`)
+    channelChains.value = response.data.data || []
+  } catch (err) {
+    console.error('Error fetching channel chains:', err)
+  } finally {
+    chainsLoading.value = false
   }
 }
 
@@ -560,7 +659,7 @@ const removeBanner = async () => {
 }
 
 const saveChannel = async () => {
-  if (activeTab.value === 'lists') return // Don't save on lists tab
+  if (activeTab.value === 'lists' || activeTab.value === 'chains') return // Don't save on lists/chains tab
   
   await updateChannel()
 }
@@ -623,10 +722,13 @@ watch(() => form.slug, () => {
   }
 })
 
-// Watch tab changes to fetch lists when needed
+// Watch tab changes to fetch lists/chains when needed
 watch(activeTab, (newTab) => {
   if (newTab === 'lists' && channelLists.value.length === 0 && channel.value.id) {
     fetchChannelLists()
+  }
+  if (newTab === 'chains' && channelChains.value.length === 0 && channel.value.id) {
+    fetchChannelChains()
   }
 })
 

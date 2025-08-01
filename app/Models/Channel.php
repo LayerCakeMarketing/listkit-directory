@@ -29,7 +29,7 @@ class Channel extends Model
         'is_public' => 'boolean',
     ];
 
-    protected $appends = ['followers_count', 'lists_count', 'is_following', 'avatar_url', 'banner_url'];
+    protected $appends = ['followers_count', 'lists_count', 'chains_count', 'is_following', 'avatar_url', 'banner_url'];
 
     /**
      * Get the route key for the model.
@@ -62,6 +62,14 @@ class Channel extends Model
     }
 
     /**
+     * Get the chains for the channel.
+     */
+    public function chains()
+    {
+        return $this->morphMany(ListChain::class, 'owner');
+    }
+
+    /**
      * The users that follow this channel.
      */
     public function followers(): BelongsToMany
@@ -90,6 +98,17 @@ class Channel extends Model
             return 0;
         }
         return $this->lists()->count();
+    }
+
+    /**
+     * Get the chains count attribute.
+     */
+    public function getChainsCountAttribute(): int
+    {
+        if (!$this->exists) {
+            return 0;
+        }
+        return $this->chains()->count();
     }
 
     /**

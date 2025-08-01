@@ -29,6 +29,9 @@ export async function compressImage(file, options = {}) {
     if (file.size < 500 * 1024) {
         return file;
     }
+    
+    // Use the provided output type or default to the original file type
+    const finalOutputType = outputType || file.type || 'image/jpeg';
 
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -66,7 +69,7 @@ export async function compressImage(file, options = {}) {
                                 [blob],
                                 file.name,
                                 {
-                                    type: outputType,
+                                    type: finalOutputType,
                                     lastModified: Date.now()
                                 }
                             );
@@ -81,7 +84,7 @@ export async function compressImage(file, options = {}) {
                             reject(new Error('Failed to compress image'));
                         }
                     },
-                    outputType,
+                    finalOutputType,
                     quality
                 );
             };

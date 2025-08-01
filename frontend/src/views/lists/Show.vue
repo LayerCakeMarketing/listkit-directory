@@ -107,6 +107,20 @@
                   {{ tag.name }}
                 </span>
               </div>
+
+              <!-- Social Interactions -->
+              <div class="mt-6 pt-4 border-t">
+                <InteractionBar
+                  type="list"
+                  :id="list.id"
+                  :liked="list.is_liked || false"
+                  :likes-count="list.likes_count || 0"
+                  :comments-count="list.comments_count || 0"
+                  :reposted="list.is_reposted || false"
+                  :reposts-count="list.reposts_count || 0"
+                  @toggle-comments="showComments = !showComments"
+                />
+              </div>
             </div>
 
             <!-- Action Buttons -->
@@ -132,6 +146,17 @@
               </router-link>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Comments Section -->
+      <div v-if="showComments" class="bg-gray-50 border-y">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <CommentSection
+            type="list"
+            :id="list.id"
+            :per-page="10"
+          />
         </div>
       </div>
 
@@ -281,6 +306,8 @@ import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
 import FollowButton from '@/components/FollowButton.vue'
+import InteractionBar from '@/components/social/InteractionBar.vue'
+import CommentSection from '@/components/social/CommentSection.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +317,7 @@ const loading = ref(true)
 const list = ref(null)
 const errorTitle = ref('List Not Found')
 const errorMessage = ref("The list you're looking for doesn't exist or is private.")
+const showComments = ref(false)
 
 const currentUser = computed(() => authStore.user)
 const isOwnList = computed(() => {

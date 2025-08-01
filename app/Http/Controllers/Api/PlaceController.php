@@ -526,7 +526,7 @@ class PlaceController extends Controller
      */
     public function show($slug)
     {
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion'])
+        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion', 'ownerUser:id,firstname,lastname'])
             ->where('slug', $slug)
             ->published()
             ->firstOrFail();
@@ -557,7 +557,7 @@ class PlaceController extends Controller
      */
     public function showById($id)
     {
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion'])
+        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion', 'ownerUser:id,firstname,lastname'])
             ->published()
             ->findOrFail($id);
 
@@ -594,7 +594,7 @@ class PlaceController extends Controller
         
         $id = $matches[2];
         
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion'])
+        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'ownerUser:id,firstname,lastname'])
             ->published()
             ->findOrFail($id);
             
@@ -767,5 +767,151 @@ class PlaceController extends Controller
         $place->save();
         
         return response()->json($place->load(['location', 'category', 'stateRegion', 'cityRegion']));
+    }
+    
+    /**
+     * Get places associated with the current user
+     * Includes created places and claimed places
+     */
+    public function myPlaces(Request $request)
+    {
+        $user = auth()->user();
+        
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+        
+        $request->validate([
+            'type' => 'nullable|in:created,claimed,all',
+            'status' => 'nullable|in:published,draft,pending_review,all',
+            'q' => 'nullable|string|max:255',
+        ]);
+        
+        $type = $request->get('type', 'all');
+        $status = $request->get('status', 'all');
+        
+        // Start with base query
+        $query = Place::with([
+            'category:id,name,slug',
+            'region:id,name,slug,type',
+            'stateRegion:id,name,slug',
+            'cityRegion:id,name,slug',
+            'claims' => function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->whereIn('status', ['pending', 'approved']) // Only load active claims
+                  ->latest();
+            }
+        ]);
+        
+        // Filter by ownership type
+        if ($type === 'created') {
+            $query->where('created_by_user_id', $user->id);
+        } elseif ($type === 'claimed') {
+            $query->whereHas('claims', function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->whereIn('status', ['pending', 'approved']); // Exclude expired and rejected
+            });
+        } else {
+            // Show both created and claimed (excluding expired/rejected)
+            $query->where(function($q) use ($user) {
+                $q->where('created_by_user_id', $user->id)
+                  ->orWhereHas('claims', function($subQ) use ($user) {
+                      $subQ->where('user_id', $user->id)
+                           ->whereIn('status', ['pending', 'approved']); // Exclude expired and rejected
+                  });
+            });
+        }
+        
+        // Filter by status
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+        
+        // Search
+        if ($request->filled('q')) {
+            $searchTerm = $request->get('q');
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('name', 'ilike', "%{$searchTerm}%")
+                  ->orWhere('description', 'ilike', "%{$searchTerm}%");
+            });
+        }
+        
+        // Add claim status for each place
+        $places = $query->orderBy('updated_at', 'desc')
+                       ->paginate(20)
+                       ->through(function ($place) use ($user) {
+                           // Determine ownership type
+                           if ($place->created_by_user_id === $user->id) {
+                               $place->ownership_type = 'created';
+                           } else {
+                               $place->ownership_type = 'claimed';
+                           }
+                           
+                           // Add active claim info if exists
+                           $activeClaim = $place->claims->first();
+                           if ($activeClaim) {
+                               $place->claim_status = $activeClaim->status;
+                               $place->claim_tier = $activeClaim->tier;
+                               $place->claimed_at = $activeClaim->approved_at;
+                           }
+                           
+                           // Remove claims relation from response
+                           unset($place->claims);
+                           
+                           return $place;
+                       });
+        
+        return response()->json($places);
+    }
+    
+    /**
+     * Show a place for claiming purposes (includes unpublished places)
+     */
+    public function showForClaiming($slug)
+    {
+        // First try to find by slug
+        $place = Place::where('slug', $slug)
+            ->with([
+                'category:id,name,slug',
+                'region:id,name,slug,type',
+                'stateRegion:id,name,slug',
+                'cityRegion:id,name,slug',
+                'claims' => function($q) {
+                    $q->latest();
+                }
+            ])
+            ->first();
+            
+        // If not found by slug and slug is numeric, try by ID
+        if (!$place && is_numeric($slug)) {
+            $place = Place::where('id', $slug)
+                ->with([
+                    'category:id,name,slug',
+                    'region:id,name,slug,type',
+                    'stateRegion:id,name,slug',
+                    'cityRegion:id,name,slug',
+                    'claims' => function($q) {
+                        $q->latest();
+                    }
+                ])
+                ->first();
+        }
+        
+        if (!$place) {
+            return response()->json(['error' => 'Place not found'], 404);
+        }
+        
+        // Check if place is already claimed
+        $activeClaim = $place->claims->where('status', '!=', 'rejected')->first();
+        if ($activeClaim) {
+            $place->is_claimed = true;
+            $place->active_claim = $activeClaim;
+        } else {
+            $place->is_claimed = false;
+        }
+        
+        return response()->json([
+            'data' => $place
+        ]);
     }
 }

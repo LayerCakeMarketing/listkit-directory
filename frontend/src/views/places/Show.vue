@@ -107,7 +107,18 @@
                                         </div>
                                     </div>
                                     <div class="flex items-center justify-between mb-2">
-                                        <h1 class="text-3xl font-bold text-gray-900">{{ entry.title }}</h1>
+                                        <div>
+                                            <h1 class="text-3xl font-bold text-gray-900">{{ entry.title }}</h1>
+                                            <!-- Verified Badge -->
+                                            <div v-if="entry.is_claimed && entry.owner_user" class="mt-1 flex items-center text-sm text-green-600">
+                                                <svg class="w-5 h-5 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                                </svg>
+                                                <span class="font-medium">Verified</span>
+                                                <span class="mx-1">•</span>
+                                                <span>Managed by {{ entry.owner_user.firstname }} {{ entry.owner_user.lastname }}</span>
+                                            </div>
+                                        </div>
                                         <div class="flex items-center space-x-2">
                                             <SaveButton
                                                 v-if="authStore.isAuthenticated"
@@ -235,6 +246,30 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Social Interactions -->
+                        <div class="border-t p-6">
+                            <InteractionBar
+                                type="place"
+                                :id="entry.id"
+                                :liked="entry.is_liked || false"
+                                :likes-count="entry.likes_count || 0"
+                                :comments-count="entry.comments_count || 0"
+                                :show-reposts="false"
+                                @toggle-comments="showComments = !showComments"
+                            />
+                        </div>
+
+                        <!-- Comments Section -->
+                        <div v-if="showComments" class="border-t">
+                            <div class="p-6">
+                                <CommentSection
+                                    type="place"
+                                    :id="entry.id"
+                                    :per-page="10"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -252,7 +287,14 @@
                             >
                                 Edit Entry
                             </router-link>
-                            <div v-else-if="authStore.user && !canEditEntry" class="text-sm text-gray-600 text-center">
+                            
+                            <!-- Claim Button -->
+                            <ClaimButton
+                                v-if="entry.id && !canEditEntry"
+                                :place="entry"
+                            />
+                            
+                            <div v-if="authStore.user && !canEditEntry && entry.is_claimed" class="text-sm text-gray-600 text-center">
                                 <p>You don't have permission to edit this entry.</p>
                                 <p class="mt-1">Required role: Admin, Manager, or Entry Owner</p>
                             </div>
@@ -359,6 +401,9 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import FollowButton from '@/components/FollowButton.vue'
 import SaveButton from '@/components/SaveButton.vue'
+import ClaimButton from '@/components/ClaimButton.vue'
+import InteractionBar from '@/components/social/InteractionBar.vue'
+import CommentSection from '@/components/social/CommentSection.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -387,6 +432,7 @@ const entry = ref(null)
 const relatedEntries = ref([])
 const parentCategory = ref(null)
 const childCategory = ref(null)
+const showComments = ref(false)
 
 // Computed
 const canEditEntry = computed(() => {
@@ -492,6 +538,7 @@ const handleEditClick = (e) => {
         alert('Unable to edit: Entry ID not found. Please refresh the page.')
     }
 }
+
 
 const fetchEntry = async () => {
     loading.value = true

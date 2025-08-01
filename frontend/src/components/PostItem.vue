@@ -215,43 +215,37 @@
     </div>
     
     <!-- Actions Bar -->
-    <div class="flex items-center justify-between text-sm">
-      <div class="flex items-center space-x-4">
-        <button
-          @click="handleLike"
-          class="flex items-center space-x-1 text-gray-500 hover:text-red-600 transition-colors"
-          :class="{ 'text-red-600': isLiked }"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
-          <span>{{ post.likes_count || 0 }}</span>
-        </button>
-        
-        <button
-          @click="handleReply"
-          class="flex items-center space-x-1 text-gray-500 hover:text-blue-600 transition-colors"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <span>{{ post.replies_count || 0 }}</span>
-        </button>
-        
-        <button
-          @click="handleShare"
-          class="flex items-center space-x-1 text-gray-500 hover:text-green-600 transition-colors"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.632 4.368C18.114 16.062 18 16.518 18 17c0 .482.114.938.316 1.342m0-2.684a3 3 0 110 2.684M9.316 10.658C9.114 10.062 9 9.518 9 9c0-.482.114-.938.316-1.342m9.368 10.684C18.886 17.938 19 17.482 19 17c0-.482-.114-.938-.316-1.342M9.316 7.658a3 3 0 110 2.684m9.368 10.684a3 3 0 110-2.684m0 0c-.701-.437-1.52-.658-2.368-.658H7.684c-.848 0-1.667.221-2.368.658" />
-          </svg>
-          <span>{{ post.shares_count || 0 }}</span>
-        </button>
-      </div>
-      
-      <div class="text-gray-500">
-        <span v-if="post.views_count > 0">{{ post.views_count }} views</span>
-      </div>
+    <div class="border-t pt-3">
+      <InteractionBar
+        type="post"
+        :id="post.id"
+        :liked="post.is_liked || false"
+        :likes-count="post.likes_count || 0"
+        :comments-count="post.comments_count || post.replies_count || 0"
+        :reposted="post.is_reposted || false"
+        :reposts-count="post.reposts_count || post.shares_count || 0"
+        :share-url="`${baseUrl}/posts/${post.id}`"
+        @toggle-comments="showComments = !showComments"
+        @update:likes-count="updateLikesCount"
+        @update:reposts-count="updateRepostsCount"
+      >
+        <template #append>
+          <div class="ml-auto text-sm text-gray-500">
+            <span v-if="post.views_count > 0">{{ formatCount(post.views_count) }} views</span>
+          </div>
+        </template>
+      </InteractionBar>
+    </div>
+    
+    <!-- Comments Section -->
+    <div v-if="showComments" class="border-t mt-4 pt-4">
+      <CommentSection
+        type="post"
+        :id="post.id"
+        :per-page="10"
+        @comment-added="handleCommentAdded"
+        @comment-deleted="handleCommentDeleted"
+      />
     </div>
   </div>
 </template>
@@ -263,6 +257,8 @@ import { useFeedStore } from '@/stores/feed'
 import ImageKitImage from '@/components/ImageKitImage.vue'
 import ImageLightbox from '@/components/ImageLightbox.vue'
 import PostEditModal from '@/components/PostEditModal.vue'
+import InteractionBar from '@/components/social/InteractionBar.vue'
+import CommentSection from '@/components/social/CommentSection.vue'
 import axios from 'axios'
 
 const props = defineProps({
@@ -278,10 +274,14 @@ const authStore = useAuthStore()
 const feedStore = useFeedStore()
 
 const showMenu = ref(false)
-const isLiked = ref(false)
 const showLightbox = ref(false)
 const lightboxIndex = ref(0)
 const showEditModal = ref(false)
+const showComments = ref(false)
+
+const baseUrl = computed(() => {
+  return window.location.origin
+})
 
 const isOwner = computed(() => {
   return authStore.user?.id === props.post.user?.id
@@ -336,23 +336,70 @@ const handleDelete = async () => {
   }
 }
 
-// Handle like
-const handleLike = () => {
-  // TODO: Implement like functionality
-  isLiked.value = !isLiked.value
-}
-
-// Handle reply
-const handleReply = () => {
-  // TODO: Implement reply functionality
-  console.log('Reply to post:', props.post.id)
-}
-
-// Handle share
-const handleShare = () => {
+// Handle share from dropdown menu
+const handleShare = async () => {
   showMenu.value = false
-  // TODO: Implement share functionality
-  console.log('Share post:', props.post.id)
+  const url = `${baseUrl.value}/posts/${props.post.id}`
+  
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Post by ' + (props.post.user?.name || 'User'),
+        text: props.post.content.substring(0, 100) + '...',
+        url: url
+      })
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        copyToClipboard(url)
+      }
+    }
+  } else {
+    copyToClipboard(url)
+  }
+}
+
+const copyToClipboard = (text) => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+  
+  alert('Link copied to clipboard!')
+}
+
+// Update counts when interactions change
+const updateLikesCount = (count) => {
+  props.post.likes_count = count
+}
+
+const updateRepostsCount = (count) => {
+  props.post.reposts_count = count
+  props.post.shares_count = count // For backward compatibility
+}
+
+// Handle comment events
+const handleCommentAdded = (comment) => {
+  props.post.comments_count = (props.post.comments_count || 0) + 1
+  props.post.replies_count = props.post.comments_count // For backward compatibility
+}
+
+const handleCommentDeleted = (commentId) => {
+  props.post.comments_count = Math.max(0, (props.post.comments_count || 0) - 1)
+  props.post.replies_count = props.post.comments_count // For backward compatibility
+}
+
+// Format count for display
+const formatCount = (count) => {
+  if (count >= 1000000) {
+    return (count / 1000000).toFixed(1) + 'M'
+  } else if (count >= 1000) {
+    return (count / 1000).toFixed(1) + 'K'
+  }
+  return count.toString()
 }
 
 // Open lightbox

@@ -50,6 +50,9 @@ Route::get('/places/public', [PlaceController::class, 'publicIndex']);
 // Short URL redirect
 Route::get('/p/{id}', [PlaceController::class, 'showById'])->where('id', '\d+');
 
+// Place claiming route (must be before hierarchical routes)
+Route::get('/places/{slug}/for-claiming', [PlaceController::class, 'showForClaiming']);
+
 // Browse routes (hierarchical)
 Route::get('/places/{state}', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'browseByState'])->where('state', '[a-z\-]+');
 Route::get('/places/{state}/{city}', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'browseByCity'])->where(['state' => '[a-z\-]+', 'city' => '[a-z\-]+']);
@@ -72,12 +75,16 @@ Route::post('/places/clear-location', [\App\Http\Controllers\Api\LocationAwarePl
 // Region routes
 Route::prefix('regions')->group(function () {
     Route::get('/', [RegionController::class, 'index']);
+    Route::get('/by-slug/{slug}', [RegionController::class, 'getBySlug']);
     Route::get('/by-slug/{state}/{city?}/{neighborhood?}', [RegionController::class, 'showBySlug']);
     Route::get('/{id}', [RegionController::class, 'show']);
     Route::get('/{id}/entries', [RegionController::class, 'entries']);
     Route::get('/{id}/children', [RegionController::class, 'children']);
     Route::get('/{id}/featured', [RegionController::class, 'featured']);
 });
+
+// Local pages routes
+Route::get('/local', [\App\Http\Controllers\Api\LocalController::class, 'index']);
 
 // User profiles (with /up/ prefix)
 Route::get('/up/@{username}', function ($username) {
@@ -124,6 +131,7 @@ Route::get('/@{slug}/lists', function ($slug) {
 // Public channel routes (for edit page and public viewing)
 Route::get('/channels', [\App\Http\Controllers\Api\ChannelController::class, 'index']);
 Route::get('/channels/{channel}', [\App\Http\Controllers\Api\ChannelController::class, 'show']);
+Route::get('/channels/{channel}/chains', [\App\Http\Controllers\Api\ChannelController::class, 'chains']);
 
 // Public list categories
 Route::get('/list-categories/public', [\App\Http\Controllers\Api\Admin\ListCategoryController::class, 'publicOptions']);
@@ -258,13 +266,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/check-url', [ProfileController::class, 'checkCustomUrl']);
     });
     
-    // Notifications
+    // Notifications (existing follow notifications)
     Route::get('/notifications', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [\App\Http\Controllers\Api\NotificationController::class, 'unreadCount']);
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Api\NotificationController::class, 'markAsRead']);
     Route::post('/notifications/mark-all-read', [\App\Http\Controllers\Api\NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{notification}', [\App\Http\Controllers\Api\NotificationController::class, 'destroy']);
     Route::delete('/notifications/clear-read', [\App\Http\Controllers\Api\NotificationController::class, 'clearRead']);
+    
+    // App Notifications (new system for messages)
+    Route::get('/app-notifications', [\App\Http\Controllers\Api\AppNotificationController::class, 'index']);
+    Route::get('/app-notifications/unread', [\App\Http\Controllers\Api\AppNotificationController::class, 'unread']);
+    Route::post('/app-notifications/{notification}/read', [\App\Http\Controllers\Api\AppNotificationController::class, 'markAsRead']);
+    Route::post('/app-notifications/read-all', [\App\Http\Controllers\Api\AppNotificationController::class, 'markAllAsRead']);
+    Route::delete('/app-notifications/{notification}', [\App\Http\Controllers\Api\AppNotificationController::class, 'destroy']);
+    Route::get('/app-notifications/statistics', [\App\Http\Controllers\Api\AppNotificationController::class, 'statistics']);
     
     // User's own lists
     Route::get('/lists', [UserListController::class, 'index']);
@@ -290,6 +306,10 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/lists/{list}/items/{item}', [UserListController::class, 'updateItem']);
     Route::delete('/lists/{list}/items/{item}', [UserListController::class, 'removeItem']);
     Route::put('/lists/{list}/items/reorder', [UserListController::class, 'reorderItems']);
+
+    // List Chains (Lists of Lists)
+    Route::apiResource('chains', \App\Http\Controllers\Api\ListChainController::class);
+    Route::post('/chains/{chain}/reorder', [\App\Http\Controllers\Api\ListChainController::class, 'reorder']);
     
     // Search directory entries for lists
     Route::get('/directory-entries/search', [UserListController::class, 'searchEntries']);
@@ -397,6 +417,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/entities/{entityType}/{entityId}/media', [\App\Http\Controllers\Api\EntityMediaController::class, 'getEntityMedia']);
     Route::post('/entities/{entityType}/{entityId}/media/clear-cache', [\App\Http\Controllers\Api\EntityMediaController::class, 'clearEntityMediaCache']);
 
+    // My places route (authenticated users)
+    Route::get('/my-places', [PlaceController::class, 'myPlaces']);
+    
     // Update a place (authenticated users can update their own places)
     Route::put('/places/{place}', [PlaceController::class, 'update']);
     Route::patch('/places/{place}/submit-for-review', [PlaceController::class, 'submitForReview']);
@@ -406,6 +429,40 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/places/{entry}', [PlaceController::class, 'destroy']);
         Route::post('/places/{entry}/publish', [PlaceController::class, 'publish']);
         Route::get('/places/pending-review', [PlaceController::class, 'pendingReview']);
+    });
+
+    // Business claiming routes
+    Route::get('/places/{place}/claim-status', [ClaimController::class, 'checkClaimability']); // Direct route for claim status
+    Route::post('/places/{place}/claim', [ClaimController::class, 'initiateClaim']); // Direct route for initiating claim
+    
+    Route::prefix('claims')->group(function () {
+        Route::get('/places/{place}/check', [ClaimController::class, 'checkClaimability']);
+        Route::post('/places/{place}/initiate', [ClaimController::class, 'initiateClaim']);
+        Route::get('/{claim}/status', [ClaimController::class, 'getClaimStatus']);
+        Route::post('/{claim}/documents', [ClaimController::class, 'uploadDocument']);
+        Route::post('/{claim}/verify', [\App\Http\Controllers\Api\VerificationController::class, 'verifyCode']);
+        Route::post('/{claim}/resend-code', [\App\Http\Controllers\Api\VerificationController::class, 'resendCode']);
+        Route::put('/{claim}/update-tier', [ClaimController::class, 'updateTier']);
+        Route::post('/{claim}/create-payment-intent', [ClaimController::class, 'createPaymentIntent']);
+        Route::post('/{claim}/confirm-payment', [ClaimController::class, 'confirmPayment']);
+        Route::post('/{claim}/create-verification-fee-payment', [ClaimController::class, 'createVerificationFeePayment']);
+        Route::post('/{claim}/confirm-verification-fee', [ClaimController::class, 'confirmVerificationFeePayment']);
+        Route::post('/{claim}/create-combined-payment', [ClaimController::class, 'createCombinedPayment']);
+        Route::delete('/{claim}', [ClaimController::class, 'cancelClaim']);
+        Route::get('/my-claims', [ClaimController::class, 'getUserClaims']);
+        
+        // Test mode endpoints
+        Route::post('/{claim}/test-approve', [ClaimController::class, 'testApprove']);
+        Route::get('/{claim}/debug-code', [ClaimController::class, 'debugCode']);
+    });
+
+    // Subscription routes
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/plans', [\App\Http\Controllers\Api\SubscriptionController::class, 'getPlans']);
+        Route::get('/places/{place}/status', [\App\Http\Controllers\Api\SubscriptionController::class, 'getSubscriptionStatus']);
+        Route::post('/places/{place}/subscribe', [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
+        Route::post('/places/{place}/cancel', [\App\Http\Controllers\Api\SubscriptionController::class, 'cancel']);
+        Route::post('/places/{place}/resume', [\App\Http\Controllers\Api\SubscriptionController::class, 'resume']);
     });
 
     // Admin routes - Fixed to match what Vue components expect
@@ -460,6 +517,16 @@ Route::middleware(['auth'])->group(function () {
         });
         
         // Place management routes
+        
+        // Bulk data import/export
+        Route::prefix('bulk-data')->group(function () {
+            Route::get('/export/places', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'exportPlaces']);
+            Route::get('/export/regions', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'exportRegions']);
+            Route::post('/import/places', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'importPlaces']);
+            Route::post('/import/regions', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'importRegions']);
+            Route::get('/template/places', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'getPlacesTemplate']);
+            Route::get('/template/regions', [App\Http\Controllers\Api\Admin\BulkDataController::class, 'getRegionsTemplate']);
+        });
         Route::get('/places', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'index']);
         Route::get('/places/stats', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'stats']);
         Route::get('/places/pending', [\App\Http\Controllers\Api\Admin\PlaceController::class, 'pending']);
@@ -564,7 +631,43 @@ Route::middleware(['auth'])->group(function () {
                 Route::get('/home', [\App\Http\Controllers\Api\Admin\HomePageController::class, 'show']);
                 Route::post('/home', [\App\Http\Controllers\Api\Admin\HomePageController::class, 'update']);
                 Route::get('/home/places', [\App\Http\Controllers\Api\Admin\HomePageController::class, 'getPlaces']);
+                
+                // Local pages settings
+                Route::get('/local', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'show']);
+                Route::post('/local', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'update']);
+                Route::get('/local/search-lists', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'searchLists']);
+                Route::get('/local/search-places', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'searchPlaces']);
             });
+        });
+        
+        // Local page settings management
+        Route::prefix('local-pages')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'index']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\LocalPageController::class, 'destroy']);
+        });
+        
+        // Claim management routes (admin)
+        Route::prefix('claims')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'index']);
+            Route::get('/statistics', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'statistics']);
+            Route::get('/{claim}', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'show']);
+            Route::post('/{claim}/approve', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'approve']);
+            Route::post('/{claim}/reject', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'reject']);
+            Route::post('/{claim}/unclaim', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'unclaim']);
+            Route::get('/{claim}/payment-details', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'paymentDetails']);
+            Route::post('/documents/{document}/verify', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'verifyDocument']);
+            Route::get('/documents/{document}/download', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'downloadDocument']);
+        });
+        
+        // Claimed places dashboard route
+        Route::get('/claimed-places', [\App\Http\Controllers\Api\Admin\ClaimController::class, 'index']);
+        
+        // Admin Notification Management
+        Route::prefix('notifications')->group(function () {
+            Route::get('/filters', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'getFilters']);
+            Route::post('/send', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'send']);
+            Route::post('/preview-recipients', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'previewRecipients']);
+            Route::get('/statistics', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'statistics']);
         });
         
         // Site Settings routes
@@ -583,6 +686,33 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/invite-bulk', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'inviteBulk']);
             Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\WaitlistController::class, 'destroy']);
         });
+    });
+    
+    // Social Interactions Routes
+    // Likes
+    Route::prefix('likes')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\LikeController::class, 'index']);
+        Route::post('/toggle', [\App\Http\Controllers\Api\LikeController::class, 'toggle']);
+        Route::get('/check', [\App\Http\Controllers\Api\LikeController::class, 'check']);
+        Route::get('/my-likes', [\App\Http\Controllers\Api\LikeController::class, 'userLikes']);
+    });
+    
+    // Comments
+    Route::prefix('comments')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\CommentController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\Api\CommentController::class, 'store']);
+        Route::put('/{comment}', [\App\Http\Controllers\Api\CommentController::class, 'update']);
+        Route::delete('/{comment}', [\App\Http\Controllers\Api\CommentController::class, 'destroy']);
+        Route::get('/{comment}/replies', [\App\Http\Controllers\Api\CommentController::class, 'replies']);
+    });
+    
+    // Reposts
+    Route::prefix('reposts')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\RepostController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\Api\RepostController::class, 'store']);
+        Route::delete('/', [\App\Http\Controllers\Api\RepostController::class, 'destroy']);
+        Route::get('/check', [\App\Http\Controllers\Api\RepostController::class, 'check']);
+        Route::get('/my-reposts', [\App\Http\Controllers\Api\RepostController::class, 'userReposts']);
     });
 });
 
