@@ -50,6 +50,9 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
           
+          # Show current commit for verification
+          echo "Current commit: $(git rev-parse HEAD)"
+          
           # Update Docker environment file if needed
           if [ -f .env.production ]; then
             cp .env.production .env
@@ -63,9 +66,12 @@ jobs:
           # Wait for services to be ready
           sleep 10
           
-          # Get the app container name
-          APP_CONTAINER=$(docker ps --filter "name=app" --format "{{.Names}}" | head -1)
+          # Get the app container name - explicitly use listerino_app
+          APP_CONTAINER="listerino_app"
           echo "Using app container: $APP_CONTAINER"
+          
+          # Verify container is running
+          docker ps | grep $APP_CONTAINER || exit 1
           
           # Run migrations
           echo "🔄 Running database migrations..."
@@ -89,9 +95,13 @@ jobs:
           
           echo "✅ Deployment completed successfully!"
           
-          # Health check
+          # Health check (non-failing)
           sleep 5
-          curl -f https://listerino.com/api/health || echo "⚠️ Health check failed"
+          if curl -f https://listerino.com/api/health; then
+            echo "✅ Health check passed"
+          else
+            echo "⚠️ Health check failed - this is non-critical"
+          fi
 
     - name: Upload frontend build
       uses: appleboy/scp-action@v0.1.5
@@ -113,8 +123,8 @@ jobs:
         port: 22
         script: |
           cd /var/www/listerino
-          # Get the app container name
-          APP_CONTAINER=$(docker ps --filter "name=app" --format "{{.Names}}" | head -1)
+          # Use explicit container name
+          APP_CONTAINER="listerino_app"
           # Copy built frontend to the Docker container
           docker cp frontend/dist/. $APP_CONTAINER:/app/frontend/dist/
           echo "✅ Frontend deployed!"
