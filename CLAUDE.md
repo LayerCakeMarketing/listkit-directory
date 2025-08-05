@@ -1037,6 +1037,98 @@ stripe listen --forward-to localhost:8000/stripe/webhook
 
 ---
 
+## Recent Updates (August 5, 2025)
+
+### Lists Management Enhancements
+- **Sections Support**: Lists now support sections/groups with structure_version 2.0
+  - Drag-and-drop reordering for both sections and items
+  - JSON storage structure with backward compatibility
+  - Visual grouping in edit and public views
+  - Database migrations: `add_sections_support_to_lists_table`, `add_section_fields_to_list_items_table`
+- **Admin Interface**: New admin interface at `/admin/lists/:id/edit` similar to chains
+  - Comprehensive metadata editing (name, slug, description, category, visibility, status)
+  - Section management with drag-and-drop reordering
+  - Featured and verified toggles
+  - View and manage list ownership
+- **Saved Items Integration**: 
+  - Modal interface matching `/saved` page design with collections sidebar
+  - Support for adding saved places, regions, and lists to lists
+  - Collections/folders support for organization
+  - Fixed route ordering issues causing SQL errors
+
+### Mapbox Integration & Geospatial Features
+- **Map Discovery**: New interactive map view at `/places/map`
+  - Mapbox GL JS integration with clustering
+  - Search and filter capabilities
+  - Geolocation support with "Near Me" functionality
+  - User location preferences stored in database
+- **Geocoding Service**: 
+  - Address autocomplete using Mapbox Geocoding API
+  - Automatic geocoding of places on save
+  - `GeocodingService` class for centralized geocoding
+- **PostGIS Support**:
+  - Spatial indexes for performance
+  - Nearby places queries using ST_DWithin
+  - Bounding box queries for map viewport
+
+### UI/UX Improvements
+- **List Editor Drawer**: Changed from right-sliding to LEFT-sliding, positioned below header (margin-top: 64px)
+- **Add Item Options**: Reordered and simplified:
+  1. Text (custom text content)
+  2. Saved (from saved items)
+  3. Location (place picker)
+  4. Event (event details)
+  - Removed "Directory Entry" option
+- **Image Display**: Increased max height from 24rem (384px) to 53rem (848px) in PostItem component
+- **Section Display**: Fixed empty title issue, items disappearing, and incorrect preview display
+
+### Technical Updates
+- **New Controllers**:
+  - `ListItemController`: Comprehensive list item management (add, update, delete, reorder, sections)
+  - `GeocodingController`: Address search and geocoding endpoints
+  - `GeospatialController`: Nearby and bounds-based place queries
+  - `SavedCollectionController`: Manage saved item collections
+  - `UserMapSettingsController`: User map preferences
+- **Database Migrations**:
+  - PostGIS extension enabled
+  - Sections support (structure_version, is_section, section_id)
+  - Saved collections table
+  - Geospatial columns and indexes for places
+  - Marketing pages table for CMS
+- **Frontend Components**:
+  - `SavedItemsModal.vue`: Modal for selecting saved items
+  - `ListSettingsDrawer.vue`: Left-sliding settings drawer
+  - `ListSection.vue`: Section display component
+  - `PlacesMap.vue`: Mapbox map component
+  - `LocationAutocomplete.vue`: Address autocomplete input
+  - Multiple composables: `useMapbox`, `useGeolocation`, `usePlacesDiscovery`, `useToast`
+
+### API Endpoints Added
+```php
+// List sections management
+POST   /api/lists/{list}/sections
+POST   /api/lists/{list}/convert-to-sections
+PUT    /api/lists/{list}/sections/{section}
+DELETE /api/lists/{list}/sections/{section}
+PUT    /api/lists/{list}/sections/reorder
+
+// Saved items integration
+POST   /api/lists/{list}/items/add-saved
+GET    /api/saved-items/for-list-creation
+
+// Geocoding and geospatial
+GET    /api/geocoding/search
+GET    /api/geospatial/nearby
+GET    /api/geospatial/in-bounds
+
+// Admin lists management
+GET    /api/admin/lists/{list}
+PUT    /api/admin/lists/{list}
+GET    /api/admin/list-categories
+```
+
+---
+
 ## Recent Updates (July 25, 2025)
 
 ### Business Claiming & Subscription System
@@ -1115,6 +1207,6 @@ php artisan test --testsuite=Feature
 
 ---
 
-**Last Updated**: July 26, 2025
+**Last Updated**: August 5, 2025
 **Maintained By**: Development Team
-**Version**: 2.5
+**Version**: 3.0

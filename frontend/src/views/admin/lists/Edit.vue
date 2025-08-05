@@ -289,7 +289,7 @@
                   target="_blank"
                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
-                  <ExternalLinkIcon class="h-4 w-4 mr-2" />
+                  <ArrowTopRightOnSquareIcon class="h-4 w-4 mr-2" />
                   View Public
                 </router-link>
                 <button
@@ -342,7 +342,7 @@ import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Bars3Icon, XMarkIcon, ExternalLinkIcon } from '@heroicons/vue/24/outline'
+import { Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline'
 import { useNotification } from '@/composables/useNotification'
 
 const route = useRoute()
