@@ -54,7 +54,8 @@ class UserList extends Model
         'place_ids',
         'is_region_specific',
         'is_category_specific',
-        'order_index'
+        'order_index',
+        'structure_version'
     ];
 
     protected $casts = [
@@ -143,10 +144,8 @@ class UserList extends Model
         return $this->places();
     }
 
-    public function comments()
-    {
-        return $this->hasMany(Comment::class, 'list_id');
-    }
+    // Comments relationship is handled by Commentable trait
+    // which uses polymorphic commentable_type/commentable_id columns
 
     public function category()
     {
@@ -599,5 +598,71 @@ class UserList extends Model
         if (!empty($updateData)) {
             $this->update($updateData);
         }
+    }
+
+    // Section support methods
+    public function convertToSectionFormat()
+    {
+        if ($this->structure_version === '1.0' || !$this->structure_version) {
+            $oldItems = $this->items ?? [];
+            
+            // Convert items to section format
+            $sections = [
+                [
+                    'id' => 'default-section',
+                    'type' => 'section',
+                    'heading' => 'Items',
+                    'items' => []
+                ]
+            ];
+            
+            // Move existing items into the default section
+            foreach ($oldItems as $item) {
+                $sections[0]['items'][] = $item->toArray();
+            }
+            
+            // Update the list with section structure
+            $this->structure_version = '2.0';
+            $this->save();
+            
+            return $sections;
+        }
+        
+        return null;
+    }
+
+    public function getSectionsAttribute()
+    {
+        if ($this->structure_version === '2.0') {
+            return $this->items()
+                ->where('is_section', true)
+                ->orderBy('order_index')
+                ->get()
+                ->map(function ($section) {
+                    // Ensure heading is set from title field
+                    $section->heading = $section->title;
+                    return $section;
+                });
+        }
+        
+        // For backward compatibility, wrap all items in a default section
+        return collect([
+            (object) [
+                'id' => 'default-section',
+                'type' => 'section',
+                'heading' => 'Items',
+                'items' => $this->items
+            ]
+        ]);
+    }
+
+    public function addItemToSection($sectionId, $itemData)
+    {
+        if ($this->structure_version !== '2.0') {
+            $this->convertToSectionFormat();
+        }
+        
+        // Implementation will be in the controller
+        return true;
     }
 }

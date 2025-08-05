@@ -25,6 +25,11 @@ class SavedItemController extends Controller
             $query->ofType($request->type);
         }
 
+        // Filter by collection if specified
+        if ($request->has('collection')) {
+            $query->inCollection($request->collection);
+        }
+
         // Eager load relationships based on type
         $query->with(['saveable' => function ($query) {
             if ($query->getModel() instanceof Place) {
@@ -34,7 +39,7 @@ class SavedItemController extends Controller
             } elseif ($query->getModel() instanceof Region) {
                 $query->with(['parent.parent']);
             }
-        }]);
+        }, 'collection']);
 
         $savedItems = $query->paginate($request->get('per_page', 20));
 
@@ -46,6 +51,12 @@ class SavedItemController extends Controller
                 'saveable_id' => $item->saveable_id, // Include the ID even if item is deleted
                 'notes' => $item->notes,
                 'saved_at' => $item->created_at,
+                'collection' => $item->collection ? [
+                    'id' => $item->collection->id,
+                    'name' => $item->collection->name,
+                    'color' => $item->collection->color,
+                    'icon' => $item->collection->icon,
+                ] : null,
                 'item' => null,
             ];
 
@@ -122,6 +133,7 @@ class SavedItemController extends Controller
             'type' => 'required|in:place,list,region',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:255',
+            'collection_id' => 'nullable|exists:saved_collections,id',
         ]);
 
         // Map type to model class
@@ -149,11 +161,20 @@ class SavedItemController extends Controller
             ], 200);
         }
 
+        // If collection_id is provided, verify ownership
+        if ($request->collection_id) {
+            $collection = \App\Models\SavedCollection::find($request->collection_id);
+            if (!$collection || $collection->user_id !== $request->user()->id) {
+                return response()->json(['message' => 'Invalid collection'], 403);
+            }
+        }
+
         // Create saved item
         $savedItem = $request->user()->savedItems()->create([
             'saveable_type' => $modelClass,
             'saveable_id' => $request->id,
             'notes' => $request->notes,
+            'collection_id' => $request->collection_id,
         ]);
 
         return response()->json([
@@ -234,25 +255,100 @@ class SavedItemController extends Controller
      */
     public function forListCreation(Request $request): JsonResponse
     {
-        // Only get saved places for now
-        $savedPlaces = $request->user()->savedItems()
-            ->ofType('place')
-            ->with(['saveable' => function ($query) {
-                $query->with(['category', 'location']);
-            }])
+        $user = $request->user();
+        
+        // Get collections
+        $collections = \App\Models\SavedCollection::where('user_id', $user->id)
+            ->withCount('savedItems')
             ->get()
-            ->map(function ($item) {
+            ->map(function ($collection) {
                 return [
-                    'id' => $item->saveable->id,
-                    'title' => $item->saveable->title,
-                    'description' => $item->saveable->description,
-                    'category' => $item->saveable->category?->name,
-                    'location' => $item->saveable->location?->city . ', ' . $item->saveable->location?->state,
-                    'image_url' => $item->saveable->featured_image_url,
-                    'saved_at' => $item->created_at,
+                    'id' => $collection->id,
+                    'name' => $collection->name,
+                    'items_count' => $collection->saved_items_count,
                 ];
             });
+            
+        // Get uncategorized count
+        $uncategorizedCount = $user->savedItems()
+            ->whereNull('collection_id')
+            ->count();
+        
+        // Get all types of saved items (places, regions, lists)
+        $savedItems = $user->savedItems()
+            ->with(['saveable', 'collection'])
+            ->get()
+            ->map(function ($item) {
+                if (!$item->saveable) {
+                    return null;
+                }
+                
+                $saveable = $item->saveable;
+                $type = class_basename($saveable);
+                
+                // Base structure for all types
+                $baseData = [
+                    'id' => $saveable->id,
+                    'type' => strtolower($type),
+                    'saved_at' => $item->created_at,
+                    'collection_id' => $item->collection_id,
+                    'collection_name' => $item->collection?->name,
+                ];
+                
+                // Add type-specific fields
+                switch ($type) {
+                    case 'Place':
+                        $location = '';
+                        if ($saveable->region) {
+                            $location = $saveable->region->name;
+                        }
+                        
+                        return array_merge($baseData, [
+                            'title' => $saveable->title,
+                            'description' => $saveable->description,
+                            'category' => $saveable->category?->name,
+                            'location' => $location,
+                            'image_url' => $saveable->featured_image_url,
+                        ]);
+                        
+                    case 'Region':
+                        // Load parent relationship if not loaded
+                        if (!$saveable->relationLoaded('parent') && $saveable->parent_id) {
+                            $saveable->load('parent');
+                        }
+                        
+                        return array_merge($baseData, [
+                            'title' => $saveable->name,
+                            'description' => $saveable->description,
+                            'category' => 'Region',
+                            'location' => $saveable->parent ? $saveable->parent->name : '',
+                            'image_url' => $saveable->featured_image,
+                            'region_type' => $saveable->type,
+                        ]);
+                        
+                    case 'UserList':
+                        return array_merge($baseData, [
+                            'title' => $saveable->name,
+                            'description' => $saveable->description,
+                            'category' => $saveable->category?->name ?? 'List',
+                            'location' => '',
+                            'image_url' => $saveable->featured_image_url,
+                            'author' => $saveable->user?->name,
+                            'item_count' => $saveable->items_count ?? 0,
+                        ]);
+                        
+                    default:
+                        return null;
+                }
+            })
+            ->filter() // Remove null values
+            ->values(); // Reset array keys
 
-        return response()->json(['places' => $savedPlaces]);
+        return response()->json([
+            'items' => $savedItems,
+            'collections' => $collections,
+            'uncategorized_count' => $uncategorizedCount,
+            'total_count' => $savedItems->count()
+        ]);
     }
 }

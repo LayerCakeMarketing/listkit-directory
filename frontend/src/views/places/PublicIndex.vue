@@ -1,29 +1,42 @@
 <template>
     <div>
         <!-- Hero Section -->
-        <section class="bg-gradient-to-r from-green-600 to-blue-600 text-white py-16">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <h1 class="text-4xl md:text-5xl font-bold mb-6">
-                    Discover Amazing Places
-                </h1>
-                <p class="text-xl mb-8 max-w-3xl mx-auto">
-                    Explore carefully curated local businesses, restaurants, and attractions. 
-                    Find your next favorite spot or share your discoveries with the community.
-                </p>
-                <div class="space-x-4">
-                    <router-link
-                        v-if="!authStore.user"
-                        to="/register"
-                        class="bg-white text-green-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block"
-                    >
-                        Join & Discover More
-                    </router-link>
-                    <a
-                        href="#featured"
-                        class="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-green-600 transition-colors inline-block"
-                    >
-                        Browse Featured Places
-                    </a>
+        <section class="relative">
+            <!-- Background Image -->
+            <div v-if="marketingContent.image_url" class="absolute inset-0">
+                <img 
+                    :src="marketingContent.image_url" 
+                    alt="Places hero background" 
+                    class="w-full h-full object-cover"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+            </div>
+            <div v-else class="absolute inset-0 bg-gradient-to-r from-green-600 to-blue-600"></div>
+            
+            <!-- Content -->
+            <div class="relative z-10 py-24">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-6 text-white">
+                        {{ marketingContent.heading || 'Discover Amazing Places' }}
+                    </h1>
+                    <p class="text-xl mb-8 max-w-3xl mx-auto text-white/90">
+                        {{ marketingContent.paragraph || 'Explore carefully curated local businesses, restaurants, and attractions. Find your next favorite spot or share your discoveries with the community.' }}
+                    </p>
+                    <div class="space-x-4">
+                        <router-link
+                            v-if="!authStore.user"
+                            to="/register"
+                            class="bg-white text-green-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block"
+                        >
+                            Join & Discover More
+                        </router-link>
+                        <a
+                            href="#featured"
+                            class="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-green-600 transition-colors inline-block"
+                        >
+                            Browse Featured Places
+                        </a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -231,6 +244,11 @@ const loading = ref(true)
 const error = ref(null)
 const featuredEntries = ref([])
 const topCategories = ref([])
+const marketingContent = ref({
+    heading: 'Discover Amazing Places',
+    paragraph: 'Explore carefully curated local businesses, restaurants, and attractions. Find your next favorite spot or share your discoveries with the community.',
+    image_url: null
+})
 
 // Methods
 const getEntryUrl = (entry) => {
@@ -253,14 +271,35 @@ const stripHtml = (html) => {
     return temp.textContent || temp.innerText || ''
 }
 
+const fetchMarketingContent = async () => {
+    try {
+        const response = await axios.get('/api/marketing-pages/places')
+        if (response.data) {
+            marketingContent.value = {
+                heading: response.data.heading || marketingContent.value.heading,
+                paragraph: response.data.paragraph || marketingContent.value.paragraph,
+                image_url: response.data.image_url || null
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching marketing content:', err)
+        // Use defaults if fetch fails
+    }
+}
+
 const fetchData = async () => {
     loading.value = true
     error.value = null
 
     try {
-        const response = await axios.get('/api/places/public')
-        featuredEntries.value = response.data.featuredEntries || []
-        topCategories.value = response.data.topCategories || []
+        // Fetch marketing content and places data in parallel
+        const [placesResponse] = await Promise.all([
+            axios.get('/api/places/public'),
+            fetchMarketingContent()
+        ])
+        
+        featuredEntries.value = placesResponse.data.featuredEntries || []
+        topCategories.value = placesResponse.data.topCategories || []
     } catch (err) {
         error.value = err.response?.data?.message || 'Failed to load places'
         console.error('Error fetching public places:', err)

@@ -23,9 +23,37 @@ class PlaceController extends Controller
             'region_id' => 'nullable|exists:regions,id',
             'status' => 'nullable|in:published,draft,pending_review',
             'q' => 'nullable|string|max:255',
+            // Geospatial parameters
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180',
+            'radius' => 'nullable|numeric|min:1|max:100',
+            'bounds' => 'nullable|array',
+            'bounds.north' => 'required_with:bounds|numeric|between:-90,90',
+            'bounds.south' => 'required_with:bounds|numeric|between:-90,90',
+            'bounds.east' => 'required_with:bounds|numeric|between:-180,180',
+            'bounds.west' => 'required_with:bounds|numeric|between:-180,180',
         ]);
 
         $query = Place::with(['category', 'region', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion']);
+
+        // Geospatial filtering
+        if ($request->filled(['lat', 'lng'])) {
+            $query->select('directory_entries.*')
+                ->selectDistanceTo($request->lat, $request->lng);
+            
+            if ($request->filled('radius')) {
+                $query->withinRadius($request->lat, $request->lng, $request->radius);
+            }
+            
+            $query->orderByDistance($request->lat, $request->lng);
+        } elseif ($request->filled('bounds')) {
+            $query->withinBoundingBox(
+                $request->bounds['north'],
+                $request->bounds['south'],
+                $request->bounds['east'],
+                $request->bounds['west']
+            );
+        }
 
         // Filter by type
         if ($request->filled('type')) {
@@ -37,9 +65,37 @@ class PlaceController extends Controller
             $query->where('category_id', $request->category_id);
         }
 
-        // Filter by region
+        // Filter by region with hierarchical support
         if ($request->filled('region_id')) {
-            $query->where('region_id', $request->region_id);
+            $region = \App\Models\Region::find($request->region_id);
+            if ($region) {
+                // If include_nearby is set and region has coordinates, use radius search
+                if ($request->boolean('include_nearby') && $region->lat && $region->lng) {
+                    // Use 20 mile radius (configurable)
+                    $radiusMiles = $request->input('nearby_radius', 20);
+                    
+                    $query->select('directory_entries.*')
+                        ->selectDistanceTo($region->lat, $region->lng)
+                        ->withinRadius($region->lat, $region->lng, $radiusMiles)
+                        ->orderByDistance($region->lat, $region->lng);
+                } else {
+                    // Standard hierarchical filtering
+                    switch ($region->level) {
+                        case 1: // State
+                            $query->where('state_region_id', $region->id);
+                            break;
+                        case 2: // City
+                            $query->where('city_region_id', $region->id);
+                            break;
+                        case 3: // Neighborhood
+                            $query->where('neighborhood_region_id', $region->id);
+                            break;
+                        default:
+                            // Fallback to old region_id field
+                            $query->where('region_id', $request->region_id);
+                    }
+                }
+            }
         }
 
         // Filter by status (for admins/editors)
@@ -60,11 +116,52 @@ class PlaceController extends Controller
 
         $entries = $query->paginate(20);
 
-        // Get categories for filtering
-        $categories = \App\Models\Category::whereNull('parent_id')
-            ->with(['children'])
-            ->withCount('directoryEntries')
-            ->get();
+        // Get categories for filtering with location-aware counts
+        $categoriesQuery = \App\Models\Category::whereNull('parent_id')
+            ->with(['children']);
+        
+        // Add location-aware count based on the same filters
+        if ($request->filled('region_id')) {
+            $region = \App\Models\Region::find($request->region_id);
+            if ($region) {
+                if ($request->boolean('include_nearby') && $region->lat && $region->lng) {
+                    // Count with radius
+                    $radiusMiles = $request->input('nearby_radius', 20);
+                    $categoriesQuery->withCount(['directoryEntries' => function ($q) use ($region, $radiusMiles) {
+                        $q->where('status', 'published')
+                          ->withinRadius($region->lat, $region->lng, $radiusMiles);
+                    }]);
+                } else {
+                    // Count with hierarchical filtering
+                    $categoriesQuery->withCount(['directoryEntries' => function ($q) use ($region) {
+                        $q->where('status', 'published');
+                        switch ($region->level) {
+                            case 1: // State
+                                $q->where('state_region_id', $region->id);
+                                break;
+                            case 2: // City
+                                $q->where('city_region_id', $region->id);
+                                break;
+                            case 3: // Neighborhood
+                                $q->where('neighborhood_region_id', $region->id);
+                                break;
+                        }
+                    }]);
+                }
+            } else {
+                // Fallback to global count if region not found
+                $categoriesQuery->withCount(['directoryEntries' => function ($q) {
+                    $q->where('status', 'published');
+                }]);
+            }
+        } else {
+            // No region filter, show global counts
+            $categoriesQuery->withCount(['directoryEntries' => function ($q) {
+                $q->where('status', 'published');
+            }]);
+        }
+        
+        $categories = $categoriesQuery->get();
 
         return response()->json([
             'entries' => $entries,
@@ -111,13 +208,27 @@ class PlaceController extends Controller
                 $validated = array_merge($validated, $regionIds);
             }
 
-            // Create directory entry
-            $entry = Place::create([
+            // Extract location data and save coordinates directly to place
+            $locationData = $request->location;
+            $placeData = [
                 ...$validated,
                 'created_by_user_id' => auth()->id(),
                 'status' => 'draft',
                 'published_at' => null,
-            ]);
+                // Save coordinates directly to place model
+                'latitude' => $locationData['latitude'] ?? null,
+                'longitude' => $locationData['longitude'] ?? null,
+                'address' => $locationData['address_line1'] ?? null,
+                'city' => $locationData['city'] ?? null,
+                'state' => $locationData['state'] ?? null,
+                'zip_code' => $locationData['zip_code'] ?? null,
+            ];
+            
+            // Remove the nested location data before creating
+            unset($placeData['location']);
+            
+            // Create directory entry
+            $entry = Place::create($placeData);
 
             // Create location (always required now)
             Location::create([
@@ -239,6 +350,16 @@ class PlaceController extends Controller
                             $place->update($regionIds);
                         }
                     }
+
+                    // Update coordinates directly on the place model
+                    $place->update([
+                        'latitude' => $locationData['latitude'] ?? $place->latitude,
+                        'longitude' => $locationData['longitude'] ?? $place->longitude,
+                        'address' => $locationData['address_line1'] ?? $place->address,
+                        'city' => $locationData['city'] ?? $place->city,
+                        'state' => $locationData['state'] ?? $place->state,
+                        'zip_code' => $locationData['zip_code'] ?? $place->zip_code,
+                    ]);
 
                     if ($place->location) {
                         $place->location->update($locationData);
@@ -436,32 +557,66 @@ class PlaceController extends Controller
             
             // Create city region if doesn't exist
             if (!empty($locationData['city'])) {
-                $cityRegion = \App\Models\Region::firstOrCreate(
-                    [
-                        'slug' => Str::slug($locationData['city']), 
+                // For cities, first try to find by parent and name/type
+                $cityRegion = \App\Models\Region::where('parent_id', $stateRegion->id)
+                    ->where('type', 'city')
+                    ->where(function($q) use ($locationData) {
+                        $q->where('name', $locationData['city'])
+                          ->orWhere('slug', Str::slug($locationData['city']));
+                    })
+                    ->first();
+                    
+                if (!$cityRegion) {
+                    // Create with a unique slug that includes state
+                    $citySlug = Str::slug($locationData['city']);
+                    $stateSlug = $stateRegion->slug;
+                    $uniqueSlug = $citySlug;
+                    
+                    // If slug already exists, append state to make it unique
+                    if (\App\Models\Region::where('slug', $citySlug)->exists()) {
+                        $uniqueSlug = $citySlug . '-' . $stateSlug;
+                    }
+                    
+                    $cityRegion = \App\Models\Region::create([
+                        'slug' => $uniqueSlug,
                         'type' => 'city',
-                        'parent_id' => $stateRegion->id
-                    ],
-                    [
+                        'parent_id' => $stateRegion->id,
                         'name' => $locationData['city'], 
                         'level' => 2
-                    ]
-                );
+                    ]);
+                }
+                
                 $regionIds['city_region_id'] = $cityRegion->id;
                 
                 // Create neighborhood region if doesn't exist
                 if (!empty($locationData['neighborhood'])) {
-                    $neighborhoodRegion = \App\Models\Region::firstOrCreate(
-                        [
-                            'slug' => Str::slug($locationData['neighborhood']), 
+                    // Similar approach for neighborhoods
+                    $neighborhoodRegion = \App\Models\Region::where('parent_id', $cityRegion->id)
+                        ->where('type', 'neighborhood')
+                        ->where(function($q) use ($locationData) {
+                            $q->where('name', $locationData['neighborhood'])
+                              ->orWhere('slug', Str::slug($locationData['neighborhood']));
+                        })
+                        ->first();
+                        
+                    if (!$neighborhoodRegion) {
+                        $neighborhoodSlug = Str::slug($locationData['neighborhood']);
+                        $uniqueSlug = $neighborhoodSlug;
+                        
+                        // If slug already exists, append city slug to make it unique
+                        if (\App\Models\Region::where('slug', $neighborhoodSlug)->exists()) {
+                            $uniqueSlug = $neighborhoodSlug . '-' . $cityRegion->slug;
+                        }
+                        
+                        $neighborhoodRegion = \App\Models\Region::create([
+                            'slug' => $uniqueSlug,
                             'type' => 'neighborhood',
-                            'parent_id' => $cityRegion->id
-                        ],
-                        [
+                            'parent_id' => $cityRegion->id,
                             'name' => $locationData['neighborhood'], 
                             'level' => 3
-                        ]
-                    );
+                        ]);
+                    }
+                    
                     $regionIds['neighborhood_region_id'] = $neighborhoodRegion->id;
                 }
             }
@@ -912,6 +1067,145 @@ class PlaceController extends Controller
         
         return response()->json([
             'data' => $place
+        ]);
+    }
+
+    /**
+     * Get places for map view with clustering support
+     */
+    public function mapData(Request $request)
+    {
+        $request->validate([
+            'bounds' => 'required|array',
+            'bounds.north' => 'required|numeric|between:-90,90',
+            'bounds.south' => 'required|numeric|between:-90,90',
+            'bounds.east' => 'required|numeric|between:-180,180',
+            'bounds.west' => 'required|numeric|between:-180,180',
+            'zoom' => 'nullable|numeric|between:0,22',
+            'category_id' => 'nullable|exists:categories,id',
+            'type' => 'nullable|in:business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest,service,online',
+            'search' => 'nullable|string|max:255',
+        ]);
+
+        $query = Place::published()
+            ->with([
+                'category:id,name,slug',
+                'region:id,name,slug,parent_id,type',
+                'stateRegion:id,name,slug',
+                'cityRegion:id,name,slug'
+            ])
+            ->hasValidCoordinates()
+            ->withinBoundingBox(
+                $request->bounds['north'],
+                $request->bounds['south'],
+                $request->bounds['east'],
+                $request->bounds['west']
+            );
+
+        // Apply filters
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        if ($request->filled('type')) {
+            $query->ofType($request->type);
+        }
+
+        // Search filter
+        if ($request->filled('search')) {
+            $searchTerm = $request->search;
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('title', 'ilike', "%{$searchTerm}%")
+                  ->orWhere('description', 'ilike', "%{$searchTerm}%")
+                  ->orWhere('address', 'ilike', "%{$searchTerm}%")
+                  ->orWhere('city', 'ilike', "%{$searchTerm}%");
+            });
+        }
+
+        // Limit results based on zoom level to prevent overwhelming the map
+        $zoom = $request->get('zoom', 10);
+        $limit = match(true) {
+            $zoom < 8 => 100,
+            $zoom < 10 => 500,
+            $zoom < 12 => 1000,
+            default => 2000
+        };
+
+        $places = $query->limit($limit)->get();
+
+        // Format for Mapbox
+        $features = $places->map(function ($place) {
+            return [
+                'type' => 'Feature',
+                'geometry' => [
+                    'type' => 'Point',
+                    'coordinates' => [(float)$place->longitude, (float)$place->latitude]
+                ],
+                'properties' => [
+                    'id' => $place->id,
+                    'title' => $place->title,
+                    'slug' => $place->slug,
+                    'canonical_url' => $place->canonical_url,
+                    'category' => $place->category ? [
+                        'id' => $place->category->id,
+                        'name' => $place->category->name,
+                        'slug' => $place->category->slug
+                    ] : null,
+                    'address' => $place->address,
+                    'city' => $place->city,
+                    'state' => $place->state,
+                    'logo_url' => $place->logo_url,
+                    'cover_image_url' => $place->cover_image_url,
+                    'is_featured' => $place->is_featured
+                ]
+            ];
+        });
+
+        return response()->json([
+            'type' => 'FeatureCollection',
+            'features' => $features,
+            'total' => $features->count()
+        ]);
+    }
+
+    /**
+     * Search places with geocoding support
+     */
+    public function searchWithLocation(Request $request)
+    {
+        $request->validate([
+            'q' => 'required|string|max:255',
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180',
+            'radius' => 'nullable|numeric|min:1|max:100',
+        ]);
+
+        $query = Place::published()
+            ->with(['category', 'location', 'stateRegion', 'cityRegion']);
+
+        // Search by name/description
+        $query->where(function ($q) use ($request) {
+            $q->where('title', 'ilike', "%{$request->q}%")
+              ->orWhere('description', 'ilike', "%{$request->q}%");
+        });
+
+        // If location provided, order by distance
+        if ($request->filled(['lat', 'lng'])) {
+            $query->select('directory_entries.*')
+                ->selectDistanceTo($request->lat, $request->lng);
+            
+            if ($request->filled('radius')) {
+                $query->withinRadius($request->lat, $request->lng, $request->radius);
+            }
+            
+            $query->orderByDistance($request->lat, $request->lng);
+        }
+
+        $places = $query->limit(20)->get();
+
+        return response()->json([
+            'places' => $places,
+            'total' => $places->count()
         ]);
     }
 }

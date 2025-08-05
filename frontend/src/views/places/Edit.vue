@@ -484,122 +484,44 @@
                         title="Address / Location"
                     >
                         <div class="space-y-4">
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="md:col-span-2">
-                                <label for="address_line1" class="block text-sm font-medium text-gray-700">
-                                    Address 
-                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
-                                </label>
-                                <input
-                                    v-model="form.location.address_line1"
-                                    type="text"
-                                    id="address_line1"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.address_line1']" class="mt-1 text-sm text-red-600">{{ errors['location.address_line1'] }}</div>
-                            </div>
+                            <!-- AddressInput Component with automatic geocoding -->
+                            <AddressInput
+                                v-model="addressData"
+                                :errors="addressErrors"
+                                :auto-geocode="true"
+                                :show-map-preview="true"
+                                @validation-complete="handleAddressValidation"
+                            />
+                            
+                            <!-- Additional location fields -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="zip_code" class="block text-sm font-medium text-gray-700">
+                                        ZIP Code 
+                                        <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
+                                    </label>
+                                    <input
+                                        v-model="form.location.zip_code"
+                                        type="text"
+                                        id="zip_code"
+                                        :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                    <div v-if="errors['location.zip_code']" class="mt-1 text-sm text-red-600">{{ errors['location.zip_code'] }}</div>
+                                </div>
 
-                            <div>
-                                <label for="city" class="block text-sm font-medium text-gray-700">City *</label>
-                                <input
-                                    v-model="form.location.city"
-                                    type="text"
-                                    id="city"
-                                    required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.city']" class="mt-1 text-sm text-red-600">{{ errors['location.city'] }}</div>
+                                <div>
+                                    <label for="neighborhood" class="block text-sm font-medium text-gray-700">Neighborhood <span class="text-gray-500 text-xs">(optional)</span></label>
+                                    <input
+                                        v-model="form.location.neighborhood"
+                                        type="text"
+                                        id="neighborhood"
+                                        placeholder="e.g., Downtown, Midtown, Financial District"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                    <div v-if="errors['location.neighborhood']" class="mt-1 text-sm text-red-600">{{ errors['location.neighborhood'] }}</div>
+                                </div>
                             </div>
-
-                            <div>
-                                <label for="state" class="block text-sm font-medium text-gray-700">State *</label>
-                                <select
-                                    v-model="form.location.state"
-                                    id="state"
-                                    required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                >
-                                    <option value="">Select a state</option>
-                                    <option v-for="state in usStates" :key="state.code" :value="state.code">
-                                        {{ state.name }}
-                                    </option>
-                                </select>
-                                <div v-if="errors['location.state']" class="mt-1 text-sm text-red-600">{{ errors['location.state'] }}</div>
-                            </div>
-
-                            <div>
-                                <label for="zip_code" class="block text-sm font-medium text-gray-700">
-                                    ZIP Code 
-                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
-                                </label>
-                                <input
-                                    v-model="form.location.zip_code"
-                                    type="text"
-                                    id="zip_code"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.zip_code']" class="mt-1 text-sm text-red-600">{{ errors['location.zip_code'] }}</div>
-                            </div>
-
-                            <div>
-                                <label for="neighborhood" class="block text-sm font-medium text-gray-700">Neighborhood <span class="text-gray-500 text-xs">(optional)</span></label>
-                                <input
-                                    v-model="form.location.neighborhood"
-                                    type="text"
-                                    id="neighborhood"
-                                    placeholder="e.g., Downtown, Midtown, Financial District"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.neighborhood']" class="mt-1 text-sm text-red-600">{{ errors['location.neighborhood'] }}</div>
-                            </div>
-
-                            <div class="md:col-span-2">
-                                <button
-                                    type="button"
-                                    @click="geocodeAddress"
-                                    :disabled="!canGeocode || geocoding"
-                                    class="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
-                                >
-                                    {{ geocoding ? 'Finding coordinates...' : 'Update Coordinates' }}
-                                </button>
-                                <p class="text-sm text-gray-500 mt-1">Click to automatically update latitude and longitude</p>
-                            </div>
-
-                            <div>
-                                <label for="latitude" class="block text-sm font-medium text-gray-700">
-                                    Latitude 
-                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
-                                </label>
-                                <input
-                                    v-model="form.location.latitude"
-                                    type="number"
-                                    step="any"
-                                    id="latitude"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.latitude']" class="mt-1 text-sm text-red-600">{{ errors['location.latitude'] }}</div>
-                            </div>
-
-                            <div>
-                                <label for="longitude" class="block text-sm font-medium text-gray-700">
-                                    Longitude 
-                                    <span v-if="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)">*</span>
-                                </label>
-                                <input
-                                    v-model="form.location.longitude"
-                                    type="number"
-                                    step="any"
-                                    id="longitude"
-                                    :required="['business_b2b', 'business_b2c', 'religious_org', 'point_of_interest', 'area_of_interest'].includes(form.type)"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                />
-                                <div v-if="errors['location.longitude']" class="mt-1 text-sm text-red-600">{{ errors['location.longitude'] }}</div>
-                            </div>
-                        </div>
                         </div>
                     </AccordionSection>
 
@@ -635,6 +557,7 @@ import AccordionSection from '@/components/AccordionSection.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import DraggableImageGallery from '@/components/DraggableImageGallery.vue'
 import PlacePreview from '@/components/PlacePreview.vue'
+import AddressInput from '@/components/AddressInput.vue'
 import { usStates } from '@/data/usStates'
 import { useAuthStore } from '@/stores/auth'
 
@@ -690,6 +613,24 @@ const errors = ref({})
 const processing = ref(false)
 const geocoding = ref(false)
 const showSuccessMessage = ref(false)
+
+// Address data for AddressInput component
+const addressData = ref({
+    address: '',
+    city: '',
+    state: '',
+    latitude: null,
+    longitude: null
+})
+
+// Computed errors for AddressInput
+const addressErrors = computed(() => ({
+    address: errors.value['location.address_line1'],
+    city: errors.value['location.city'],
+    state: errors.value['location.state'],
+    latitude: errors.value['location.latitude'],
+    longitude: errors.value['location.longitude']
+}))
 
 // Image upload state
 const logoImages = ref([])
@@ -880,6 +821,15 @@ const initializeForm = () => {
         form.location.longitude = entry.value.location.longitude || ''
         form.location.cross_streets = entry.value.location.cross_streets || ''
         form.location.neighborhood = entry.value.location.neighborhood || ''
+        
+        // Also update addressData for AddressInput component
+        addressData.value = {
+            address: entry.value.location.address_line1 || '',
+            city: entry.value.location.city || '',
+            state: entry.value.location.state || '',
+            latitude: entry.value.location.latitude || null,
+            longitude: entry.value.location.longitude || null
+        }
     }
 }
 
@@ -939,30 +889,27 @@ const removeCoverImage = () => {
     coverImages.value = []
 }
 
-const geocodeAddress = async () => {
-    if (!canGeocode.value) return
-    
-    geocoding.value = true
-    
-    const address = `${form.location.address_line1}, ${form.location.city}, ${form.location.state} ${form.location.zip_code}`
-    
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-        const data = await response.json()
-        
-        if (data.length > 0) {
-            form.location.latitude = parseFloat(data[0].lat)
-            form.location.longitude = parseFloat(data[0].lon)
-        } else {
-            alert('Could not find coordinates for this address. Please enter them manually.')
-        }
-    } catch (error) {
-        console.error('Geocoding error:', error)
-        alert('Error finding coordinates. Please enter them manually.')
-    } finally {
-        geocoding.value = false
+// Handle address validation from AddressInput
+const handleAddressValidation = (result) => {
+    console.log('Address validation result:', result)
+    if (result.valid && result.confidence >= 0.8) {
+        // Clear any previous address errors
+        delete errors.value['location.address_line1']
+        delete errors.value['location.city']
+        delete errors.value['location.state']
+        delete errors.value['location.latitude']
+        delete errors.value['location.longitude']
     }
 }
+
+// Watch addressData and sync with form.location
+watch(addressData, (newVal) => {
+    form.location.address_line1 = newVal.address
+    form.location.city = newVal.city
+    form.location.state = newVal.state
+    form.location.latitude = newVal.latitude
+    form.location.longitude = newVal.longitude
+}, { deep: true })
 
 const submitForm = async () => {
     processing.value = true

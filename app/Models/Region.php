@@ -34,6 +34,7 @@ class Region extends Model
         'meta_title',
         'meta_description',
         'custom_fields',
+        'designation',
         // Park-specific fields
         'park_system',
         'park_designation',

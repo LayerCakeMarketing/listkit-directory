@@ -97,6 +97,12 @@ const routes = [
     component: () => import('@/views/places/Index.vue')
   },
   {
+    path: '/places/map',
+    name: 'PlacesMap',
+    component: () => import('@/views/places/MapDiscovery.vue'),
+    meta: { title: 'Places Map' }
+  },
+  {
     path: '/my-places',
     name: 'MyPlaces',
     component: () => import('@/views/MyPlaces.vue'),
@@ -414,6 +420,12 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/admin/lists/:id/edit',
+    name: 'AdminListEdit',
+    component: () => import('@/views/admin/lists/Edit.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/admin/list-categories',
     name: 'AdminListCategories',
     component: () => import('@/views/admin/list-categories/Index.vue'),
@@ -459,6 +471,12 @@ const routes = [
     path: '/admin/marketing-pages/local',
     name: 'AdminLocalPageSettings',
     component: () => import('@/views/admin/marketing-pages/LocalPageEditor.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/marketing-pages/:page',
+    name: 'AdminMarketingPageEditor',
+    component: () => import('@/views/admin/marketing-pages/MarketingPageEditor.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {

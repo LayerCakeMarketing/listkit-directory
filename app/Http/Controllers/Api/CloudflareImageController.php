@@ -24,9 +24,9 @@ class CloudflareImageController extends Controller
         try {
             // Validate optional context parameters
             $request->validate([
-                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover,avatar_temp,banner_temp,banner',
+                'context' => 'nullable|string|in:avatar,cover,gallery,logo,item,region_cover,avatar_temp,banner_temp,banner,marketing',
                 'entity_type' => 'nullable|string',
-                'entity_id' => 'nullable|integer',
+                'entity_id' => 'nullable|string|max:255',
             ]);
 
             $metadata = [

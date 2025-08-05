@@ -77,4 +77,30 @@ return [
         'auto_approve_free' => env('CLAIMING_AUTO_APPROVE_FREE', false),
     ],
 
+    'geocoding' => [
+        'provider' => env('GEOCODING_PROVIDER', 'openstreetmap'), // openstreetmap, google_maps, mapbox
+        'cache_duration_days' => env('GEOCODING_CACHE_DAYS', 30),
+        'rate_limit_delay_ms' => env('GEOCODING_RATE_LIMIT_MS', 100),
+        
+        'google_maps' => [
+            'api_key' => env('GOOGLE_MAPS_API_KEY'),
+            'region' => env('GOOGLE_MAPS_REGION', 'us'),
+        ],
+        
+        'mapbox' => [
+            'access_token' => env('MAPBOX_ACCESS_TOKEN'),
+            'country_code' => env('MAPBOX_COUNTRY_CODE', 'us'),
+        ],
+        
+        'openstreetmap' => [
+            'user_agent' => env('APP_NAME', 'Laravel') . ' Geocoding Service',
+            'country_codes' => env('OSM_COUNTRY_CODES', 'us'),
+            'rate_limit' => env('OSM_RATE_LIMIT', 1), // requests per second
+        ]
+    ],
+    
+    'mapbox' => [
+        'secret_token' => env('MAPBOX_SECRET_TOKEN'),
+    ],
+
 ];

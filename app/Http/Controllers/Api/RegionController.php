@@ -93,6 +93,67 @@ class RegionController extends Controller
     }
     
     /**
+     * Get nearby regions based on current region.
+     */
+    public function nearby(Request $request)
+    {
+        $regionId = $request->input('region_id');
+        
+        if (!$regionId) {
+            return response()->json(['data' => []]);
+        }
+        
+        $currentRegion = Region::find($regionId);
+        if (!$currentRegion) {
+            return response()->json(['data' => []]);
+        }
+        
+        $nearbyRegions = collect();
+        
+        // Get siblings (same parent)
+        if ($currentRegion->parent_id) {
+            $siblings = Region::where('parent_id', $currentRegion->parent_id)
+                ->where('id', '!=', $currentRegion->id)
+                ->with(['parent'])
+                ->withCount([
+                    'entries as places_count' => function ($q) {
+                        $q->where('status', 'published');
+                    }
+                ])
+                ->orderBy('name')
+                ->limit(5)
+                ->get();
+            
+            $nearbyRegions = $nearbyRegions->concat($siblings);
+        }
+        
+        // If current region is a city, get other popular cities in the same state
+        if ($currentRegion->level === 2 && $currentRegion->parent_id) {
+            $otherCities = Region::where('parent_id', $currentRegion->parent_id)
+                ->where('id', '!=', $currentRegion->id)
+                ->where('level', 2)
+                ->with(['parent'])
+                ->withCount([
+                    'cityEntries as places_count' => function ($q) {
+                        $q->where('status', 'published');
+                    }
+                ])
+                ->orderBy('places_count', 'desc')
+                ->limit(5 - $nearbyRegions->count())
+                ->get();
+            
+            $nearbyRegions = $nearbyRegions->concat($otherCities);
+        }
+        
+        // Remove duplicates and limit to 5
+        $nearbyRegions = $nearbyRegions->unique('id')->take(5);
+        
+        return response()->json([
+            'data' => $nearbyRegions->values()
+        ]);
+    }
+    
+    /**
      * Display a listing of regions.
      */
     public function index(Request $request)

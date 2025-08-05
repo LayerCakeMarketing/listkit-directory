@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use App\Models\Place;
+use App\Observers\PlaceObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -36,5 +38,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-regions', function ($user) {
             return in_array($user->role, ['admin', 'manager']);
         });
+        
+        // Register model observers
+        Place::observe(PlaceObserver::class);
     }
 }

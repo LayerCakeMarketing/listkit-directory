@@ -41,6 +41,10 @@ class Place extends Model
         // Location metadata
         'cross_streets', 'neighborhood',
         
+        // Geospatial fields
+        'latitude', 'longitude', 'address_line1', 'address_line2', 'city', 'state', 'zip_code', 'country',
+        'location_updated_at', 'location_verified',
+        
         // Hierarchical regions
         'state_region_id', 'city_region_id', 'neighborhood_region_id', 'regions_updated_at',
         
@@ -89,6 +93,12 @@ class Place extends Model
         'claimed_at' => 'datetime',
         'subscription_expires_at' => 'datetime',
         'ownership_transferred_at' => 'datetime',
+        
+        // Geospatial fields
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
+        'location_updated_at' => 'datetime',
+        'location_verified' => 'boolean',
     ];
 
     protected $appends = ['canonical_url', 'name'];
@@ -360,6 +370,69 @@ class Place extends Model
               ->orWhereIn('city_region_id', $regionIds)
               ->orWhereIn('neighborhood_region_id', $regionIds);
         });
+    }
+
+    // Geospatial scopes for distance-based queries
+    public function scopeWithinRadius($query, $latitude, $longitude, $radiusInMiles = 25)
+    {
+        $radiusInMeters = $radiusInMiles * 1609.34;
+        
+        return $query->whereNotNull('geom')
+            ->whereRaw(
+                'ST_DWithin(geom, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                [$longitude, $latitude, $radiusInMeters]
+            )
+            ->addSelect(\DB::raw("
+                ST_Distance(geom, ST_SetSRID(ST_MakePoint({$longitude}, {$latitude}), 4326)::geography) as distance_meters,
+                ROUND(ST_Distance(geom, ST_SetSRID(ST_MakePoint({$longitude}, {$latitude}), 4326)::geography) * 0.000621371, 2) as distance_miles
+            "));
+    }
+
+    public function scopeWithinBoundingBox($query, $northLat, $southLat, $eastLng, $westLng)
+    {
+        return $query->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereBetween('latitude', [$southLat, $northLat])
+            ->whereBetween('longitude', [$westLng, $eastLng]);
+    }
+
+    public function scopeNearbyFast($query, $latitude, $longitude, $radiusInMiles = 25)
+    {
+        // Fast bounding box approximation for initial filtering
+        $latRange = $radiusInMiles / 69; // 1 degree lat ≈ 69 miles
+        $lngRange = $radiusInMiles / (69 * cos(deg2rad($latitude))); // Adjust for longitude
+        
+        return $query->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereBetween('latitude', [$latitude - $latRange, $latitude + $latRange])
+            ->whereBetween('longitude', [$longitude - $lngRange, $longitude + $lngRange]);
+    }
+
+    public function scopeOrderByDistance($query, $latitude, $longitude)
+    {
+        return $query->whereNotNull('geom')
+            ->orderByRaw(
+                'ST_Distance(geom, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)',
+                [$longitude, $latitude]
+            );
+    }
+
+    public function scopeWithCoordinates($query)
+    {
+        return $query->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereNotNull('geom');
+    }
+
+    public function scopeNeedsGeocoding($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('latitude')
+              ->orWhereNull('longitude')
+              ->orWhereNull('location_updated_at')
+              ->orWhere('location_verified', false);
+        })->whereNotNull('address_line1')
+          ->orWhereNotNull('city');
     }
 
     // Helper methods
@@ -683,4 +756,189 @@ class Place extends Model
         return $query->where('subscription_tier', '!=', 'free')
                     ->where('subscription_expires_at', '>', now());
     }
+
+    // Geospatial helper methods
+    
+    /**
+     * Get the full address string
+     */
+    public function getFullAddressAttribute()
+    {
+        $parts = array_filter([
+            $this->address_line1,
+            $this->address_line2,
+            $this->city,
+            $this->state,
+            $this->zip_code
+        ]);
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * Check if place has valid coordinates
+     */
+    public function hasValidCoordinates(): bool
+    {
+        return $this->latitude !== null 
+            && $this->longitude !== null
+            && $this->latitude >= -90 
+            && $this->latitude <= 90
+            && $this->longitude >= -180 
+            && $this->longitude <= 180;
+    }
+
+    /**
+     * Calculate distance to another place or coordinates
+     */
+    public function distanceTo($target, $unit = 'miles')
+    {
+        if (!$this->hasValidCoordinates()) {
+            return null;
+        }
+
+        if ($target instanceof Place) {
+            if (!$target->hasValidCoordinates()) {
+                return null;
+            }
+            $targetLat = $target->latitude;
+            $targetLng = $target->longitude;
+        } elseif (is_array($target) && isset($target['lat'], $target['lng'])) {
+            $targetLat = $target['lat'];
+            $targetLng = $target['lng'];
+        } else {
+            return null;
+        }
+
+        // Use PostGIS for accurate calculation
+        $distance = \DB::selectOne("
+            SELECT ST_Distance(
+                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography
+            ) as distance
+        ", [$this->longitude, $this->latitude, $targetLng, $targetLat]);
+
+        $distanceMeters = $distance->distance;
+        
+        return match($unit) {
+            'miles' => $distanceMeters * 0.000621371,
+            'kilometers', 'km' => $distanceMeters / 1000,
+            'meters', 'm' => $distanceMeters,
+            default => $distanceMeters * 0.000621371
+        };
+    }
+
+    /**
+     * Get nearby places within radius
+     */
+    public function getNearbyPlaces($radiusInMiles = 5, $limit = 10)
+    {
+        if (!$this->hasValidCoordinates()) {
+            return collect();
+        }
+
+        return static::published()
+            ->where('id', '!=', $this->id)
+            ->withinRadius($this->latitude, $this->longitude, $radiusInMiles)
+            ->orderByDistance($this->latitude, $this->longitude)
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Update coordinates and trigger geometry update
+     */
+    public function updateCoordinates($latitude, $longitude, $source = 'manual_correction')
+    {
+        $this->update([
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'location_source' => $source,
+            'location_updated_at' => now(),
+            'location_verified' => true
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Get coordinates as array
+     */
+    public function getCoordinatesAttribute()
+    {
+        if (!$this->hasValidCoordinates()) {
+            return null;
+        }
+
+        return [
+            'lat' => (float) $this->latitude,
+            'lng' => (float) $this->longitude
+        ];
+    }
+
+    /**
+     * Check if place needs geocoding
+     */
+    public function needsGeocoding(): bool
+    {
+        // Has address but no coordinates
+        if (($this->address_line1 || $this->city) && !$this->hasValidCoordinates()) {
+            return true;
+        }
+
+        // Location not updated recently and not verified
+        if (!$this->location_verified && 
+            (!$this->location_updated_at || $this->location_updated_at->lt(now()->subDays(30)))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get geocoding address string
+     */
+    public function getGeocodingAddress(): ?string
+    {
+        if (!$this->address_line1 && !$this->city) {
+            return null;
+        }
+
+        $parts = array_filter([
+            $this->address_line1,
+            $this->city,
+            $this->state,
+            $this->zip_code,
+            $this->country === 'US' ? 'USA' : $this->country
+        ]);
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * Scope query to select distance to a point
+     */
+    public function scopeSelectDistanceTo($query, $lat, $lng)
+    {
+        return $query->addSelect(\DB::raw(
+            "ST_Distance(
+                ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+                ST_SetSRID(ST_MakePoint({$lng}, {$lat}), 4326)::geography
+            ) as distance_meters"
+        ));
+    }
+
+    /**
+     * Scope query to filter places with valid coordinates
+     */
+    public function scopeHasValidCoordinates($query)
+    {
+        return $query->whereNotNull('latitude')
+                     ->whereNotNull('longitude')
+                     ->where('latitude', '>=', -90)
+                     ->where('latitude', '<=', 90)
+                     ->where('longitude', '>=', -180)
+                     ->where('longitude', '<=', 180);
+    }
+
 }

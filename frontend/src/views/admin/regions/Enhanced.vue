@@ -40,6 +40,8 @@
             <option value="state">State</option>
             <option value="city">City</option>
             <option value="neighborhood">Neighborhood</option>
+            <option value="state_park">State Park</option>
+            <option value="national_park">National Park</option>
           </select>
           <select
             v-model="filters.parentId"
@@ -90,7 +92,10 @@
                 <div>
                   <h3 class="text-lg font-semibold text-gray-900">{{ region.name }}</h3>
                   <div class="flex items-center space-x-4 text-sm text-gray-500">
-                    <span class="capitalize">{{ region.type }}</span>
+                    <span class="capitalize">{{ formatRegionType(region.type) }}</span>
+                    <span v-if="region.designation" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {{ formatDesignation(region.designation) }}
+                    </span>
                     <span v-if="region.parent">Parent: {{ region.parent.name }}</span>
                     <span>{{ region.entries_count || region.cached_place_count || 0 }} places</span>
                     <span>{{ region.featured_entries?.length || 0 }} featured</span>
@@ -1285,6 +1290,8 @@
                   <option value="state">State</option>
                   <option value="city">City</option>
                   <option value="neighborhood">Neighborhood</option>
+                  <option value="state_park">State Park</option>
+                  <option value="national_park">National Park</option>
                 </select>
               </div>
               
@@ -1308,7 +1315,7 @@
               
               <div v-if="newRegion.type !== 'state'">
                 <label for="region-parent" class="block text-sm font-medium text-gray-700 mb-1">
-                  Parent {{ newRegion.type === 'city' ? 'State' : 'City' }} <span class="text-red-500">*</span>
+                  Parent {{ getParentTypeLabel(newRegion.type) }} <span class="text-red-500">*</span>
                 </label>
                 <select
                   id="region-parent"
@@ -1322,8 +1329,31 @@
                   </option>
                 </select>
                 <p v-if="newRegion.type !== 'state' && getValidParentsForType(newRegion.type).length === 0" class="mt-1 text-sm text-red-600">
-                  No {{ newRegion.type === 'city' ? 'states' : 'cities' }} available. Please create a {{ newRegion.type === 'city' ? 'state' : 'city' }} first.
+                  No {{ getExpectedParentType(newRegion.type) }} available. Please create a {{ getExpectedParentType(newRegion.type) }} first.
                 </p>
+              </div>
+              
+              <!-- Designation for cities and neighborhoods -->
+              <div v-if="newRegion.type === 'city' || newRegion.type === 'neighborhood'">
+                <label for="region-designation" class="block text-sm font-medium text-gray-700 mb-1">
+                  Designation (Optional)
+                </label>
+                <select
+                  id="region-designation"
+                  v-model="newRegion.designation"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="">None</option>
+                  <option value="resort_town">Resort Town</option>
+                  <option value="beach_town">Beach Town</option>
+                  <option value="ski_town">Ski Town</option>
+                  <option value="historic_town">Historic Town</option>
+                  <option value="college_town">College Town</option>
+                  <option value="arts_district">Arts District</option>
+                  <option value="financial_district">Financial District</option>
+                  <option value="tech_hub">Tech Hub</option>
+                </select>
+                <p class="mt-1 text-sm text-gray-500">Special designation for this {{ newRegion.type }}</p>
               </div>
               
               <div>
@@ -1773,6 +1803,7 @@ const newRegion = reactive({
   intro_text: '',
   description: '',
   abbreviation: '',
+  designation: '',
   state_filter: '' // For filtering cities when selecting neighborhood parent
 })
 
@@ -1918,13 +1949,58 @@ const getValidParents = (region) => {
   return parentRegions.value.filter(p => p.type === 'city')
 }
 
+const formatRegionType = (type) => {
+  const types = {
+    'state': 'State',
+    'city': 'City',
+    'neighborhood': 'Neighborhood',
+    'state_park': 'State Park',
+    'national_park': 'National Park'
+  }
+  return types[type] || type
+}
+
+const formatDesignation = (designation) => {
+  const designations = {
+    'resort_town': 'Resort Town',
+    'beach_town': 'Beach Town',
+    'ski_town': 'Ski Town',
+    'historic_town': 'Historic Town',
+    'college_town': 'College Town',
+    'arts_district': 'Arts District',
+    'financial_district': 'Financial District',
+    'tech_hub': 'Tech Hub'
+  }
+  return designations[designation] || designation
+}
+
+const getParentTypeLabel = (type) => {
+  const labels = {
+    'city': 'State',
+    'neighborhood': 'City',
+    'state_park': 'State',
+    'national_park': 'State'
+  }
+  return labels[type] || 'Parent'
+}
+
+const getExpectedParentType = (type) => {
+  const parentTypes = {
+    'city': 'state',
+    'neighborhood': 'city',
+    'state_park': 'state',
+    'national_park': 'state'
+  }
+  return parentTypes[type] || 'parent region'
+}
+
 const getValidParentsForType = (type) => {
   console.log('Getting valid parents for type:', type)
   console.log('Available parent regions:', parentRegions.value)
   
   if (type === 'state') return []
   
-  if (type === 'city') {
+  if (type === 'city' || type === 'state_park' || type === 'national_park') {
     const states = parentRegions.value.filter(p => p.type === 'state' || p.level === 1)
     console.log('Found states:', states)
     return states
@@ -2033,7 +2109,14 @@ const createRegion = async () => {
     const { state_filter, ...regionData } = newRegion
     
     // Add level based on type
-    regionData.level = regionData.type === 'state' ? 1 : (regionData.type === 'city' ? 2 : 3)
+    const levelMap = {
+      'state': 1,
+      'city': 2,
+      'neighborhood': 3,
+      'state_park': 4,
+      'national_park': 5
+    }
+    regionData.level = levelMap[regionData.type] || 1
     
     // Ensure parent_id is null if empty string, or convert to number
     if (regionData.parent_id === '') {
@@ -2053,6 +2136,7 @@ const createRegion = async () => {
     newRegion.intro_text = ''
     newRegion.description = ''
     newRegion.abbreviation = ''
+    newRegion.designation = ''
     newRegion.state_filter = ''
     
     // Refresh both regions list and parent regions

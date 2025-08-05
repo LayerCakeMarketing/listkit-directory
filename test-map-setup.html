@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Mapbox Setup</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #info { position: absolute; top: 10px; left: 10px; background: white; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="info">
+        <h3>Mapbox Test</h3>
+        <p>Token: <span id="token-status">Checking...</span></p>
+        <p>Places API: <span id="api-status">Not tested</span></p>
+        <button onclick="testAPI()">Test API</button>
+    </div>
+    
+    <script>
+        // Your Mapbox token
+        const mapboxToken = 'pk.eyJ1IjoiaWxsdW1pbmF0ZWxvY2FsIiwiYSI6ImNsNmJhNjY0ZTE3NXozZHFzM3ptMGlyZjQifQ.yyazyT4c59Plm5EHB1Rxag';
+        
+        mapboxgl.accessToken = mapboxToken;
+        
+        // Test token validity
+        document.getElementById('token-status').textContent = mapboxToken.substring(0, 10) + '...';
+        
+        // Create map
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [-122.4194, 37.7749], // San Francisco
+            zoom: 12
+        });
+        
+        map.on('load', () => {
+            console.log('Map loaded successfully!');
+            
+            // Add navigation control
+            map.addControl(new mapboxgl.NavigationControl());
+            
+            // Test adding markers from our API data
+            fetch('http://localhost:8000/api/places/map-data?bounds[north]=37.85&bounds[south]=37.75&bounds[east]=-122.35&bounds[west]=-122.50')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('API Response:', data);
+                    document.getElementById('api-status').textContent = `Found ${data.total} places`;
+                    
+                    // Add markers for each place
+                    data.features.forEach(feature => {
+                        new mapboxgl.Marker()
+                            .setLngLat(feature.geometry.coordinates)
+                            .setPopup(new mapboxgl.Popup().setHTML(
+                                `<h3>${feature.properties.title}</h3>
+                                 <p>${feature.properties.category?.name || 'No category'}</p>`
+                            ))
+                            .addTo(map);
+                    });
+                })
+                .catch(error => {
+                    console.error('API Error:', error);
+                    document.getElementById('api-status').textContent = 'Error: ' + error.message;
+                });
+        });
+        
+        function testAPI() {
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

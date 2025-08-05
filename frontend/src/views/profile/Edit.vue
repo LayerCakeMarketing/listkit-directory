@@ -293,12 +293,15 @@
 
               <div>
                 <label class="block text-sm font-medium text-gray-700">Location</label>
-                <input
+                <LocationAutocomplete
                   v-model="form.location"
-                  type="text"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="San Francisco, CA"
+                  placeholder="Enter city, state or zip code"
+                  help-text="Start typing to search for your location"
+                  :return-full-data="true"
+                  @place-selected="handleLocationSelected"
+                  @error="handleLocationError"
                 />
+                <p v-if="errors.location" class="mt-1 text-sm text-red-600">{{ errors.location }}</p>
               </div>
 
               <div>
@@ -674,6 +677,7 @@ import axios from 'axios'
 import MediaViewer from '@/components/MediaViewer.vue'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
 import PasswordChangeForm from '@/components/profile/PasswordChangeForm.vue'
+import LocationAutocomplete from '@/components/LocationAutocomplete.vue'
 import { useNotification } from '@/composables/useNotification'
 
 const router = useRouter()
@@ -745,6 +749,35 @@ const form = reactive({
   show_website: true,
   page_logo_option: 'profile' // Required field with default value
 })
+
+// Handle location selection from autocomplete
+function handleLocationSelected(locationData) {
+  if (typeof locationData === 'string') {
+    // Simple string format
+    form.location = locationData
+  } else if (locationData.formatted) {
+    // Full data format with coordinates
+    form.location = locationData.formatted
+    
+    // Optionally store coordinates for future use (e.g., map features)
+    // You could add lat/lng fields to the user profile if needed
+    if (locationData.coordinates) {
+      // form.latitude = locationData.coordinates.lat
+      // form.longitude = locationData.coordinates.lng
+    }
+  }
+  
+  // Clear any location errors
+  if (errors.location) {
+    errors.location = null
+  }
+}
+
+// Handle location autocomplete errors
+function handleLocationError(error) {
+  console.error('Location autocomplete error:', error)
+  showError('Unable to search locations. Please try again.')
+}
 
 // Fetch user profile data
 async function fetchProfile() {

@@ -7,6 +7,7 @@ use App\Models\UserList;
 use App\Models\User;
 use App\Models\Channel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ListManagementController extends Controller
 {
@@ -148,7 +149,25 @@ class ListManagementController extends Controller
 
     public function show($id)
     {
-        $list = UserList::with(['user', 'items.directoryEntry'])->findOrFail($id);
+        $list = UserList::with(['user', 'owner', 'category', 'items' => function ($query) {
+            $query->orderBy('order_index');
+        }])->findOrFail($id);
+        
+        // Get sections if structure version is 2.0
+        $sections = [];
+        if ($list->structure_version === '2.0') {
+            $sections = $list->items()
+                ->where('is_section', true)
+                ->orderBy('order_index')
+                ->get()
+                ->map(function ($section) {
+                    return [
+                        'id' => $section->id,
+                        'title' => $section->title,
+                        'order_index' => $section->order_index
+                    ];
+                });
+        }
         
         return response()->json([
             'id' => $list->id,
@@ -161,20 +180,30 @@ class ListManagementController extends Controller
             'status_changed_at' => $list->status_changed_at,
             'view_count' => $list->view_count,
             'is_featured' => $list->is_featured,
+            'is_verified' => $list->is_verified,
+            'structure_version' => $list->structure_version,
+            'category_id' => $list->category_id,
+            'category' => $list->category,
             'created_at' => $list->created_at,
             'updated_at' => $list->updated_at,
-            'user' => [
-                'id' => $list->user->id,
-                'name' => $list->user->name,
-                'username' => $list->user->username,
-                'custom_url' => $list->user->custom_url,
-                'profile_url' => '/' . ($list->user->custom_url ?? $list->user->username),
-            ],
+            'owner_type' => $list->owner_type,
+            'owner_id' => $list->owner_id,
+            'owner' => $list->owner,
+            'user' => $list->user,
+            'channel' => $list->owner_type === 'App\Models\Channel' ? $list->owner : null,
+            'sections' => $sections,
             'items' => $list->items->map(function ($item) {
                 return [
                     'id' => $item->id,
+                    'type' => $item->type,
                     'order_index' => $item->order_index,
                     'notes' => $item->notes,
+                    'title' => $item->title,
+                    'content' => $item->content,
+                    'is_section' => $item->is_section,
+                    'section_id' => $item->section_id,
+                    'display_title' => $item->display_title,
+                    'display_content' => $item->display_content,
                     'affiliate_url' => $item->affiliate_url,
                     'entry' => $item->directoryEntry ? [
                         'id' => $item->directoryEntry->id,
@@ -193,16 +222,50 @@ class ListManagementController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string|max:1000',
+            'slug' => 'sometimes|required|string|max:255|unique:lists,slug,' . $id,
+            'description' => 'nullable|string',
+            'category_id' => 'nullable|exists:list_categories,id',
             'visibility' => 'sometimes|required|in:public,private,unlisted',
+            'status' => 'sometimes|required|in:active,draft,on_hold,archived',
             'is_featured' => 'sometimes|boolean',
+            'is_verified' => 'sometimes|boolean',
+            'sections' => 'nullable|array',
+            'sections.*.id' => 'required',
+            'sections.*.title' => 'required|string|max:255',
+            'sections.*.order_index' => 'integer'
         ]);
 
-        $list->update($validated);
+        \DB::transaction(function () use ($list, $validated) {
+            // Update list attributes
+            $list->update($validated);
+
+            // Update sections if provided
+            if (isset($validated['sections']) && $list->structure_version === '2.0') {
+                foreach ($validated['sections'] as $index => $sectionData) {
+                    if (is_string($sectionData['id']) && str_starts_with($sectionData['id'], 'new-')) {
+                        // Create new section
+                        $list->items()->create([
+                            'type' => 'section',
+                            'is_section' => true,
+                            'title' => $sectionData['title'],
+                            'order_index' => $index
+                        ]);
+                    } else {
+                        // Update existing section
+                        $list->items()
+                            ->where('id', $sectionData['id'])
+                            ->update([
+                                'title' => $sectionData['title'],
+                                'order_index' => $index
+                            ]);
+                    }
+                }
+            }
+        });
 
         return response()->json([
             'message' => 'List updated successfully',
-            'list' => $list,
+            'list' => $list->fresh(),
         ]);
     }
 

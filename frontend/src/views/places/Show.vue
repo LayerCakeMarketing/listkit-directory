@@ -316,6 +316,26 @@
                             >
                                 Share
                             </button>
+                            
+                            <!-- Directions Button -->
+                            <a
+                                v-if="entry.latitude && entry.longitude"
+                                :href="`https://www.google.com/maps/dir/Current+Location/${entry.latitude},${entry.longitude}`"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors inline-flex items-center justify-center"
+                            >
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M5 11l1.5-4.5h11L19 11m-1.5 5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5m-11 0c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 11v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5z" />
+                                </svg>
+                                Get Directions
+                            </a>
+                            <QRCodeGenerator
+                                type="place"
+                                :data="entry"
+                                button-text="Generate QR Code"
+                                :button-class="'w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors inline-flex items-center justify-center'"
+                            />
                         </div>
                     </div>
 
@@ -404,6 +424,7 @@ import SaveButton from '@/components/SaveButton.vue'
 import ClaimButton from '@/components/ClaimButton.vue'
 import InteractionBar from '@/components/social/InteractionBar.vue'
 import CommentSection from '@/components/social/CommentSection.vue'
+import QRCodeGenerator from '@/components/QRCodeGenerator.vue'
 
 const route = useRoute()
 const router = useRouter()

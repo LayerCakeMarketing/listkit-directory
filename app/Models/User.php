@@ -22,7 +22,8 @@ class User extends Authenticatable
         'show_activity', 'show_followers', 'show_following', 'page_title',
         'profile_color', 'custom_css', 'show_join_date', 'show_location', 'show_website',
         'avatar_cloudflare_id', 'cover_cloudflare_id', 'page_logo_cloudflare_id', 'page_logo_option',
-        'avatar_updated_at', 'cover_updated_at', 'stripe_customer_id'
+        'avatar_updated_at', 'cover_updated_at', 'stripe_customer_id',
+        'default_map_latitude', 'default_map_longitude', 'default_map_zoom', 'default_map_location_name'
     ];
 
     protected $hidden = [
@@ -358,6 +359,11 @@ class User extends Authenticatable
     public function savedItems()
     {
         return $this->hasMany(SavedItem::class)->latest();
+    }
+
+    public function savedCollections()
+    {
+        return $this->hasMany(SavedCollection::class)->ordered();
     }
 
     public function publicActivities()

@@ -15,6 +15,7 @@ class SavedItem extends Model
         'user_id',
         'saveable_id',
         'saveable_type',
+        'collection_id',
         'notes',
     ];
 
@@ -34,6 +35,14 @@ class SavedItem extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the collection this item belongs to.
+     */
+    public function collection(): BelongsTo
+    {
+        return $this->belongsTo(SavedCollection::class);
     }
 
     /**
@@ -65,5 +74,17 @@ class SavedItem extends Model
         }
 
         return $query;
+    }
+
+    /**
+     * Scope to filter by collection
+     */
+    public function scopeInCollection($query, $collectionId)
+    {
+        if ($collectionId === 'uncategorized') {
+            return $query->whereNull('collection_id');
+        }
+        
+        return $query->where('collection_id', $collectionId);
     }
 }

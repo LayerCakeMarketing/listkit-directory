@@ -157,7 +157,7 @@
           :alt="'Post by ' + post.user?.name"
           transformation="large"
           container-class="w-full"
-          image-class="w-full h-auto max-h-96 object-cover cursor-pointer"
+          image-class="w-full h-auto max-h-[53rem] object-cover cursor-pointer"
           @click="openLightbox(0)"
         />
       </div>
@@ -209,7 +209,7 @@
         <video 
           :src="post.media_items[0].url" 
           controls 
-          class="w-full h-auto max-h-96"
+          class="w-full h-auto max-h-[53rem]"
         />
       </div>
     </div>

@@ -16,6 +16,11 @@ const authStore = useAuthStore()
 const registrationEnabled = ref(true)
 const checkingStatus = ref(true)
 const waitlistSuccess = ref(false)
+const marketingContent = ref({
+    heading: 'Join Our Community',
+    paragraph: 'Sign up to save your favorite places, create lists, and connect with other local enthusiasts. It\'s free and only takes a moment.',
+    image_url: null
+})
 
 const form = reactive({
     firstname: '',
@@ -102,9 +107,28 @@ const submitWaitlist = async () => {
     }
 }
 
+const fetchMarketingContent = async () => {
+    try {
+        const response = await axios.get('/api/marketing-pages/register')
+        if (response.data) {
+            marketingContent.value = {
+                heading: response.data.heading || marketingContent.value.heading,
+                paragraph: response.data.paragraph || marketingContent.value.paragraph,
+                image_url: response.data.image_url || null
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching marketing content:', err)
+        // Use defaults if fetch fails
+    }
+}
+
 onMounted(async () => {
     document.title = 'Register - ' + (import.meta.env.VITE_APP_NAME || 'Laravel')
-    await checkRegistrationStatus()
+    await Promise.all([
+        checkRegistrationStatus(),
+        fetchMarketingContent()
+    ])
 })
 </script>
 
@@ -329,7 +353,27 @@ onMounted(async () => {
             </div>
         </div>
         <div class="relative hidden w-0 flex-1 lg:block">
-            <img class="absolute inset-0 size-full object-cover" src="https://images.unsplash.com/photo-1496917756835-20cb06e75b4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1908&q=80" alt="" />
+            <!-- Marketing Content Background -->
+            <img 
+                v-if="marketingContent.image_url" 
+                class="absolute inset-0 size-full object-cover" 
+                :src="marketingContent.image_url" 
+                alt="Register background" 
+            />
+            <img 
+                v-else 
+                class="absolute inset-0 size-full object-cover" 
+                src="https://images.unsplash.com/photo-1496917756835-20cb06e75b4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1908&q=80" 
+                alt="" 
+            />
+            
+            <!-- Marketing Content Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
+                <div class="p-12 text-white">
+                    <h2 class="text-3xl font-bold mb-4">{{ marketingContent.heading }}</h2>
+                    <p class="text-lg max-w-lg">{{ marketingContent.paragraph }}</p>
+                </div>
+            </div>
         </div>
     </div>
 </template>

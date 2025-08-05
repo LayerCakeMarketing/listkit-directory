@@ -125,6 +125,8 @@ class RegionManagementController extends Controller
             'states' => Region::where('level', 1)->count(),
             'cities' => Region::where('level', 2)->count(),
             'neighborhoods' => Region::where('level', 3)->count(),
+            'state_parks' => Region::where('level', 4)->count(),
+            'national_parks' => Region::where('level', 5)->count(),
             'with_places' => Region::whereHas('directoryEntries', function($q) {
                 $q->where('status', 'published');
             })->count(),
@@ -143,13 +145,14 @@ class RegionManagementController extends Controller
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:regions,slug',
             'type' => 'nullable|string|in:state,city,county,neighborhood,district,custom,national_park,state_park,regional_park,local_park',
-            'level' => 'required|in:1,2,3',
+            'level' => 'required|in:1,2,3,4,5',
             'parent_id' => 'nullable|exists:regions,id',
             'intro_text' => 'nullable|string',
             'is_featured' => 'boolean',
             'display_priority' => 'nullable|integer|min:0',
             'cover_image' => 'nullable|string',
             'cloudflare_image_id' => 'nullable|string',
+            'designation' => 'nullable|string|in:resort_town,beach_town,ski_town,historic_town,college_town,arts_district,financial_district,tech_hub',
             'facts' => 'nullable|array',
             'state_symbols' => 'nullable|array',
             'geojson' => 'nullable|array',
@@ -180,11 +183,24 @@ class RegionManagementController extends Controller
 
         if (!empty($validated['parent_id'])) {
             $parent = Region::find($validated['parent_id']);
-            if ($parent->level >= $validated['level']) {
-                return response()->json([
-                    'message' => 'Parent region must be of a higher level',
-                    'errors' => ['parent_id' => ['Parent region must be of a higher level']]
-                ], 422);
+            
+            // Special handling for parks - they can be at the same level as cities (under states)
+            if (in_array($validated['level'], [4, 5])) {
+                // Parks must have a state (level 1) as parent
+                if ($parent->level != 1) {
+                    return response()->json([
+                        'message' => 'Parks must have a state as their parent region',
+                        'errors' => ['parent_id' => ['Parks must have a state as their parent region']]
+                    ], 422);
+                }
+            } else {
+                // Regular hierarchy validation
+                if ($parent->level >= $validated['level']) {
+                    return response()->json([
+                        'message' => 'Parent region must be of a higher level',
+                        'errors' => ['parent_id' => ['Parent region must be of a higher level']]
+                    ], 422);
+                }
             }
         }
 
@@ -199,6 +215,8 @@ class RegionManagementController extends Controller
                 1 => 'state',
                 2 => 'city',
                 3 => 'neighborhood',
+                4 => 'state_park',
+                5 => 'national_park',
                 default => 'custom'
             };
         }
@@ -231,13 +249,14 @@ class RegionManagementController extends Controller
         $validationRules = [
             'name' => 'sometimes|required|string|max:255',
             'type' => 'sometimes|string|in:state,city,county,neighborhood,district,custom,national_park,state_park,regional_park,local_park',
-            'level' => 'sometimes|required|in:1,2,3',
+            'level' => 'sometimes|required|in:1,2,3,4,5',
             'parent_id' => 'nullable|exists:regions,id',
             'intro_text' => 'nullable|string',
             'is_featured' => 'boolean',
             'display_priority' => 'nullable|integer|min:0',
             'cover_image' => 'nullable|string', // Can be URL or file upload
             'cloudflare_image_id' => 'nullable|string',
+            'designation' => 'nullable|string|in:resort_town,beach_town,ski_town,historic_town,college_town,arts_district,financial_district,tech_hub',
             'facts' => 'nullable|array',
             'state_symbols' => 'nullable|array',
             'geojson' => 'nullable|array',
@@ -284,11 +303,24 @@ class RegionManagementController extends Controller
         if (!empty($validated['parent_id'])) {
             $parent = Region::find($validated['parent_id']);
             $level = $validated['level'] ?? $region->level;
-            if ($parent->level >= $level) {
-                return response()->json([
-                    'message' => 'Parent region must be of a higher level',
-                    'errors' => ['parent_id' => ['Parent region must be of a higher level']]
-                ], 422);
+            
+            // Special handling for parks - they can be at the same level as cities (under states)
+            if (in_array($level, [4, 5])) {
+                // Parks must have a state (level 1) as parent
+                if ($parent->level != 1) {
+                    return response()->json([
+                        'message' => 'Parks must have a state as their parent region',
+                        'errors' => ['parent_id' => ['Parks must have a state as their parent region']]
+                    ], 422);
+                }
+            } else {
+                // Regular hierarchy validation
+                if ($parent->level >= $level) {
+                    return response()->json([
+                        'message' => 'Parent region must be of a higher level',
+                        'errors' => ['parent_id' => ['Parent region must be of a higher level']]
+                    ], 422);
+                }
             }
         }
 
@@ -298,6 +330,8 @@ class RegionManagementController extends Controller
                 1 => 'state',
                 2 => 'city',
                 3 => 'neighborhood',
+                4 => 'state_park',
+                5 => 'national_park',
                 default => 'custom'
             };
         }

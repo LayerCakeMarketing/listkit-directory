@@ -328,6 +328,22 @@
       </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <DeleteConfirmationModal
+      ref="deleteModalRef"
+      :is-open="showDeleteModal"
+      :title="deleteType === 'list' ? 'Delete List' : 'Delete Chain'"
+      :message="`Are you sure you want to delete this ${deleteType}? This action cannot be undone.`"
+      :item-details="deleteTarget ? {
+        name: deleteTarget.name,
+        description: deleteTarget.description,
+        count: deleteType === 'list' ? deleteTarget.items_count : deleteTarget.lists_count,
+        countLabel: deleteType === 'list' ? 'items' : 'lists'
+      } : null"
+      @close="handleDeleteClose"
+      @confirm="handleDeleteConfirm"
+    />
+
     <!-- Create List Modal (simplified) -->
     <div v-if="showCreateModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div class="bg-white rounded-lg max-w-md w-full p-6">
@@ -398,9 +414,12 @@ import axios from 'axios'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { EllipsisVerticalIcon } from '@heroicons/vue/20/solid'
 import TagInput from '@/components/TagInput.vue'
+import DeleteConfirmationModal from '@/components/DeleteConfirmationModal.vue'
+import { useNotification } from '@/composables/useNotification'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { showSuccess, showError } = useNotification()
 
 const loading = ref(true)
 const lists = ref([])
@@ -408,6 +427,12 @@ const chains = ref([])
 const activeTab = ref('lists')
 const showCreateModal = ref(false)
 const currentUser = computed(() => authStore.user)
+
+// Delete confirmation modal state
+const showDeleteModal = ref(false)
+const deleteTarget = ref(null)
+const deleteType = ref('list') // 'list' or 'chain'
+const deleteModalRef = ref(null)
 
 const newList = reactive({
   name: '',
@@ -501,16 +526,9 @@ function editList(list) {
 
 // Delete list
 async function deleteList(list) {
-  if (!confirm(`Are you sure you want to delete "${list.name}"?`)) {
-    return
-  }
-  
-  try {
-    await axios.delete(`/api/lists/${list.id}`)
-    lists.value = lists.value.filter(l => l.id !== list.id)
-  } catch (error) {
-    alert('Failed to delete list. Please try again.')
-  }
+  deleteTarget.value = list
+  deleteType.value = 'list'
+  showDeleteModal.value = true
 }
 
 // Fetch user's chains
@@ -543,16 +561,41 @@ function editChain(chain) {
 
 // Delete chain
 async function deleteChain(chain) {
-  if (!confirm(`Are you sure you want to delete "${chain.name}"?`)) {
-    return
-  }
+  deleteTarget.value = chain
+  deleteType.value = 'chain'
+  showDeleteModal.value = true
+}
+
+// Handle delete confirmation
+async function handleDeleteConfirm() {
+  if (!deleteTarget.value) return
   
   try {
-    await axios.delete(`/api/chains/${chain.id}`)
-    chains.value = chains.value.filter(c => c.id !== chain.id)
+    if (deleteType.value === 'list') {
+      await axios.delete(`/api/lists/${deleteTarget.value.id}`)
+      lists.value = lists.value.filter(l => l.id !== deleteTarget.value.id)
+      showSuccess(`List "${deleteTarget.value.name}" has been deleted`)
+    } else if (deleteType.value === 'chain') {
+      await axios.delete(`/api/chains/${deleteTarget.value.id}`)
+      chains.value = chains.value.filter(c => c.id !== deleteTarget.value.id)
+      showSuccess(`Chain "${deleteTarget.value.name}" has been deleted`)
+    }
+    
+    // Close modal and reset state
+    showDeleteModal.value = false
+    deleteTarget.value = null
+    deleteModalRef.value?.resetState()
   } catch (error) {
-    alert('Failed to delete chain. Please try again.')
+    showError(`Failed to delete ${deleteType.value}. Please try again.`)
+    deleteModalRef.value?.resetState()
   }
+}
+
+// Handle delete modal close
+function handleDeleteClose() {
+  showDeleteModal.value = false
+  deleteTarget.value = null
+  deleteModalRef.value?.resetState()
 }
 
 onMounted(() => {

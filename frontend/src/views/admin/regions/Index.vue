@@ -28,7 +28,7 @@
                     </div>
 
                     <!-- Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4 mt-6">
                         <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
                             <div class="text-sm text-blue-600 font-medium">Total Regions</div>
                             <div class="text-2xl font-bold text-blue-900">{{ stats.total || 0 }}</div>
@@ -44,6 +44,14 @@
                         <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg">
                             <div class="text-sm text-orange-600 font-medium">Neighborhoods</div>
                             <div class="text-2xl font-bold text-orange-900">{{ stats.neighborhoods || 0 }}</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 p-4 rounded-lg">
+                            <div class="text-sm text-cyan-600 font-medium">State Parks</div>
+                            <div class="text-2xl font-bold text-cyan-900">{{ stats.state_parks || 0 }}</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-teal-50 to-teal-100 p-4 rounded-lg">
+                            <div class="text-sm text-teal-600 font-medium">National Parks</div>
+                            <div class="text-2xl font-bold text-teal-900">{{ stats.national_parks || 0 }}</div>
                         </div>
                         <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-lg">
                             <div class="text-sm text-indigo-600 font-medium">With Places</div>
@@ -76,6 +84,8 @@
                                 <option value="1">State</option>
                                 <option value="2">City</option>
                                 <option value="3">Neighborhood</option>
+                                <option value="4">State Park</option>
+                                <option value="5">National Park</option>
                             </select>
                         </div>
                         <div>
@@ -202,9 +212,14 @@
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span :class="getTypeBadgeClass(region.type)" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
-                                                {{ formatType(region.type) }}
-                                            </span>
+                                            <div class="flex flex-col gap-1">
+                                                <span :class="getTypeBadgeClass(region.type)" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                                                    {{ formatType(region.type) }}
+                                                </span>
+                                                <span v-if="region.designation" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                    {{ formatDesignation(region.designation) }}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div v-if="region.parent" class="text-sm text-gray-900">
@@ -324,6 +339,8 @@
                                 <option value="1">State (Level 1)</option>
                                 <option value="2">City (Level 2)</option>
                                 <option value="3">Neighborhood (Level 3)</option>
+                                <option value="4">State Park (Level 4)</option>
+                                <option value="5">National Park (Level 5)</option>
                             </select>
                             <div v-if="errors.level" class="text-red-500 text-sm mt-1">{{ errors.level }}</div>
                         </div>
@@ -337,10 +354,29 @@
                             >
                                 <option value="">Select parent...</option>
                                 <option v-for="parent in availableParents" :key="parent.id" :value="parent.id">
-                                    {{ parent.name }}
+                                    {{ parent.name }} ({{ getParentTypeLabel(parent) }})
                                 </option>
                             </select>
                             <div v-if="errors.parent_id" class="text-red-500 text-sm mt-1">{{ errors.parent_id }}</div>
+                        </div>
+
+                        <div v-if="form.level == 2 || form.level == 3">
+                            <label class="block text-sm font-medium text-gray-700">Designation</label>
+                            <select
+                                v-model="form.designation"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            >
+                                <option value="">None</option>
+                                <option value="resort_town">Resort Town</option>
+                                <option value="beach_town">Beach Town</option>
+                                <option value="ski_town">Ski Town</option>
+                                <option value="historic_town">Historic Town</option>
+                                <option value="college_town">College Town</option>
+                                <option value="arts_district">Arts District</option>
+                                <option value="financial_district">Financial District</option>
+                                <option value="tech_hub">Tech Hub</option>
+                            </select>
+                            <p class="mt-1 text-sm text-gray-500">Optional special designation for this region</p>
                         </div>
 
                         <div class="md:col-span-2">
@@ -662,15 +698,21 @@ const form = reactive({
     is_featured: false,
     display_priority: 0,
     cover_image: null,
-    cloudflare_image_id: null
+    cloudflare_image_id: null,
+    designation: null
 })
 
 // Computed
 const availableParents = computed(() => {
     if (form.level == 2) {
+        // Cities can have States as parents
         return parentRegions.value.filter(r => r.level == 1)
     } else if (form.level == 3) {
+        // Neighborhoods can have Cities as parents
         return parentRegions.value.filter(r => r.level == 2)
+    } else if (form.level == 4 || form.level == 5) {
+        // State Parks and National Parks can have States as parents (same level as cities)
+        return parentRegions.value.filter(r => r.level == 1)
     }
     return []
 })
@@ -748,6 +790,7 @@ const editRegion = (region) => {
     form.display_priority = region.display_priority || 0
     form.cover_image = region.cover_image || null
     form.cloudflare_image_id = region.cloudflare_image_id || null
+    form.designation = region.designation || null
     showModal.value = true
 }
 
@@ -779,7 +822,11 @@ const saveRegion = async () => {
     try {
         const data = {
             ...form,
-            type: form.level == 1 ? 'state' : form.level == 2 ? 'city' : 'neighborhood'
+            type: form.level == 1 ? 'state' : 
+                  form.level == 2 ? 'city' : 
+                  form.level == 3 ? 'neighborhood' :
+                  form.level == 4 ? 'state_park' :
+                  form.level == 5 ? 'national_park' : 'other'
         }
 
         if (editingRegion.value) {
@@ -846,6 +893,9 @@ const closeModal = () => {
     form.intro_text = ''
     form.is_featured = false
     form.display_priority = 0
+    form.cover_image = null
+    form.cloudflare_image_id = null
+    form.designation = null
     errors.value = {}
 }
 
@@ -858,18 +908,52 @@ const formatType = (type) => {
     const types = {
         state: 'State',
         city: 'City',
-        neighborhood: 'Neighborhood'
+        neighborhood: 'Neighborhood',
+        state_park: 'State Park',
+        national_park: 'National Park'
     }
     return types[type] || type
+}
+
+const formatDesignation = (designation) => {
+    const designations = {
+        resort_town: 'Resort Town',
+        beach_town: 'Beach Town',
+        ski_town: 'Ski Town',
+        historic_town: 'Historic Town',
+        college_town: 'College Town',
+        arts_district: 'Arts District',
+        financial_district: 'Financial District',
+        tech_hub: 'Tech Hub'
+    }
+    return designations[designation] || designation
 }
 
 const getTypeBadgeClass = (type) => {
     const classes = {
         state: 'bg-green-100 text-green-800',
         city: 'bg-purple-100 text-purple-800',
-        neighborhood: 'bg-orange-100 text-orange-800'
+        neighborhood: 'bg-orange-100 text-orange-800',
+        state_park: 'bg-blue-100 text-blue-800',
+        national_park: 'bg-teal-100 text-teal-800'
     }
     return classes[type] || 'bg-gray-100 text-gray-800'
+}
+
+const getParentTypeLabel = (parent) => {
+    if (!parent) return ''
+    return formatType(parent.type || getTypeFromLevel(parent.level))
+}
+
+const getTypeFromLevel = (level) => {
+    const levelTypeMap = {
+        1: 'state',
+        2: 'city',
+        3: 'neighborhood',
+        4: 'state_park',
+        5: 'national_park'
+    }
+    return levelTypeMap[level] || 'other'
 }
 
 const getRegionPath = (region) => {
@@ -896,6 +980,7 @@ const openCreateModal = () => {
     form.display_priority = 0
     form.cover_image = null
     form.cloudflare_image_id = null
+    form.designation = null
     errors.value = {}
     showModal.value = true
 }

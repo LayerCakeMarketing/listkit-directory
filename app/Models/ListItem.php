@@ -23,12 +23,15 @@ class ListItem extends Model
         'affiliate_url',
         'notes',
         'custom_data',
+        'is_section',
+        'section_id',
     ];
 
     protected $casts = [
         'data' => 'array',
         'custom_data' => 'array',
         'order_index' => 'integer',
+        'is_section' => 'boolean',
     ];
 
     protected $appends = ['display_title', 'display_content', 'item_image_url'];

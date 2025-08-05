@@ -51,12 +51,21 @@
             </h1>
             <p v-if="cityData?.description" class="mt-2 text-lg text-gray-600">{{ cityData.description }}</p>
           </div>
-          <SaveButton
-            v-if="authStore.isAuthenticated && cityData?.id"
-            item-type="region"
-            :item-id="cityData.id"
-            :initial-saved="cityData.is_saved || false"
-          />
+          <div class="flex items-center space-x-3">
+            <SaveButton
+              v-if="authStore.isAuthenticated && cityData?.id"
+              item-type="region"
+              :item-id="cityData.id"
+              :initial-saved="cityData.is_saved || false"
+            />
+            <QRCodeGenerator
+              v-if="cityData"
+              type="region"
+              :data="cityData"
+              button-text="QR Code"
+              :show-button-text="false"
+            />
+          </div>
         </div>
       </div>
 
@@ -323,6 +332,7 @@ import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
 import RegionDetailsTab from '@/components/regions/RegionDetailsTab.vue'
 import RegionEditDrawer from '@/components/regions/RegionEditDrawer.vue'
+import QRCodeGenerator from '@/components/QRCodeGenerator.vue'
 import { CogIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 

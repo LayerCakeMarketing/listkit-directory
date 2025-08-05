@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ClaimController;
 use App\Http\Controllers\Api\PlaceController;
 use App\Http\Controllers\Api\PublicListController;
 use App\Http\Controllers\Api\Admin\UserManagementController;
+use App\Http\Controllers\Api\GeocodingController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\RegionController;
 use App\Http\Controllers\Api\Admin\RegionManagementController;
@@ -43,6 +44,21 @@ Route::get('/users/{username}/activity', [ProfileController::class, 'getUserActi
 // Tags
 Route::get('/tags/search', [\App\Http\Controllers\Api\Admin\TagController::class, 'search']);
 
+// Geospatial routes
+Route::prefix('geospatial')->group(function () {
+    Route::get('/nearby', [\App\Http\Controllers\Api\GeospatialController::class, 'nearby']);
+    Route::get('/in-bounds', [\App\Http\Controllers\Api\GeospatialController::class, 'inBounds']);
+    Route::get('/place/{place}/details', [\App\Http\Controllers\Api\GeospatialController::class, 'placeDetails']);
+    Route::get('/distance', [\App\Http\Controllers\Api\GeospatialController::class, 'distance']);
+    Route::get('/stats', [\App\Http\Controllers\Api\GeospatialController::class, 'stats']);
+    Route::get('/needs-geocoding', [\App\Http\Controllers\Api\GeospatialController::class, 'needsGeocoding']);
+    
+    // POST routes for geocoding
+    Route::post('/geocode', [\App\Http\Controllers\Api\GeospatialController::class, 'geocode']);
+    Route::post('/reverse-geocode', [\App\Http\Controllers\Api\GeospatialController::class, 'reverseGeocode']);
+    Route::post('/batch-geocode', [\App\Http\Controllers\Api\GeospatialController::class, 'batchGeocode'])->middleware('auth');
+});
+
 // Places routes (new canonical URL structure)
 Route::get('/places', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'index']);
 Route::get('/places/public', [PlaceController::class, 'publicIndex']);
@@ -52,6 +68,17 @@ Route::get('/p/{id}', [PlaceController::class, 'showById'])->where('id', '\d+');
 
 // Place claiming route (must be before hierarchical routes)
 Route::get('/places/{slug}/for-claiming', [PlaceController::class, 'showForClaiming']);
+
+// Geospatial endpoints (must be before dynamic routes)
+Route::get('/places/map-data', [PlaceController::class, 'mapData']);
+Route::get('/places/search-location', [PlaceController::class, 'searchWithLocation']);
+
+// Geocoding endpoints
+Route::prefix('geocoding')->group(function () {
+    Route::post('/validate', [GeocodingController::class, 'validateAddress']);
+    Route::post('/geocode', [GeocodingController::class, 'geocode']);
+    Route::post('/reverse', [GeocodingController::class, 'reverseGeocode']);
+});
 
 // Browse routes (hierarchical)
 Route::get('/places/{state}', [\App\Http\Controllers\Api\LocationAwarePlaceController::class, 'browseByState'])->where('state', '[a-z\-]+');
@@ -75,6 +102,9 @@ Route::post('/places/clear-location', [\App\Http\Controllers\Api\LocationAwarePl
 // Region routes
 Route::prefix('regions')->group(function () {
     Route::get('/', [RegionController::class, 'index']);
+    Route::get('/search', [RegionController::class, 'search']);
+    Route::get('/popular', [RegionController::class, 'popular']);
+    Route::get('/nearby', [RegionController::class, 'nearby']);
     Route::get('/by-slug/{slug}', [RegionController::class, 'getBySlug']);
     Route::get('/by-slug/{state}/{city?}/{neighborhood?}', [RegionController::class, 'showBySlug']);
     Route::get('/{id}', [RegionController::class, 'show']);
@@ -85,6 +115,9 @@ Route::prefix('regions')->group(function () {
 
 // Local pages routes
 Route::get('/local', [\App\Http\Controllers\Api\LocalController::class, 'index']);
+
+// Marketing pages (public)
+Route::get('/marketing-pages/{key}', [\App\Http\Controllers\Api\MarketingPagePublicController::class, 'show']);
 
 // User profiles (with /up/ prefix)
 Route::get('/up/@{username}', function ($username) {
@@ -159,9 +192,7 @@ Route::get('/lists/public/categories', [PublicListController::class, 'categories
 // Legacy route
 Route::get('/lists/public/legacy', [UserListController::class, 'publicLists']);
 
-// Region search and location
-Route::get('/regions/search', [RegionController::class, 'search']);
-Route::get('/regions/popular', [RegionController::class, 'popular']);
+// Location detection
 Route::get('/location/detect', [RegionController::class, 'detectLocation']);
 
 // Public stats endpoint
@@ -241,6 +272,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/home', [HomeController::class, 'getFeed']);
     Route::get('/home/metadata', [HomeController::class, 'getMetadata']);
     
+    // User map settings
+    Route::get('/user/map-settings', [\App\Http\Controllers\Api\UserMapSettingsController::class, 'show']);
+    Route::put('/user/map-settings', [\App\Http\Controllers\Api\UserMapSettingsController::class, 'update']);
+    Route::delete('/user/map-settings', [\App\Http\Controllers\Api\UserMapSettingsController::class, 'destroy']);
+    
     // Posts
     Route::prefix('posts')->group(function () {
         Route::post('/', [PostController::class, 'store']);
@@ -301,11 +337,11 @@ Route::middleware(['auth'])->group(function () {
         return response()->json($places);
     });
     
-    // List items management
-    Route::post('/lists/{list}/items', [UserListController::class, 'addItem']);
-    Route::put('/lists/{list}/items/{item}', [UserListController::class, 'updateItem']);
-    Route::delete('/lists/{list}/items/{item}', [UserListController::class, 'removeItem']);
-    Route::put('/lists/{list}/items/reorder', [UserListController::class, 'reorderItems']);
+    // List items management (old - now handled by ListItemController below)
+    // Route::post('/lists/{list}/items', [UserListController::class, 'addItem']);
+    // Route::put('/lists/{list}/items/{item}', [UserListController::class, 'updateItem']);
+    // Route::delete('/lists/{list}/items/{item}', [UserListController::class, 'removeItem']);
+    // Route::put('/lists/{list}/items/reorder', [UserListController::class, 'reorderItems']);
 
     // List Chains (Lists of Lists)
     Route::apiResource('chains', \App\Http\Controllers\Api\ListChainController::class);
@@ -318,6 +354,24 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/lists/{list}/shares', [UserListController::class, 'getShares']);
     Route::post('/lists/{list}/shares', [UserListController::class, 'shareList']);
     Route::delete('/lists/{list}/shares/{share}', [UserListController::class, 'removeShare']);
+    
+    // List items management
+    Route::post('/lists/{list}/items', [\App\Http\Controllers\Api\ListItemController::class, 'store']);
+    // Specific routes must come before generic {item} routes
+    Route::put('/lists/{list}/items/reorder', [\App\Http\Controllers\Api\ListItemController::class, 'reorder']);
+    Route::post('/lists/{list}/items/add-saved', [\App\Http\Controllers\Api\ListItemController::class, 'addSavedItems']);
+    // Generic item routes come last
+    Route::put('/lists/{list}/items/{item}', [\App\Http\Controllers\Api\ListItemController::class, 'update']);
+    Route::delete('/lists/{list}/items/{item}', [\App\Http\Controllers\Api\ListItemController::class, 'destroy']);
+    
+    // List sections management
+    Route::post('/lists/{list}/sections', [\App\Http\Controllers\Api\ListItemController::class, 'createSection']);
+    // Specific routes must come before generic {section} routes
+    Route::put('/lists/{list}/sections/reorder', [\App\Http\Controllers\Api\ListItemController::class, 'reorderSections']);
+    Route::post('/lists/{list}/convert-to-sections', [\App\Http\Controllers\Api\ListItemController::class, 'convertToSections']);
+    // Generic section routes come last
+    Route::put('/lists/{list}/sections/{section}', [\App\Http\Controllers\Api\ListItemController::class, 'updateSection']);
+    Route::delete('/lists/{list}/sections/{section}', [\App\Http\Controllers\Api\ListItemController::class, 'deleteSection']);
     
     // User search for sharing
     Route::get('/users/search', [UserListController::class, 'searchUsers']);
@@ -340,6 +394,17 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/saved-items/{type}/{id}', [\App\Http\Controllers\Api\SavedItemController::class, 'destroy']);
     Route::post('/saved-items/check', [\App\Http\Controllers\Api\SavedItemController::class, 'checkSaved']);
     Route::get('/saved-items/for-list-creation', [\App\Http\Controllers\Api\SavedItemController::class, 'forListCreation']);
+    
+    // Saved Collections routes
+    Route::get('/saved-collections', [\App\Http\Controllers\Api\SavedCollectionController::class, 'index']);
+    Route::post('/saved-collections', [\App\Http\Controllers\Api\SavedCollectionController::class, 'store']);
+    Route::get('/saved-collections/{collection}', [\App\Http\Controllers\Api\SavedCollectionController::class, 'show']);
+    Route::put('/saved-collections/{collection}', [\App\Http\Controllers\Api\SavedCollectionController::class, 'update']);
+    Route::delete('/saved-collections/{collection}', [\App\Http\Controllers\Api\SavedCollectionController::class, 'destroy']);
+    Route::post('/saved-collections/{collection}/add-items', [\App\Http\Controllers\Api\SavedCollectionController::class, 'addItems']);
+    Route::post('/saved-collections/{collection}/remove-items', [\App\Http\Controllers\Api\SavedCollectionController::class, 'removeItems']);
+    Route::post('/saved-collections/reorder', [\App\Http\Controllers\Api\SavedCollectionController::class, 'reorder']);
+    Route::put('/saved-items/{item}/move', [\App\Http\Controllers\Api\SavedCollectionController::class, 'moveItem']);
     
     // Channel routes (authenticated only)
     Route::post('/channels', [\App\Http\Controllers\Api\ChannelController::class, 'store']);
@@ -556,6 +621,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/lists/{list}/status', [\App\Http\Controllers\Api\Admin\ListManagementController::class, 'updateStatus']);
         Route::post('/lists/bulk-update', [\App\Http\Controllers\Api\Admin\ListManagementController::class, 'bulkUpdate']);
         
+        // List categories for admin
+        Route::get('/list-categories', [\App\Http\Controllers\Api\Admin\ListCategoryController::class, 'index']);
+        
         // Media management routes
         Route::get('/media', [\App\Http\Controllers\Api\Admin\MediaController::class, 'index']);
         Route::get('/media/stats', [\App\Http\Controllers\Api\Admin\MediaController::class, 'stats']);
@@ -620,6 +688,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{page}', [\App\Http\Controllers\Api\Admin\PageController::class, 'show']);
             Route::put('/{page}', [\App\Http\Controllers\Api\Admin\PageController::class, 'update']);
             Route::delete('/{page}', [\App\Http\Controllers\Api\Admin\PageController::class, 'destroy']);
+            
+            // Marketing pages by key
+            Route::get('/key/{key}', [\App\Http\Controllers\Api\Admin\MarketingPageController::class, 'getByKey']);
+            Route::put('/key/{key}', [\App\Http\Controllers\Api\Admin\MarketingPageController::class, 'updateByKey']);
             
             // Special pages
             Route::prefix('special')->group(function () {

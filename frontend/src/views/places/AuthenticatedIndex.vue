@@ -1,5 +1,32 @@
 <template>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-32">
+    <div>
+        <!-- Hero Section with Marketing Content -->
+        <section class="relative mb-8">
+            <!-- Background Image -->
+            <div v-if="marketingContent.image_url" class="absolute inset-0">
+                <img 
+                    :src="marketingContent.image_url" 
+                    alt="Places hero background" 
+                    class="w-full h-full object-cover"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+            </div>
+            <div v-else class="absolute inset-0 bg-gradient-to-r from-green-600 to-blue-600"></div>
+            
+            <!-- Content -->
+            <div class="relative z-10 py-24">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-6 text-white">
+                        {{ marketingContent.heading || 'Discover Amazing Places' }}
+                    </h1>
+                    <p class="text-xl mb-8 max-w-3xl mx-auto text-white/90">
+                        {{ marketingContent.paragraph || 'Explore carefully curated local businesses, restaurants, and attractions. Find your next favorite spot or share your discoveries with the community.' }}
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Loading State -->
         <div v-if="loading" class="flex justify-center items-center py-12">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
@@ -58,18 +85,12 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-3">
-                        <router-link 
-                            :to="{path: '/places', query: {all: 'true', ...(currentCategory ? {category: currentCategory.slug} : {})}}"
-                            class="text-sm text-gray-600 hover:text-gray-800 font-medium"
-                        >
-                            Browse all {{ currentCategory ? currentCategory.name : 'places' }}
-                        </router-link>
-                        <LocationSearch
+                    <div class="flex items-center">
+                        <LocationCommandPalette
                             v-model="selectedLocation"
+                            :current-location="currentRegion"
                             @change="handleLocationChange"
-                            :placeholder="'Change location'"
-                            class="w-48"
+                            class="w-64"
                         />
                     </div>
                 </div>
@@ -86,23 +107,110 @@
             </div>
 
             <!-- Page Header -->
-            <div class="flex items-center justify-between mb-8">
-                <div>
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-4">
                     <h1 class="text-3xl font-bold text-gray-900">
                         {{ currentCategory ? currentCategory.name : 'Browse Places' }}
                     </h1>
-                    <p class="text-gray-600 mt-2">
-                        {{ currentCategory ? `Browse ${currentCategory.name.toLowerCase()} in your area` : 'Discover local businesses, restaurants, and attractions' }}
-                    </p>
+                    <div class="flex items-center space-x-4">
+                        <router-link
+                            to="/places/map"
+                            class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                        >
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            Map View
+                        </router-link>
+                        <router-link
+                            to="/places/create"
+                            class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                        >
+                            + Add Place
+                        </router-link>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <router-link
-                        to="/places/create"
-                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
-                    >
-                        + Add Place
-                    </router-link>
+                
+                <!-- Location Context -->
+                <div v-if="currentRegion" class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-gray-600">
+                            Showing places in <span class="font-semibold">{{ currentRegion.name }}</span>
+                            <span v-if="parentRegion">, {{ parentRegion.name }}</span>
+                        </p>
+                        
+                        <!-- Include Nearby Toggle -->
+                        <label class="flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                v-model="includeNearby"
+                                @change="fetchEntries()"
+                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">
+                                Include places within 20 miles
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <!-- Region Navigation -->
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Parent Region Link -->
+                        <router-link
+                            v-if="parentRegion"
+                            :to="`/regions/${parentRegion.slug}`"
+                            class="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors text-sm"
+                        >
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            View all {{ parentRegion.name }}
+                        </router-link>
+                        
+                        <!-- Current Region -->
+                        <span class="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            {{ currentRegion.name }}
+                        </span>
+                        
+                        <!-- Child Regions (Neighborhoods) -->
+                        <div v-if="childRegions.length > 0" class="flex items-center gap-2 flex-wrap">
+                            <span class="text-gray-500 text-sm">|</span>
+                            <span class="text-gray-600 text-sm">Neighborhoods:</span>
+                            <router-link
+                                v-for="child in (showAllNeighborhoods ? childRegions : childRegions.slice(0, 5))"
+                                :key="child.id"
+                                :to="`/regions/${child.slug}`"
+                                class="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors text-sm"
+                            >
+                                {{ child.name }}
+                            </router-link>
+                            <button 
+                                v-if="childRegions.length > 5"
+                                @click="showAllNeighborhoods = !showAllNeighborhoods"
+                                class="inline-flex items-center px-3 py-1 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                            >
+                                <span>{{ showAllNeighborhoods ? 'Show less' : `Show ${childRegions.length - 5} more` }}</span>
+                                <svg 
+                                    class="ml-1 w-4 h-4 transition-transform duration-200"
+                                    :class="{ 'rotate-180': showAllNeighborhoods }"
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
+                
+                <p v-else class="text-gray-600">
+                    {{ currentCategory ? `Browse ${currentCategory.name.toLowerCase()} in your area` : 'Discover local businesses, restaurants, and attractions' }}
+                </p>
             </div>
 
             <!-- Search & Filters -->
@@ -208,8 +316,23 @@
             <div v-if="!currentCategory" class="mb-8">
                 <h2 class="text-xl font-semibold text-gray-900 mb-4">Browse by Category</h2>
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- All Places Category -->
                     <router-link
-                        v-for="category in categories.slice(0, 12)"
+                        :to="{path: '/places'}"
+                        class="bg-white rounded-lg p-4 text-center border hover:shadow-md hover:border-green-300 transition-all cursor-pointer group"
+                    >
+                        <div class="text-2xl mb-2">🏢</div>
+                        <h3 class="text-sm font-medium text-gray-900 group-hover:text-green-600 transition-colors">
+                            All Places
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-1">
+                            {{ totalPlacesCount }} {{ totalPlacesCount === 1 ? 'place' : 'places' }}
+                        </p>
+                    </router-link>
+                    
+                    <!-- Individual Categories -->
+                    <router-link
+                        v-for="category in categories.slice(0, 11)"
                         :key="category.id"
                         :to="{path: '/places', query: {category: category.slug}}"
                         class="bg-white rounded-lg p-4 text-center border hover:shadow-md hover:border-green-300 transition-all cursor-pointer group"
@@ -218,8 +341,8 @@
                         <h3 class="text-sm font-medium text-gray-900 group-hover:text-green-600 transition-colors">
                             {{ category.name }}
                         </h3>
-                        <p class="text-xs text-gray-500">
-                            {{ category.total_entries_count || category.directory_entries_count || 0 }}
+                        <p class="text-xs text-gray-500 mt-1">
+                            {{ category.directory_entries_count || 0 }} {{ category.directory_entries_count === 1 ? 'place' : 'places' }}
                         </p>
                     </router-link>
                 </div>
@@ -344,13 +467,18 @@
                             <h3 class="text-lg font-semibold text-gray-900 mb-1 group-hover:text-green-600 transition-colors">{{ entry.title }}</h3>
                             <p class="text-gray-600 text-sm mb-3 line-clamp-2">{{ stripHtml(entry.description) }}</p>
                             
-                            <div v-if="entry.location" class="flex items-center text-gray-500 text-sm">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                </svg>
-                                <span v-if="entry.location.neighborhood">{{ entry.location.neighborhood }}, </span>
-                                {{ entry.location.city }}, {{ entry.location.state }}
+                            <div v-if="entry.location" class="flex items-center justify-between text-gray-500 text-sm">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    <span v-if="entry.location.neighborhood">{{ entry.location.neighborhood }}, </span>
+                                    {{ entry.location.city }}, {{ entry.location.state }}
+                                </div>
+                                <span v-if="includeNearby && entry.distance_miles" class="text-xs font-medium">
+                                    {{ entry.distance_miles }} mi
+                                </span>
                             </div>
                         </div>
                     </router-link>
@@ -399,6 +527,9 @@
                                         </svg>
                                         <span v-if="entry.location.neighborhood">{{ entry.location.neighborhood }}, </span>
                                         {{ entry.location.city }}, {{ entry.location.state }}
+                                        <span v-if="includeNearby && entry.distance_miles" class="ml-2 font-medium">
+                                            ({{ entry.distance_miles }} mi)
+                                        </span>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <a v-if="entry.website_url" 
@@ -514,6 +645,7 @@
                 </div>
             </div>
         </template>
+        </div>
     </div>
 </template>
 
@@ -523,10 +655,12 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { usStates } from '@/data/usStates'
 import LocationSwitcher from '@/components/LocationSwitcher.vue'
-import LocationSearch from '@/components/LocationSearch.vue'
+import LocationCommandPalette from '@/components/LocationCommandPalette.vue'
 import { getPlaceUrl } from '@/utils/placeUrls'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // Available states for location picker
 const availableStates = usStates
@@ -546,6 +680,18 @@ const pagination = ref({
     last_page: 1,
     total: 0
 })
+const marketingContent = ref({
+    heading: 'Discover Amazing Places',
+    paragraph: 'Explore carefully curated local businesses, restaurants, and attractions. Find your next favorite spot or share your discoveries with the community.',
+    image_url: null
+})
+const includeNearby = ref(false)
+
+// Region state
+const currentRegion = ref(null)
+const parentRegion = ref(null)
+const childRegions = ref([])
+const showAllNeighborhoods = ref(false)
 
 // Location detection
 const loadingLocation = ref(false)
@@ -567,6 +713,13 @@ const currentCategory = computed(() => {
     return categories.value.find(cat => cat.slug === categorySlug)
 })
 
+const totalPlacesCount = computed(() => {
+    // Sum up all category counts for location-specific total
+    return categories.value.reduce((total, category) => {
+        return total + (category.directory_entries_count || 0)
+    }, 0)
+})
+
 const paginationRange = computed(() => {
     const range = []
     const { current_page, last_page } = pagination.value
@@ -584,7 +737,48 @@ const detectUserLocation = async () => {
     loadingLocation.value = true
     
     try {
-        // Try to get location from localStorage first
+        // First try to use user's profile location
+        if (authStore.user?.location) {
+            // Parse user location string (e.g., "Irvine, CA")
+            const parts = authStore.user.location.split(',').map(s => s.trim())
+            if (parts.length >= 2) {
+                const city = parts[0]
+                const state = parts[1]
+                
+                // Try to find the region in the database
+                const regionResponse = await axios.get('/api/regions/search', {
+                    params: { q: city, type: 'city' }
+                })
+                
+                if (regionResponse.data.data && regionResponse.data.data.length > 0) {
+                    const cityRegion = regionResponse.data.data.find(r => 
+                        r.name.toLowerCase() === city.toLowerCase() &&
+                        r.parent?.name?.toLowerCase().includes(state.toLowerCase())
+                    ) || regionResponse.data.data[0]
+                    
+                    if (cityRegion) {
+                        currentRegion.value = cityRegion
+                        userLocation.value = {
+                            city: cityRegion.name,
+                            state: cityRegion.parent?.name || state,
+                            region_id: cityRegion.id,
+                            lat: cityRegion.lat,
+                            lng: cityRegion.lng
+                        }
+                        
+                        // Fetch parent and child regions
+                        await fetchRegionHierarchy(cityRegion)
+                        
+                        // Update filters
+                        updateFiltersFromLocation()
+                        loadingLocation.value = false
+                        return
+                    }
+                }
+            }
+        }
+        
+        // Try to get location from localStorage
         const savedLocation = localStorage.getItem('userLocation')
         if (savedLocation) {
             userLocation.value = JSON.parse(savedLocation)
@@ -593,7 +787,7 @@ const detectUserLocation = async () => {
             return
         }
         
-        // Use IP geolocation service
+        // Use IP geolocation service as fallback
         const response = await fetch('https://ipapi.co/json/')
         const data = await response.json()
         
@@ -602,6 +796,18 @@ const detectUserLocation = async () => {
                 city: data.city,
                 state: data.region,
                 country: data.country_name || 'United States'
+            }
+            
+            // Try to find matching region in database
+            const regionResponse = await axios.get('/api/regions/search', {
+                params: { q: data.city, type: 'city' }
+            })
+            
+            if (regionResponse.data.data && regionResponse.data.data.length > 0) {
+                const cityRegion = regionResponse.data.data[0]
+                currentRegion.value = cityRegion
+                userLocation.value.region_id = cityRegion.id
+                await fetchRegionHierarchy(cityRegion)
             }
             
             // Save to localStorage
@@ -615,6 +821,25 @@ const detectUserLocation = async () => {
         // Fallback to default (no location filtering)
     } finally {
         loadingLocation.value = false
+    }
+}
+
+const fetchRegionHierarchy = async (region) => {
+    try {
+        // Fetch parent region if exists
+        if (region.parent_id) {
+            const parentResponse = await axios.get(`/api/regions/${region.parent_id}`)
+            parentRegion.value = parentResponse.data.data
+        }
+        
+        // Fetch child regions (neighborhoods)
+        const childResponse = await axios.get(`/api/regions/${region.id}/children`)
+        childRegions.value = childResponse.data.data || []
+        
+        // Reset the show all neighborhoods when changing regions
+        showAllNeighborhoods.value = false
+    } catch (error) {
+        console.error('Error fetching region hierarchy:', error)
     }
 }
 
@@ -678,9 +903,17 @@ const fetchEntries = async (page = 1) => {
             params.category = router.currentRoute.value.query.category
         }
         
-        // Add 'all' param if in URL
-        if (router.currentRoute.value.query.all === 'true') {
-            params.all = true
+        // Always filter by region if we have a location
+        if (userLocation.value?.region_id) {
+            params.region_id = userLocation.value.region_id
+        } else if (currentRegion.value?.id) {
+            params.region_id = currentRegion.value.id
+        }
+        
+        // Add nearby parameter if enabled
+        if (includeNearby.value && params.region_id) {
+            params.include_nearby = true
+            params.nearby_radius = 20 // 20 mile radius
         }
         
         // Filter out undefined values
@@ -806,9 +1039,25 @@ watch(searchQuery, () => {
 })
 
 // Handle location change from LocationSwitcher
-const handleLocationChange = (newLocation) => {
+const handleLocationChange = async (newLocation) => {
     // Update the selected location
     selectedLocation.value = newLocation
+    
+    // Update current region
+    currentRegion.value = newLocation
+    
+    // Update user location
+    userLocation.value = {
+        city: newLocation.name,
+        state: newLocation.parent?.name || newLocation.state,
+        region_id: newLocation.id,
+        lat: newLocation.lat,
+        lng: newLocation.lng
+    }
+    
+    // Fetch region hierarchy for the new location
+    await fetchRegionHierarchy(newLocation)
+    
     // Refresh the page data with new location
     fetchEntries()
 }
@@ -824,12 +1073,32 @@ watch(() => router.currentRoute.value.query, () => {
     fetchEntries()
 })
 
+// Fetch marketing content
+const fetchMarketingContent = async () => {
+    try {
+        const response = await axios.get('/api/marketing-pages/places')
+        if (response.data) {
+            marketingContent.value = {
+                heading: response.data.heading || marketingContent.value.heading,
+                paragraph: response.data.paragraph || marketingContent.value.paragraph,
+                image_url: response.data.image_url || null
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching marketing content:', err)
+        // Use defaults if fetch fails
+    }
+}
+
 // Initialize
 onMounted(async () => {
     document.title = 'Browse Places'
     
-    // Start location detection in parallel
-    detectUserLocation()
+    // Start location detection and marketing content fetch in parallel
+    Promise.all([
+        detectUserLocation(),
+        fetchMarketingContent()
+    ])
     
     // Fetch initial data (will be filtered by location once detected)
     fetchEntries()

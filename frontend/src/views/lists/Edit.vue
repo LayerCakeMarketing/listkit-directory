@@ -61,312 +61,43 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Settings Drawer -->
-                    <TransitionRoot as="template" :show="settingsOpen">
-                        <Dialog class="relative z-50" @close="settingsOpen = false">
-                            <div class="fixed inset-0 overflow-hidden">
-                                <div class="absolute inset-0 overflow-hidden">
-                                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full">
-                                        <TransitionChild
-                                            as="template"
-                                            enter="transform transition ease-in-out duration-300"
-                                            enter-from="translate-x-full"
-                                            enter-to="translate-x-0"
-                                            leave="transform transition ease-in-out duration-300"
-                                            leave-from="translate-x-0"
-                                            leave-to="translate-x-full"
-                                        >
-                                            <DialogPanel class="pointer-events-auto w-screen max-w-md">
-                                                <div class="flex h-full flex-col overflow-y-auto bg-white shadow-2xl">
-                                                    <div class="px-4 py-6 sm:px-6">
-                                                        <div class="flex items-center justify-between">
-                                                            <DialogTitle class="text-lg font-semibold text-gray-900">List Settings</DialogTitle>
-                                                            <div class="ml-3 flex h-7 items-center">
-                                                                <button
-                                                                    type="button"
-                                                                    class="rounded-md bg-white text-gray-400 hover:text-gray-500"
-                                                                    @click="settingsOpen = false"
-                                                                >
-                                                                    <span class="sr-only">Close panel</span>
-                                                                    <XMarkIcon class="h-6 w-6" aria-hidden="true" />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="relative flex-1 px-4 sm:px-6">
-                                                        <form @submit.prevent="updateList" class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Name</label>
-                                    <input
-                                        v-model="listForm.name"
-                                        type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Description</label>
-                                    <RichTextEditor
-                                        v-model="listForm.description"
-                                        placeholder="Enter list description..."
-                                        :max-height="200"
-                                    />
-                                </div>
-                                <div>
-                                    <CategorySelect
-                                        v-model="listForm.category_id"
-                                        label="Category *"
-                                        placeholder="Select a category..."
-                                        help-text="Choose the category that best describes your list"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Channel</label>
-                                    <select
-                                        v-model="listForm.channel_id"
-                                        class="mt-1 block w-full rounded-md border-gray-300"
-                                    >
-                                        <option :value="null">No channel (personal list)</option>
-                                        <option
-                                            v-for="channel in userChannels"
-                                            :key="channel.id"
-                                            :value="channel.id"
-                                        >
-                                            {{ channel.name }} (@{{ channel.slug }})
-                                        </option>
-                                    </select>
-                                    <p class="mt-1 text-sm text-gray-500">Assign this list to one of your channels</p>
-                                </div>
-                                <div>
-                                    <TagInput
-                                        v-model="listForm.tags"
-                                        label="Tags"
-                                        placeholder="Search or create tags..."
-                                        help-text="Add tags to help people discover your list"
-                                        :allow-create="true"
-                                        :max-tags="10"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
-                                    <div class="space-y-2">
-                                        <label class="flex items-start">
-                                            <input
-                                                v-model="listForm.visibility"
-                                                value="public"
-                                                type="radio"
-                                                class="mt-0.5 rounded-full border-gray-300"
-                                            />
-                                            <div class="ml-3">
-                                                <span class="block text-sm font-medium text-gray-700">Public</span>
-                                                <span class="block text-xs text-gray-500">Visible to all logged-in users and appears in feeds</span>
-                                            </div>
-                                        </label>
-                                        <label class="flex items-start">
-                                            <input
-                                                v-model="listForm.visibility"
-                                                value="unlisted"
-                                                type="radio"
-                                                class="mt-0.5 rounded-full border-gray-300"
-                                            />
-                                            <div class="ml-3">
-                                                <span class="block text-sm font-medium text-gray-700">Unlisted</span>
-                                                <span class="block text-xs text-gray-500">Only accessible via direct URL</span>
-                                            </div>
-                                        </label>
-                                        <label class="flex items-start">
-                                            <input
-                                                v-model="listForm.visibility"
-                                                value="private"
-                                                type="radio"
-                                                class="mt-0.5 rounded-full border-gray-300"
-                                            />
-                                            <div class="ml-3">
-                                                <span class="block text-sm font-medium text-gray-700">Private</span>
-                                                <span class="block text-xs text-gray-500">Only visible to you and people you share with</span>
-                                            </div>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                                        Photos
-                                        <span v-if="photos.length > 0" class="text-green-600 font-normal"> - {{ photos.length }} photo(s) uploaded ✓</span>
-                                    </label>
-                                    <CloudflareDragDropUploader
-                                        :max-files="10"
-                                        :max-file-size="14680064"
-                                        context="cover"
-                                        entity-type="App\Models\UserList"
-                                        :entity-id="listId"
-                                        @upload-success="handlePhotoUpload"
-                                        @upload-error="handleUploadError"
-                                    />
-                                    <!-- Upload Results with Drag & Drop Reordering -->
-                                    <DraggableImageGallery 
-                                        v-model:images="photos"
-                                        title="Uploaded Photos"
-                                        :show-primary="true"
-                                        @remove="handleGalleryRemove"
-                                        @reorder="updateImageOrder"
-                                    />
-                                    <!-- Existing Gallery Images -->
-                                    <DraggableImageGallery 
-                                        v-if="existingPhotos.length > 0"
-                                        v-model:images="existingPhotos"
-                                        title="Current Photos"
-                                        :show-primary="true"
-                                        @remove="handleExistingGalleryRemove"
-                                        @reorder="updateExistingImageOrder"
-                                    />
-                                    <p class="text-xs text-gray-500 mt-1">Add photos for your list. The first photo will be used as the featured image. Drag to reorder them.</p>
-                                </div>
-                                                        </form>
-                                                        
-                                                        <!-- Publishing Options -->
-                                                        <div class="border-t px-4 py-4 mt-4">
-                                                            <label class="block text-sm font-medium text-gray-700 mb-2">Publishing Options</label>
-                                                            <div class="space-y-3">
-                                                                <label class="flex items-center">
-                                                                    <input
-                                                                        v-model="listForm.is_draft"
-                                                                        type="checkbox"
-                                                                        class="rounded border-gray-300"
-                                                                    />
-                                                                    <span class="ml-2 text-sm text-gray-700">Save as draft</span>
-                                                                </label>
-                                                                <div v-if="!listForm.is_draft">
-                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Schedule for later</label>
-                                                                    <input
-                                                                        v-model="listForm.scheduled_for"
-                                                                        type="datetime-local"
-                                                                        class="w-full rounded-md border-gray-300"
-                                                                        :min="new Date().toISOString().slice(0, 16)"
-                                                                    />
-                                                                    <p class="text-xs text-gray-500 mt-1">Leave empty to publish immediately</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <!-- List Sharing (Private Lists Only) -->
-                                                        <div v-if="listForm.visibility === 'private'" class="border-t px-4 py-4 mt-4">
-                                                            <h3 class="text-lg font-semibold mb-4">Share List</h3>
-                                                            <!-- Add New Share -->
-                                                            <div class="space-y-4 mb-6">
-                                                                <div>
-                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Share with user</label>
-                                                                    <input
-                                                                        v-model="shareSearch"
-                                                                        @input="debouncedSearchUsers"
-                                                                        type="text"
-                                                                        placeholder="Search by name, username, or email..."
-                                                                        class="w-full rounded-md border-gray-300"
-                                                                    />
-                                                                    <div v-if="userSearchResults.length > 0" class="mt-2 max-h-40 overflow-y-auto border rounded">
-                                                                        <button
-                                                                            v-for="user in userSearchResults"
-                                                                            :key="user.id"
-                                                                            @click="selectUserToShare(user)"
-                                                                            class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0 flex items-center space-x-2"
-                                                                        >
-                                                                            <div>
-                                                                                <div class="font-medium">{{ user.name }}</div>
-                                                                                <div class="text-sm text-gray-500">@{{ user.username || user.email }}</div>
-                                                                            </div>
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                                <div v-if="selectedUser" class="p-3 bg-gray-50 rounded border">
-                                                                    <div class="flex items-center justify-between mb-3">
-                                                                        <div>
-                                                                            <div class="font-medium">{{ selectedUser.name }}</div>
-                                                                            <div class="text-sm text-gray-500">@{{ selectedUser.username || selectedUser.email }}</div>
-                                                                        </div>
-                                                                        <button @click="clearSelectedUser" class="text-gray-400 hover:text-gray-600">
-                                                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                                                                            </svg>
-                                                                        </button>
-                                                                    </div>
-                                                                    <div class="space-y-2">
-                                                                        <div>
-                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">Permission</label>
-                                                                            <select v-model="shareForm.permission" class="w-full rounded-md border-gray-300">
-                                                                                <option value="view">View only</option>
-                                                                                <option value="edit">Can edit</option>
-                                                                            </select>
-                                                                        </div>
-                                                                        <div>
-                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">Expires (optional)</label>
-                                                                            <input
-                                                                                v-model="shareForm.expires_at"
-                                                                                type="datetime-local"
-                                                                                class="w-full rounded-md border-gray-300"
-                                                                                :min="new Date().toISOString().slice(0, 16)"
-                                                                            />
-                                                                        </div>
-                                                                        <button
-                                                                            @click="shareList"
-                                                                            :disabled="sharing"
-                                                                            class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                                                                        >
-                                                                            {{ sharing ? 'Sharing...' : 'Share List' }}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <!-- Current Shares -->
-                                                            <div v-if="shares.length > 0">
-                                                                <h4 class="font-medium text-gray-900 mb-3">Current Shares</h4>
-                                                                <div class="space-y-2">
-                                                                    <div
-                                                                        v-for="share in shares"
-                                                                        :key="share.id"
-                                                                        class="flex items-center justify-between p-3 bg-gray-50 rounded border"
-                                                                    >
-                                                                        <div>
-                                                                            <div class="font-medium">{{ share.user.name }}</div>
-                                                                            <div class="text-sm text-gray-500">
-                                                                                {{ share.permission }} access
-                                                                                <span v-if="share.expires_at"> • Expires {{ formatDate(share.expires_at) }}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div class="flex items-center space-x-2">
-                                                                            <button
-                                                                                @click="editShare(share)"
-                                                                                class="text-blue-600 hover:text-blue-800 text-sm"
-                                                                            >
-                                                                                Edit
-                                                                            </button>
-                                                                            <button
-                                                                                @click="removeShare(share)"
-                                                                                class="text-red-600 hover:text-red-800 text-sm"
-                                                                            >
-                                                                                Remove
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div v-else class="text-sm text-gray-500 text-center py-4">
-                                                                No one has access to this private list yet.
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </DialogPanel>
-                                        </TransitionChild>
-                                    </div>
-                                </div>
-                            </div>
-                        </Dialog>
-                    </TransitionRoot>
+                    <!-- Settings Drawer (Left-sliding) -->
+                    <ListSettingsDrawer
+                        :open="settingsOpen"
+                        :form="listForm"
+                        :channels="userChannels"
+                        :photos="photos"
+                        :existing-photos="existingPhotos"
+                        :list-id="listId"
+                        :shares="shares"
+                        :saving="savingList"
+                        @close="settingsOpen = false"
+                        @save="updateList"
+                        @photo-upload="handlePhotoUpload"
+                        @upload-error="handleUploadError"
+                        @gallery-remove="handleGalleryRemove"
+                        @image-reorder="updateImageOrder"
+                        @existing-gallery-remove="handleExistingGalleryRemove"
+                        @existing-image-reorder="updateExistingImageOrder"
+                        @share-added="handleShareAdded"
+                        @share-removed="handleShareRemoved"
+                    />
 
                     <!-- List Items (full width when drawer is closed) -->
                     <div class="flex flex-col gap-6">
                         <!-- Add New Item -->
                         <div class="bg-white p-6 rounded-lg shadow">
-                            <h3 class="text-lg font-semibold mb-4">Add Item</h3>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold">Add Item</h3>
+                                <button
+                                    @click="showAddSection = true"
+                                    type="button"
+                                    class="flex items-center gap-2 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm font-medium"
+                                >
+                                    <PlusIcon class="h-4 w-4" />
+                                    Add Section
+                                </button>
+                            </div>
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Item Type</label>
@@ -375,7 +106,7 @@
                                             v-for="type in itemTypes"
                                             :key="type.value"
                                             type="button"
-                                            @click="selectedItemType = type.value"
+                                            @click="handleItemTypeClick(type.value)"
                                             :class="[
                                                 'p-2 text-sm rounded border',
                                                 selectedItemType === type.value
@@ -384,37 +115,6 @@
                                             ]"
                                         >
                                             {{ type.label }}
-                                        </button>
-                                    </div>
-                                </div>
-                                <!-- Directory Entry Search -->
-                                <div v-if="selectedItemType === 'directory_entry'">
-                                    <div class="flex gap-2">
-                                        <input
-                                            v-model="entrySearch"
-                                            @input="debouncedSearchEntries"
-                                            type="text"
-                                            placeholder="Search directory entries..."
-                                            class="flex-1 rounded-md border-gray-300"
-                                        />
-                                        <button
-                                            @click="showSavedItems = true"
-                                            type="button"
-                                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
-                                        >
-                                            From Saved
-                                        </button>
-                                    </div>
-                                    <div v-if="searchResults.length > 0" class="mt-2 max-h-60 overflow-y-auto border rounded">
-                                        <button
-                                            v-for="entry in searchResults"
-                                            :key="entry.id"
-                                            type="button"
-                                            @click="addDirectoryEntry(entry)"
-                                            class="w-full text-left p-2 hover:bg-gray-100 border-b last:border-b-0"
-                                        >
-                                            <div class="font-medium">{{ entry.title }}</div>
-                                            <div class="text-sm text-gray-500">{{ entry.category?.name }}</div>
                                         </button>
                                     </div>
                                 </div>
@@ -513,71 +213,98 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- List Items -->
+                        <!-- List Items with Sections -->
                         <div class="bg-white rounded-lg shadow">
                             <div class="p-6 border-b">
                                 <h3 class="text-lg font-semibold">List Items</h3>
-                                <p class="text-sm text-gray-500 mt-1">Drag to reorder items</p>
+                                <p class="text-sm text-gray-500 mt-1">Drag to reorder items and sections</p>
                             </div>
-                            <div v-if="items.length === 0" class="p-6 text-center text-gray-500">
-                                No items yet. Add some content to your list!
+                            
+                            <!-- If using sections -->
+                            <div v-if="list.structure_version === '2.0' && sections.length > 0" class="p-6">
+                                <draggable
+                                    v-model="sections"
+                                    @end="handleSectionReorder"
+                                    item-key="id"
+                                    handle=".drag-handle"
+                                    class="space-y-4"
+                                >
+                                    <template #item="{ element: section }">
+                                        <ListSection
+                                            :section="section"
+                                            :items="getSectionItems(section.id)"
+                                            @update-heading="updateSectionHeading(section.id, $event)"
+                                            @reorder="handleItemReorder(section.id, $event)"
+                                            @remove="removeSection(section.id)"
+                                            @edit-item="editItem"
+                                            @remove-item="removeItem"
+                                        />
+                                    </template>
+                                </draggable>
                             </div>
-                            <draggable
-                                v-else
-                                v-model="items"
-                                @end="handleReorder"
-                                item-key="id"
-                                class="divide-y"
-                                handle=".drag-handle"
-                            >
-                                <template #item="{ element, index }">
-                                    <div class="p-4 hover:bg-gray-50 cursor-move">
-                                        <div class="flex items-start space-x-3">
-                                            <div class="flex-shrink-0 mt-1 drag-handle cursor-grab">
-                                                <svg class="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                                </svg>
-                                            </div>
-                                            <div class="flex-1">
-                                                <div class="flex items-center justify-between">
-                                                    <h4 class="font-medium text-gray-900">
-                                                        {{ element.display_title || element.title }}
-                                                    </h4>
-                                                    <div class="flex items-center space-x-2">
-                                                        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                                            {{ element.type }}
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            @click="editItem(element)"
-                                                            class="text-blue-600 hover:text-blue-800 text-sm"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            @click="removeItem(element)"
-                                                            class="text-red-600 hover:text-red-800 text-sm"
-                                                        >
-                                                            Remove
-                                                        </button>
+                            
+                            <!-- Legacy flat list -->
+                            <div v-else>
+                                <div v-if="items.length === 0" class="p-6 text-center text-gray-500">
+                                    No items yet. Add some content to your list!
+                                </div>
+                                <draggable
+                                    v-else
+                                    v-model="items"
+                                    @end="handleReorder"
+                                    item-key="id"
+                                    class="divide-y"
+                                    handle=".drag-handle"
+                                >
+                                    <template #item="{ element }">
+                                        <div class="p-4 hover:bg-gray-50 cursor-move">
+                                            <div class="flex items-start space-x-3">
+                                                <div class="flex-shrink-0 mt-1 drag-handle cursor-grab">
+                                                    <svg class="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                                    </svg>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="flex items-center justify-between">
+                                                        <h4 class="font-medium text-gray-900">
+                                                            {{ element.display_title || element.title }}
+                                                        </h4>
+                                                        <div class="flex items-center space-x-2">
+                                                            <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                                {{ element.type }}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                @click="editItem(element)"
+                                                                class="text-blue-600 hover:text-blue-800 text-sm"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                @click="removeItem(element)"
+                                                                class="text-red-600 hover:text-red-800 text-sm"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <p v-if="element.display_content || element.content" class="text-sm text-gray-600 mt-1">
-                                                    {{ truncate(element.display_content || element.content, 150) }}
-                                                </p>
-                                                <div v-if="element.type === 'location' && element.data" class="text-sm text-gray-500 mt-1">
-                                                    📍 {{ element.data.address }}
-                                                </div>
-                                                <div v-if="element.type === 'event' && element.data" class="text-sm text-gray-500 mt-1">
-                                                    📅 {{ formatDate(element.data.start_date) }}
-                                                    <span v-if="element.data.location"> @ {{ element.data.location }}</span>
+                                                    <p v-if="element.display_content || element.content" class="text-sm text-gray-600 mt-1">
+                                                        {{ truncate(element.display_content || element.content, 150) }}
+                                                    </p>
+                                                    <div v-if="element.type === 'location' && element.data" class="text-sm text-gray-500 mt-1">
+                                                        📍 {{ element.data.address }}
+                                                    </div>
+                                                    <div v-if="element.type === 'event' && element.data" class="text-sm text-gray-500 mt-1">
+                                                        📅 {{ formatDate(element.data.start_date) }}
+                                                        <span v-if="element.data.location"> @ {{ element.data.location }}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </template>
-                            </draggable>
+                                    </template>
+                                </draggable>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -659,96 +386,48 @@
         </Modal>
         
         <!-- Saved Items Modal -->
-        <TransitionRoot :show="showSavedItems" as="template" @after-leave="savedItemsQuery = ''">
-            <Dialog as="div" class="relative z-50" @close="showSavedItems = false">
-                <TransitionChild
-                    as="template"
-                    enter="ease-out duration-300"
-                    enter-from="opacity-0"
-                    enter-to="opacity-100"
-                    leave="ease-in duration-200"
-                    leave-from="opacity-100"
-                    leave-to="opacity-0"
-                >
-                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
-                </TransitionChild>
-
-                <div class="fixed inset-0 z-10 overflow-y-auto">
-                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                        <TransitionChild
-                            as="template"
-                            enter="ease-out duration-300"
-                            enter-from="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                            enter-to="opacity-100 translate-y-0 sm:scale-100"
-                            leave="ease-in duration-200"
-                            leave-from="opacity-100 translate-y-0 sm:scale-100"
-                            leave-to="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                        >
-                            <DialogPanel class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
-                                <div>
-                                    <h3 class="text-lg font-medium leading-6 text-gray-900">
-                                        Select from Saved Places
-                                    </h3>
-                                    <div class="mt-4">
-                                        <input
-                                            v-model="savedItemsQuery"
-                                            type="text"
-                                            placeholder="Filter saved places..."
-                                            class="w-full rounded-md border-gray-300 mb-4"
-                                        />
-                                        
-                                        <div v-if="loadingSavedItems" class="text-center py-4">
-                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                                        </div>
-                                        
-                                        <div v-else-if="filteredSavedItems.length === 0" class="text-center py-8 text-gray-500">
-                                            No saved places found.
-                                        </div>
-                                        
-                                        <div v-else class="max-h-96 overflow-y-auto space-y-2">
-                                            <div
-                                                v-for="place in filteredSavedItems"
-                                                :key="place.id"
-                                                class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                                                @click="addSavedPlace(place)"
-                                            >
-                                                <div class="flex items-start justify-between">
-                                                    <div>
-                                                        <h4 class="font-medium text-gray-900">{{ place.title }}</h4>
-                                                        <p class="text-sm text-gray-500">
-                                                            {{ place.category }}
-                                                            <span v-if="place.location"> · {{ place.location }}</span>
-                                                        </p>
-                                                        <p v-if="place.description" class="text-sm text-gray-600 mt-1 line-clamp-2">
-                                                            {{ place.description }}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        class="ml-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                                    >
-                                                        Add
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-5 sm:mt-6">
-                                    <button
-                                        type="button"
-                                        class="inline-flex w-full justify-center rounded-md bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-400"
-                                        @click="showSavedItems = false"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </DialogPanel>
-                        </TransitionChild>
+        <SavedItemsModal
+            :show="showSavedItems"
+            @close="showSavedItems = false"
+            @add-items="handleAddSavedItems"
+        />
+        
+        <!-- Add Section Modal -->
+        <Modal :show="showAddSection" @close="showAddSection = false" max-width="md">
+            <div class="p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">
+                    Add New Section
+                </h3>
+                <form @submit.prevent="createSection" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Section Heading</label>
+                        <input
+                            v-model="newSectionHeading"
+                            type="text"
+                            class="mt-1 block w-full rounded-md border-gray-300"
+                            placeholder="e.g., Day 1, Best Restaurants, Must-See Places..."
+                            required
+                            autofocus
+                        />
                     </div>
-                </div>
-            </Dialog>
-        </TransitionRoot>
+                    <div class="flex justify-end space-x-3">
+                        <button
+                            type="button"
+                            @click="showAddSection = false"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                        >
+                            Add Section
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Modal>
     </div>
 </template>
 
@@ -766,13 +445,18 @@ import RichTextEditor from '@/components/RichTextEditor.vue'
 import draggable from 'vuedraggable'
 import { debounce } from 'lodash'
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
-import { XMarkIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, Cog6ToothIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { useNotification } from '@/composables/useNotification'
+import { useToast } from '@/composables/useToast'
+import ListSettingsDrawer from '@/components/lists/ListSettingsDrawer.vue'
+import SavedItemsModal from '@/components/lists/SavedItemsModal.vue'
+import ListSection from '@/components/lists/ListSection.vue'
 
 // Vue Router
 const route = useRoute()
 const router = useRouter()
 const { showSuccess, showError } = useNotification()
+const { success: toastSuccess, error: toastError } = useToast()
 
 // Get listId from route params
 const listId = ref(route.params.id)
@@ -790,7 +474,7 @@ const savingList = ref(false)
 const savingItem = ref(false)
 const showEditModal = ref(false)
 const editingItem = ref(null)
-const selectedItemType = ref('directory_entry')
+const selectedItemType = ref('text')
 const entrySearch = ref('')
 const searchResults = ref([])
 
@@ -813,8 +497,6 @@ const hasSaved = ref(false)
 // Saved items state
 const showSavedItems = ref(false)
 const savedItems = ref([])
-const loadingSavedItems = ref(false)
-const savedItemsQuery = ref('')
 const userChannels = ref([])
 
 const listForm = reactive({
@@ -856,11 +538,16 @@ const shareForm = reactive({
 })
 
 const itemTypes = [
-    { value: 'directory_entry', label: 'Directory Entry' },
     { value: 'text', label: 'Text' },
+    { value: 'saved', label: 'From Saved' },
     { value: 'location', label: 'Location' },
     { value: 'event', label: 'Event' }
 ]
+
+// Sections support
+const sections = ref([])
+const showAddSection = ref(false)
+const newSectionHeading = ref('')
 
 // Computed
 const backLink = computed(() => {
@@ -887,15 +574,6 @@ const backLinkText = computed(() => {
     return 'Back to My Lists'
 })
 
-const filteredSavedItems = computed(() => {
-    if (!savedItemsQuery.value) return savedItems.value
-    const query = savedItemsQuery.value.toLowerCase()
-    return savedItems.value.filter(item => 
-        item.title.toLowerCase().includes(query) ||
-        (item.description && item.description.toLowerCase().includes(query)) ||
-        (item.category && item.category.toLowerCase().includes(query))
-    )
-})
 
 // Methods
 const fetchList = async () => {
@@ -935,6 +613,11 @@ const fetchList = async () => {
         // Fetch shares if private list
         if (response.data.visibility === 'private') {
             fetchShares()
+        }
+        
+        // Load sections if using v2 structure
+        if (response.data.structure_version === '2.0') {
+            sections.value = response.data.sections || []
         }
     } catch (error) {
         console.error('Error fetching list:', error)
@@ -1010,45 +693,151 @@ const searchEntries = async () => {
 
 const debouncedSearchEntries = debounce(searchEntries, 300)
 
-const addDirectoryEntry = async (entry) => {
+const convertToSections = async () => {
     try {
-        const response = await axios.post(`/api/lists/${listId.value}/items`, {
-            type: 'directory_entry',
-            directory_entry_id: entry.id
-        })
-        items.value.push(response.data.item)
-        entrySearch.value = ''
-        searchResults.value = []
+        const response = await axios.post(`/api/lists/${listId.value}/convert-to-sections`)
+        list.value = response.data.list
+        sections.value = response.data.sections || []
+        toastSuccess('Success', 'List converted to sections format')
     } catch (error) {
-        showError('Error', error.response?.data?.message || 'Failed to add entry')
+        toastError('Error', 'Failed to convert list format')
     }
 }
 
-const fetchSavedItems = async () => {
-    loadingSavedItems.value = true
+const getSectionItems = (sectionId) => {
+    return items.value.filter(item => item.section_id === sectionId)
+}
+
+const createSection = async () => {
+    if (!newSectionHeading.value.trim()) return
+    
     try {
-        const response = await axios.get('/api/saved-items/for-list-creation')
-        savedItems.value = response.data.places || []
+        const response = await axios.post(`/api/lists/${listId.value}/sections`, {
+            heading: newSectionHeading.value.trim()
+        })
+        
+        newSectionHeading.value = ''
+        showAddSection.value = false
+        toastSuccess('Success', 'Section created')
+        
+        // Refresh the entire list to get proper structure
+        await fetchList()
     } catch (error) {
-        console.error('Error fetching saved items:', error)
-        savedItems.value = []
-    } finally {
-        loadingSavedItems.value = false
+        console.error('Error creating section:', error)
+        toastError('Error', error.response?.data?.message || 'Failed to create section')
     }
 }
 
-const addSavedPlace = async (place) => {
+const updateSectionHeading = async (sectionId, newHeading) => {
     try {
-        const response = await axios.post(`/api/lists/${listId.value}/items`, {
-            type: 'directory_entry',
-            directory_entry_id: place.id
+        await axios.put(`/api/lists/${listId.value}/sections/${sectionId}`, {
+            heading: newHeading
         })
-        items.value.push(response.data.item)
+        const section = sections.value.find(s => s.id === sectionId)
+        if (section) {
+            section.heading = newHeading
+        }
+        toastSuccess('Success', 'Section heading updated')
+    } catch (error) {
+        toastError('Error', 'Failed to update section heading')
+    }
+}
+
+const removeSection = async (sectionId) => {
+    if (!confirm('Remove this section? Items will be moved to the default section.')) return
+    
+    try {
+        await axios.delete(`/api/lists/${listId.value}/sections/${sectionId}`)
+        sections.value = sections.value.filter(s => s.id !== sectionId)
+        // Move items to default section
+        items.value.forEach(item => {
+            if (item.section_id === sectionId) {
+                item.section_id = 'default-section'
+            }
+        })
+        toastSuccess('Success', 'Section removed')
+    } catch (error) {
+        toastError('Error', 'Failed to remove section')
+    }
+}
+
+const handleSectionReorder = async () => {
+    // Update order of sections
+    try {
+        const sectionOrder = sections.value.map((section, index) => ({
+            id: section.id,
+            order_index: index
+        }))
+        await axios.put(`/api/lists/${listId.value}/sections/reorder`, {
+            sections: sectionOrder
+        })
+    } catch (error) {
+        toastError('Error', 'Failed to reorder sections')
+        fetchList() // Revert on error
+    }
+}
+
+const handleItemReorder = async (sectionId, newItems) => {
+    // Update items within a section
+    const sectionItems = newItems.map((item, index) => ({
+        ...item,
+        section_id: sectionId,
+        order_index: index
+    }))
+    
+    // Update local state
+    items.value = items.value.filter(i => i.section_id !== sectionId).concat(sectionItems)
+    
+    // Save to server
+    await handleReorder()
+}
+
+const handleItemTypeClick = (type) => {
+    if (type === 'saved') {
+        showSavedItems.value = true
+    } else {
+        selectedItemType.value = type
+    }
+}
+
+const handleAddSavedItems = async (selectedItems) => {
+    try {
+        // Format items for the new API structure
+        const formattedItems = selectedItems.map(item => ({
+            id: item.id,
+            type: item.type
+        }))
+        
+        // Get current section ID if using sections
+        const currentSectionId = sections.value.length > 0 ? sections.value[0].id : null
+        
+        const response = await axios.post(`/api/lists/${listId.value}/items/add-saved`, {
+            items: formattedItems,
+            section_id: currentSectionId
+        })
+        
+        // Add to the items array
+        response.data.items.forEach(item => {
+            if (currentSectionId) {
+                item.section_id = currentSectionId
+            }
+            items.value.push(item)
+        })
+        
         showSavedItems.value = false
-        showSuccess('Added', 'Place added to list')
+        toastSuccess('Success', `Added ${response.data.items.length} items`)
     } catch (error) {
-        showError('Error', error.response?.data?.message || 'Failed to add place')
+        console.error('Error adding saved items:', error)
+        toastError('Error', error.response?.data?.message || 'Failed to add saved items')
     }
+}
+
+const handleShareAdded = (share) => {
+    shares.value.push(share)
+}
+
+const handleShareRemoved = (shareId) => {
+    shares.value = shares.value.filter(s => s.id !== shareId)
 }
 
 const addTextItem = async () => {
@@ -1172,6 +961,8 @@ const handleReorder = async () => {
     }))
     
     console.log('Reordering items:', reorderData)
+    console.log('List ID:', listId.value)
+    console.log('Items before reorder:', items.value)
     
     try {
         const response = await axios.put(`/api/lists/${listId.value}/items/reorder`, { items: reorderData })
@@ -1181,9 +972,13 @@ const handleReorder = async () => {
         items.value.forEach((item, index) => {
             item.order_index = index
         })
+        
+        showSuccess('Items reordered successfully')
     } catch (error) {
         console.error('Error reordering items:', error)
-        showError('Error', error.response?.data?.message || 'Failed to save order')
+        console.error('Error response:', error.response?.data)
+        console.error('Error status:', error.response?.status)
+        toastError('Error', error.response?.data?.message || 'Failed to save order')
         // Revert on error
         fetchList()
     }
@@ -1363,6 +1158,15 @@ watch(showSavedItems, (newValue) => {
         fetchSavedItems()
     }
 })
+
+const fetchSavedItems = async () => {
+    try {
+        const response = await axios.get('/api/saved')
+        savedItems.value = response.data.places || []
+    } catch (error) {
+        console.error('Failed to fetch saved items:', error)
+    }
+}
 
 const fetchChannels = async () => {
     try {

@@ -144,6 +144,12 @@
               >
                 Edit List
               </router-link>
+              <QRCodeGenerator
+                type="list"
+                :data="list"
+                button-text="QR Code"
+                :show-button-text="false"
+              />
             </div>
           </div>
         </div>
@@ -162,12 +168,16 @@
 
       <!-- List Items -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div v-if="list.items && list.items.length > 0" class="space-y-6">
-          <div 
-            v-for="(item, index) in list.items" 
-            :key="item.id"
-            class="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow"
-          >
+        <!-- Section-based display -->
+        <div v-if="list.structure_version === '2.0' && list.sections && list.sections.length > 0" class="space-y-8">
+          <div v-for="section in list.sections" :key="section.id" class="bg-gray-50 rounded-lg p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">{{ section.heading || section.title }}</h2>
+            <div class="space-y-4">
+              <div 
+                v-for="(item, index) in getSectionItems(section.id)" 
+                :key="item.id"
+                class="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow"
+              >
             <div class="p-6">
               <div class="flex items-start space-x-4">
                 <!-- Item Number -->
@@ -221,6 +231,140 @@
                       <span v-if="item.data.location" class="ml-4">
                         📍 {{ item.data.location }}
                       </span>
+                    </div>
+                  </div>
+
+                  <!-- Region Type -->
+                  <div v-else-if="item.type === 'region'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.region_type">{{ item.data.region_type }}</span>
+                      <span v-if="item.data.region_name" class="ml-2">in {{ item.data.region_name }}</span>
+                    </div>
+                  </div>
+
+                  <!-- List Type -->
+                  <div v-else-if="item.type === 'list'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.author">by {{ item.data.author }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Item Notes -->
+                  <div v-if="item.notes" class="mt-3 p-3 bg-gray-50 rounded-md">
+                    <p class="text-sm text-gray-700">{{ item.notes }}</p>
+                  </div>
+
+                  <!-- Affiliate Link -->
+                  <div v-if="item.affiliate_url" class="mt-3">
+                    <a 
+                      :href="item.affiliate_url" 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
+                    >
+                      <span>Visit Website</span>
+                      <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Item Image -->
+                <div v-if="item.item_image_cloudflare_id || item.image" class="flex-shrink-0">
+                  <img 
+                    :src="getItemImageUrl(item)"
+                    :alt="item.title || 'Item image'"
+                    class="w-24 h-24 rounded-lg object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Legacy flat list display -->
+        <div v-else-if="list.items && list.items.length > 0" class="space-y-6">
+          <div 
+            v-for="(item, index) in list.items" 
+            :key="item.id"
+            class="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow"
+          >
+            <div class="p-6">
+              <div class="flex items-start space-x-4">
+                <!-- Item Number -->
+                <div class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <span class="text-indigo-600 font-semibold">{{ index + 1 }}</span>
+                </div>
+
+                <!-- Item Content -->
+                <div class="flex-1 min-w-0">
+                  <!-- Directory Entry Type (Place) -->
+                  <div v-if="item.type === 'directory_entry' && (item.directory_entry || item.place)">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                      {{ item.directory_entry?.title || item.place?.title }}
+                    </h3>
+                    <p v-if="item.directory_entry?.description || item.place?.description" class="mt-1 text-gray-600">
+                      {{ item.directory_entry?.description || item.place?.description }}
+                    </p>
+                    <div class="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                      <span v-if="item.directory_entry?.category?.name || item.place?.category?.name">
+                        {{ item.directory_entry?.category?.name || item.place?.category?.name }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Text Type -->
+                  <div v-else-if="item.type === 'text'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600" v-html="item.content"></p>
+                  </div>
+
+                  <!-- Location Type -->
+                  <div v-else-if="item.type === 'location'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.address">📍 {{ item.data.address }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Event Type -->
+                  <div v-else-if="item.type === 'event'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.start_date">
+                        📅 {{ formatDate(item.data.start_date) }}
+                      </span>
+                      <span v-if="item.data.location" class="ml-4">
+                        📍 {{ item.data.location }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Region Type -->
+                  <div v-else-if="item.type === 'region'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.region_type">{{ item.data.region_type }}</span>
+                      <span v-if="item.data.region_name" class="ml-2">in {{ item.data.region_name }}</span>
+                    </div>
+                  </div>
+
+                  <!-- List Type -->
+                  <div v-else-if="item.type === 'list'">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
+                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.data" class="mt-2 text-sm text-gray-500">
+                      <span v-if="item.data.author">by {{ item.data.author }}</span>
                     </div>
                   </div>
 
@@ -308,6 +452,7 @@ import SaveButton from '@/components/SaveButton.vue'
 import FollowButton from '@/components/FollowButton.vue'
 import InteractionBar from '@/components/social/InteractionBar.vue'
 import CommentSection from '@/components/social/CommentSection.vue'
+import QRCodeGenerator from '@/components/QRCodeGenerator.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -318,6 +463,11 @@ const list = ref(null)
 const errorTitle = ref('List Not Found')
 const errorMessage = ref("The list you're looking for doesn't exist or is private.")
 const showComments = ref(false)
+
+const getSectionItems = (sectionId) => {
+  if (!list.value || !list.value.items) return []
+  return list.value.items.filter(item => item.section_id === sectionId && !item.is_section)
+}
 
 const currentUser = computed(() => authStore.user)
 const isOwnList = computed(() => {

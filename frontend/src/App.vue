@@ -25,6 +25,9 @@
     
     <!-- Global Notification Container -->
     <NotificationContainer />
+    
+    <!-- Toast Container -->
+    <ToastContainer />
   </div>
 </template>
 
@@ -35,6 +38,7 @@ import { useAuthStore } from '@/stores/auth'
 import UnifiedHeader from '@/components/headers/UnifiedHeader.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import NotificationContainer from '@/components/ui/NotificationContainer.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
 
 const route = useRoute()
 const router = useRouter()
