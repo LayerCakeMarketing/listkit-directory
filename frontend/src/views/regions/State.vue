@@ -12,7 +12,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </li>
-          <li class="font-medium text-gray-900">{{ stateData?.display_name || stateData?.full_name || stateData?.name || state }}</li>
+          <li class="font-medium text-gray-900">{{ stateData?.name || state }}</li>
         </ol>
       </nav>
 
@@ -20,7 +20,7 @@
       <div class="mb-8">
         <div class="flex items-start justify-between">
           <div>
-            <h1 class="text-3xl font-bold text-gray-900">{{ stateData?.display_name || stateData?.full_name || stateData?.name || 'Loading...' }}</h1>
+            <h1 class="text-3xl font-bold text-gray-900">{{ stateData?.name || 'Loading...' }}</h1>
             <p v-if="stateData?.description" class="mt-2 text-lg text-gray-600">{{ stateData.description }}</p>
           </div>
           <SaveButton
@@ -115,14 +115,141 @@
           </ul>
         </div>
 
-        <!-- Cities List -->
+        <!-- Cities List with Map -->
         <div class="bg-white shadow-sm rounded-lg">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-xl font-semibold text-gray-900">Cities in {{ stateData?.display_name || stateData?.full_name || stateData?.name }}</h2>
+            <h2 class="text-xl font-semibold text-gray-900">Explore {{ stateData?.name }}</h2>
           </div>
           
           <div class="p-6">
-            <div v-if="cities.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Two-column layout: Cities list on left (40%), map on right (60%) -->
+            <div v-if="cities.length > 0" class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <!-- Left Column - Cities List (40% width) -->
+              <div class="lg:col-span-2 space-y-4 overflow-y-auto" style="max-height: 90vh;">
+                <div
+                  v-for="city in cities"
+                  :key="city.id"
+                  @click="handleCityClick(city)"
+                  @mouseenter="hoveredCityId = city.id"
+                  @mouseleave="hoveredCityId = null"
+                  class="group cursor-pointer rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-200 overflow-hidden"
+                >
+                  <!-- City Cover Image -->
+                  <div v-if="city.cover_image_url" class="relative h-32">
+                    <img 
+                      :src="city.cover_image_url" 
+                      :alt="city.name"
+                      class="w-full h-full object-cover"
+                    >
+                    <div v-if="city.is_featured" class="absolute top-2 left-2 bg-purple-600 text-white px-2 py-1 rounded text-xs font-medium">
+                      Featured
+                    </div>
+                  </div>
+                  
+                  <!-- City Info -->
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <h3 class="text-lg font-medium text-gray-900 group-hover:text-blue-600 flex-1">
+                        {{ city.name }}
+                      </h3>
+                      <span v-if="city.entries_count > 0" class="text-sm text-gray-500">
+                        {{ city.entries_count }} places
+                      </span>
+                    </div>
+                    
+                    <p v-if="city.description" class="text-sm text-gray-500 line-clamp-2 mb-2">
+                      {{ stripHtml(city.description) }}
+                    </p>
+                    
+                    <div v-if="city.children_count > 0" class="text-xs text-gray-400 mb-3">
+                      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      {{ city.children_count }} neighborhoods
+                    </div>
+                    
+                    <!-- View Details Link -->
+                    <router-link
+                      :to="`/local/${stateData?.slug || state}/${city.slug}`"
+                      @click.stop
+                      class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                    >
+                      View City
+                      <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </router-link>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Right Column - Map (60% width) -->
+              <div class="lg:col-span-3 relative">
+                <div 
+                  ref="mapContainer"
+                  id="state-map"
+                  class="w-full h-[90vh] rounded-lg shadow-inner"
+                >
+                  <div v-if="mapLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                    <div class="text-center">
+                      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                      <p class="mt-3 text-sm text-gray-600">Loading map...</p>
+                    </div>
+                  </div>
+                  
+                  <div v-if="mapError" class="absolute inset-0 flex items-center justify-center bg-red-50 rounded-lg">
+                    <div class="text-center">
+                      <svg class="w-12 h-12 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p class="mt-3 text-sm text-red-600">{{ mapError }}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Map Style Selector -->
+                <div class="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg">
+                  <select 
+                    v-model="currentMapStyle" 
+                    @change="changeMapStyle"
+                    class="px-3 py-2 text-sm font-medium text-gray-700 bg-transparent border-0 rounded-lg cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <!-- Standard Mapbox Styles -->
+                    <option value="mapbox://styles/mapbox/streets-v12">Streets</option>
+                    <option value="mapbox://styles/mapbox/outdoors-v12">Outdoors</option>
+                    <option value="mapbox://styles/mapbox/light-v11">Light</option>
+                    <option value="mapbox://styles/mapbox/dark-v11">Dark</option>
+                    <option value="mapbox://styles/mapbox/satellite-v9">Satellite</option>
+                    <option value="mapbox://styles/mapbox/satellite-streets-v12">Hybrid</option>
+                    
+                    <!-- Navigation Styles -->
+                    <option value="mapbox://styles/mapbox/navigation-day-v1">Navigation Day</option>
+                    <option value="mapbox://styles/mapbox/navigation-night-v1">Navigation Night</option>
+                    
+                    <!-- Custom styles from Mapbox Studio -->
+                    <option value="mapbox://styles/illuminatelocal/clf0ha89i000a01o7fyggdklz">Illuminate Local</option>
+                  </select>
+                </div>
+                
+                <!-- Map Legend -->
+                <div class="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3">
+                  <div class="text-xs font-semibold text-gray-700 mb-2">Legend</div>
+                  <div class="space-y-1">
+                    <div class="flex items-center">
+                      <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                      <span class="text-xs text-gray-600">Cities</span>
+                    </div>
+                    <div v-if="featuredCities.length > 0" class="flex items-center">
+                      <div class="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+                      <span class="text-xs text-gray-600">Featured Cities</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Original grid layout fallback for smaller screens -->
+            <div v-else-if="cities.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:hidden">
               <router-link
                 v-for="city in cities"
                 :key="city.id"
@@ -212,7 +339,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
@@ -220,6 +347,7 @@ import RegionDetailsTab from '@/components/regions/RegionDetailsTab.vue'
 import RegionEditDrawer from '@/components/regions/RegionEditDrawer.vue'
 import { CogIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
+import { useMapbox } from '@/composables/useMapbox'
 
 const props = defineProps({
   state: {
@@ -236,6 +364,30 @@ const stateData = ref(null)
 const cities = ref([])
 const featuredPlaces = ref([])
 const isDrawerOpen = ref(false)
+const hoveredCityId = ref(null)
+const mapContainer = ref(null)
+const mapLoading = ref(false)
+const mapError = ref(null)
+const currentMapStyle = ref('mapbox://styles/illuminatelocal/clf0ha89i000a01o7fyggdklz') // Illuminate Local custom style
+
+// Mapbox composable
+const {
+  map,
+  initializeMap,
+  cleanup,
+  isLoaded
+} = useMapbox()
+
+// Computed properties
+const featuredCities = computed(() => cities.value.filter(c => c.is_featured))
+
+// Helper functions
+const stripHtml = (html) => {
+  if (!html) return ''
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  return tmp.textContent || tmp.innerText || ''
+}
 
 const fetchStateData = async () => {
   try {
@@ -278,7 +430,183 @@ const handleRegionUpdated = (updatedRegion) => {
   fetchStateData()
 }
 
+const initStateMap = async () => {
+  console.log('initStateMap called for state:', stateData.value?.name)
+  
+  // Reset states
+  mapLoading.value = true
+  mapError.value = null
+  
+  try {
+    if (cities.value.length === 0) {
+      mapError.value = 'No cities to display on map'
+      mapLoading.value = false
+      return
+    }
+    
+    // Wait for DOM to update
+    await nextTick()
+    
+    // Use the ref directly or fallback to getElementById
+    let mapContainerEl = mapContainer.value || document.getElementById('state-map')
+    
+    // Retry logic if container not found
+    let retries = 0
+    while (!mapContainerEl && retries < 5) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      mapContainerEl = mapContainer.value || document.getElementById('state-map')
+      retries++
+    }
+    
+    if (!mapContainerEl) {
+      console.error('Map container not found after retries')
+      mapError.value = 'Map container element not found'
+      mapLoading.value = false
+      return
+    }
+    
+    console.log('State map container found:', mapContainerEl)
+    
+    // Initialize map centered on state
+    const centerLat = stateData.value?.lat || stateData.value?.latitude || 34.0522
+    const centerLng = stateData.value?.lng || stateData.value?.longitude || -118.2437
+    
+    console.log('Initializing state map at:', { centerLat, centerLng })
+    
+    const success = await initializeMap('state-map', {
+      center: [centerLng, centerLat],
+      zoom: 6,
+      style: currentMapStyle.value
+    })
+    
+    if (!success) {
+      console.error('Failed to initialize state map')
+      mapError.value = 'Failed to initialize map. Please check your internet connection.'
+      mapLoading.value = false
+      return
+    }
+    
+    console.log('State map initialized successfully')
+    
+    // Add markers for cities
+    if (map.value) {
+      cities.value.forEach(city => {
+        if (city.lat && city.lng) {
+          const markerColor = city.is_featured ? '#9333EA' : '#3B82F6' // Purple for featured, blue for regular
+          const marker = new window.mapboxgl.Marker({
+            color: markerColor
+          })
+            .setLngLat([city.lng, city.lat])
+            .setPopup(new window.mapboxgl.Popup().setHTML(`
+              <div class="p-3">
+                <h3 class="font-semibold">${city.name}</h3>
+                <p class="text-sm text-gray-600 mt-1">${city.entries_count || 0} places</p>
+                ${city.children_count ? `<p class="text-sm text-gray-600">${city.children_count} neighborhoods</p>` : ''}
+                <a href="/local/${props.state}/${city.slug}" 
+                   class="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 inline-block">
+                  View City →
+                </a>
+              </div>
+            `))
+            .addTo(map.value)
+        }
+      })
+      
+      // Fit bounds to show all cities
+      const citiesWithCoords = cities.value.filter(c => c.lat && c.lng)
+      if (citiesWithCoords.length > 1) {
+        const bounds = new window.mapboxgl.LngLatBounds()
+        citiesWithCoords.forEach(city => {
+          bounds.extend([city.lng, city.lat])
+        })
+        map.value.fitBounds(bounds, { padding: 50 })
+      }
+    }
+    
+  } catch (err) {
+    console.error('Error initializing state map:', err)
+    mapError.value = 'Failed to initialize map'
+  } finally {
+    mapLoading.value = false
+  }
+}
+
+const handleCityClick = (city) => {
+  console.log('City clicked:', city)
+  
+  // Check if city has coordinates
+  if (!city.lat || !city.lng) {
+    console.log('City has no coordinates')
+    return
+  }
+  
+  // Fly to the city location
+  if (map.value) {
+    map.value.flyTo({
+      center: [city.lng, city.lat],
+      zoom: 10,
+      essential: true
+    })
+  }
+}
+
+const changeMapStyle = () => {
+  if (map.value && currentMapStyle.value) {
+    map.value.setStyle(currentMapStyle.value)
+    
+    // Re-add cities after style change (styles clear all sources/layers)
+    map.value.once('styledata', () => {
+      // Wait for style to load then re-add our data
+      setTimeout(() => {
+        // Re-add city markers
+        cities.value.forEach(city => {
+          if (city.lat && city.lng) {
+            const markerColor = city.is_featured ? '#9333EA' : '#3B82F6'
+            const marker = new window.mapboxgl.Marker({
+              color: markerColor
+            })
+              .setLngLat([city.lng, city.lat])
+              .setPopup(new window.mapboxgl.Popup().setHTML(`
+                <div class="p-3">
+                  <h3 class="font-semibold">${city.name}</h3>
+                  <p class="text-sm text-gray-600 mt-1">${city.entries_count || 0} places</p>
+                  ${city.children_count ? `<p class="text-sm text-gray-600">${city.children_count} neighborhoods</p>` : ''}
+                  <a href="/local/${props.state}/${city.slug}" 
+                     class="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 inline-block">
+                    View City →
+                  </a>
+                </div>
+              `))
+              .addTo(map.value)
+          }
+        })
+      }, 500)
+    })
+  }
+}
+
 onMounted(() => {
   fetchStateData()
+})
+
+// Watch for cities to be loaded and initialize map
+watch(cities, async (newCities) => {
+  if (newCities.length > 0) {
+    // Wait for multiple ticks to ensure DOM is fully rendered
+    await nextTick()
+    await nextTick()
+    
+    // Add a small delay to ensure the DOM is ready
+    setTimeout(() => {
+      initStateMap()
+    }, 100)
+  }
+}, { immediate: false })
+
+// Clean up map on component unmount
+onUnmounted(() => {
+  if (map.value) {
+    cleanup()
+  }
 })
 </script>

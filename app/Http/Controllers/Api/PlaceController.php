@@ -293,6 +293,10 @@ class PlaceController extends Controller
             'location.neighborhood' => 'nullable|string|max:255',
             'location.latitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-90,90',
             'location.longitude' => 'nullable|required_if:type,business_b2b,business_b2c,religious_org,point_of_interest,area_of_interest|numeric|between:-180,180',
+            
+            // Region associations
+            'neighborhood_region_id' => 'nullable|exists:regions,id',
+            'park_region_id' => 'nullable|exists:regions,id',
             ]);
 
             \Log::info('Validated data:', $validated);
@@ -681,7 +685,15 @@ class PlaceController extends Controller
      */
     public function show($slug)
     {
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion', 'ownerUser:id,firstname,lastname'])
+        $entry = Place::with([
+                'category.parent', 
+                'location', 
+                'stateRegion', 
+                'cityRegion', 
+                'neighborhoodRegion',
+                'parkRegion',
+                'ownerUser:id,firstname,lastname'
+            ])
             ->where('slug', $slug)
             ->published()
             ->firstOrFail();
@@ -712,7 +724,15 @@ class PlaceController extends Controller
      */
     public function showById($id)
     {
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'neighborhoodRegion', 'ownerUser:id,firstname,lastname'])
+        $entry = Place::with([
+                'category.parent', 
+                'location', 
+                'stateRegion', 
+                'cityRegion', 
+                'neighborhoodRegion',
+                'parkRegion',
+                'ownerUser:id,firstname,lastname'
+            ])
             ->published()
             ->findOrFail($id);
 
@@ -749,7 +769,15 @@ class PlaceController extends Controller
         
         $id = $matches[2];
         
-        $entry = Place::with(['category.parent', 'location', 'stateRegion', 'cityRegion', 'ownerUser:id,firstname,lastname'])
+        $entry = Place::with([
+                'category.parent', 
+                'location', 
+                'stateRegion', 
+                'cityRegion', 
+                'neighborhoodRegion',
+                'parkRegion',
+                'ownerUser:id,firstname,lastname'
+            ])
             ->published()
             ->findOrFail($id);
             
@@ -886,23 +914,61 @@ class PlaceController extends Controller
             ->firstOrFail();
             
         $categoryModel = \App\Models\Category::where('slug', $category)
+            ->with('children')
             ->firstOrFail();
             
-        // Get entries in this category and city
-        $entries = Place::with(['category', 'location', 'neighborhoodRegion'])
+        // Determine if this is a parent category or subcategory
+        $isParentCategory = is_null($categoryModel->parent_id);
+        
+        // Get the subcategory filter if provided
+        $subcategorySlug = request()->query('subcategory');
+        
+        // Build the query for entries
+        $query = Place::with(['category.parent', 'location', 'neighborhoodRegion'])
             ->published()
-            ->where('city_region_id', $cityRegion->id)
-            ->where('category_id', $categoryModel->id)
-            ->get()
-            ->map(function($entry) {
-                $entry->canonical_url = $entry->getCanonicalUrl();
-                return $entry;
-            });
+            ->where('city_region_id', $cityRegion->id);
+        
+        if ($isParentCategory) {
+            // If it's a parent category, get all entries in this category and its children
+            $categoryIds = collect([$categoryModel->id])
+                ->merge($categoryModel->children->pluck('id'));
+            
+            // Apply subcategory filter if provided
+            if ($subcategorySlug) {
+                $subcategory = $categoryModel->children->where('slug', $subcategorySlug)->first();
+                if ($subcategory) {
+                    $query->where('category_id', $subcategory->id);
+                } else {
+                    // Invalid subcategory filter, show all
+                    $query->whereIn('category_id', $categoryIds);
+                }
+            } else {
+                $query->whereIn('category_id', $categoryIds);
+            }
+        } else {
+            // If it's a subcategory, just get entries for this specific category
+            $query->where('category_id', $categoryModel->id);
+        }
+        
+        $entries = $query->get()->map(function($entry) {
+            $entry->canonical_url = $entry->getCanonicalUrl();
+            return $entry;
+        });
+        
+        // Get subcategories for filtering (only for parent categories)
+        $subcategories = $isParentCategory ? $categoryModel->children : collect();
+        
+        // If this is a subcategory, also return the parent for context
+        $parentCategory = !$isParentCategory ? $categoryModel->parent : null;
 
         return response()->json([
             'state' => $stateRegion,
             'city' => $cityRegion,
             'category' => $categoryModel,
+            'parent_category' => $parentCategory,
+            'subcategories' => $subcategories,
+            'is_parent_category' => $isParentCategory,
+            'active_subcategory' => $subcategorySlug,
             'entries' => $entries
         ]);
     }

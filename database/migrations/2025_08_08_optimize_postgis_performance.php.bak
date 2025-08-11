@@ -1,0 +1,221 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Advanced PostGIS optimizations for park boundaries and place clustering
+     * Implements production-grade spatial optimizations
+     */
+    public function up(): void
+    {
+        // **1. SPATIAL INDEXING**: Advanced GiST indexes with operator classes
+        
+        // High-precision index for park boundary operations
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS regions_boundary_precision_idx 
+            ON regions USING GIST(boundary gist_geometry_ops_2d) 
+            WHERE boundary IS NOT NULL 
+              AND type IN (\'national_park\', \'state_park\', \'regional_park\', \'local_park\')
+        ');
+
+        // Multi-resolution spatial index for different zoom levels
+        // Note: Using latitude/longitude columns since geom doesn't exist yet
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS places_multi_resolution_idx 
+            ON directory_entries USING GIST(
+                ST_MakePoint(longitude, latitude)
+            ) WHERE status = \'published\' 
+              AND latitude IS NOT NULL 
+              AND longitude IS NOT NULL
+        ');
+
+        // **2. BOUNDARY SIMPLIFICATION**: Pre-compute simplified boundaries
+        
+        DB::statement("
+            UPDATE regions 
+            SET boundaries_simplified = ST_Simplify(boundary, 0.001)
+            WHERE boundary IS NOT NULL 
+              AND boundaries_simplified IS NULL
+              AND type IN ('national_park', 'state_park', 'regional_park', 'local_park')
+        ");
+
+        // Add index for simplified boundaries (faster rendering)
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS regions_boundary_simplified_idx 
+            ON regions USING GIST(boundaries_simplified) 
+            WHERE boundaries_simplified IS NOT NULL
+        ');
+
+        // **3. CLUSTERING OPTIMIZATION**: Spatial clustering tables
+        
+        // Create pre-computed clustering table for different zoom levels
+        DB::statement('
+            CREATE TABLE IF NOT EXISTS place_clusters (
+                id SERIAL PRIMARY KEY,
+                zoom_level INTEGER NOT NULL,
+                region_id INTEGER,
+                cluster_geom geometry(Point, 4326) NOT NULL,
+                place_count INTEGER NOT NULL,
+                featured_count INTEGER DEFAULT 0,
+                verified_count INTEGER DEFAULT 0,
+                category_breakdown JSONB,
+                bounds geometry(Polygon, 4326),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ');
+
+        // Index the clustering table
+        DB::statement('CREATE INDEX place_clusters_zoom_region_idx ON place_clusters (zoom_level, region_id)');
+        DB::statement('CREATE INDEX place_clusters_geom_idx ON place_clusters USING GIST(cluster_geom)');
+        DB::statement('CREATE INDEX place_clusters_bounds_idx ON place_clusters USING GIST(bounds)');
+
+        // **4. SPATIAL FUNCTIONS**: Custom functions for performance
+        
+        // Function to check if point is within any park boundary (fast lookup)
+        DB::statement('
+            CREATE OR REPLACE FUNCTION point_in_park(lat DECIMAL, lng DECIMAL) 
+            RETURNS TABLE(
+                park_id INTEGER,
+                park_name TEXT,
+                park_type TEXT,
+                distance_meters DECIMAL
+            ) AS $$
+            BEGIN
+                RETURN QUERY
+                SELECT 
+                    r.id,
+                    r.name,
+                    r.type,
+                    ST_Distance(
+                        ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+                        ST_Centroid(r.boundary)::geography
+                    )::DECIMAL as distance_meters
+                FROM regions r
+                WHERE r.type IN (\'national_park\', \'state_park\', \'regional_park\', \'local_park\')
+                  AND r.boundary IS NOT NULL
+                  AND ST_Contains(r.boundary, ST_SetSRID(ST_MakePoint(lng, lat), 4326))
+                ORDER BY distance_meters
+                LIMIT 5;
+            END;
+            $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+        ');
+
+        // Function for efficient nearby places with park context
+        DB::statement('
+            CREATE OR REPLACE FUNCTION nearby_places_with_parks(
+                search_lat DECIMAL,
+                search_lng DECIMAL, 
+                radius_meters INTEGER DEFAULT 25000,
+                limit_count INTEGER DEFAULT 50
+            ) 
+            RETURNS TABLE(
+                place_id INTEGER,
+                place_title TEXT,
+                place_lat DECIMAL,
+                place_lng DECIMAL,
+                distance_meters DECIMAL,
+                category_id INTEGER,
+                is_featured BOOLEAN,
+                park_context JSONB
+            ) AS $$
+            BEGIN
+                RETURN QUERY
+                SELECT 
+                    p.id,
+                    p.title,
+                    p.latitude,
+                    p.longitude,
+                    ST_Distance(
+                        ST_SetSRID(ST_MakePoint(search_lng, search_lat), 4326)::geography,
+                        p.geom::geography
+                    )::DECIMAL as distance_meters,
+                    p.category_id,
+                    p.is_featured,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                \'park_id\', r.id,
+                                \'park_name\', r.name,
+                                \'park_type\', r.type
+                            )
+                        ) FILTER (WHERE r.id IS NOT NULL),
+                        \'[]\'::json
+                    )::jsonb as park_context
+                FROM directory_entries p
+                LEFT JOIN regions r ON (
+                    r.type IN (\'national_park\', \'state_park\', \'regional_park\', \'local_park\')
+                    AND r.boundary IS NOT NULL
+                    AND ST_Contains(r.boundary, p.geom)
+                )
+                WHERE p.status = \'published\'
+                  AND p.geom IS NOT NULL
+                  AND ST_DWithin(
+                      ST_SetSRID(ST_MakePoint(search_lng, search_lat), 4326)::geography,
+                      p.geom::geography,
+                      radius_meters
+                  )
+                GROUP BY p.id, p.title, p.latitude, p.longitude, p.category_id, p.is_featured, p.geom
+                ORDER BY distance_meters
+                LIMIT limit_count;
+            END;
+            $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
+        ');
+
+        // **5. VACUUM AND ANALYZE**: Optimize statistics
+        DB::statement('VACUUM ANALYZE regions');
+        DB::statement('VACUUM ANALYZE directory_entries');
+
+        // **6. CONFIGURATION**: Optimize PostGIS settings
+        
+        // Increase work_mem for spatial operations (per connection)
+        DB::statement('SET work_mem = \'256MB\'');
+        
+        // Enable parallel spatial operations
+        DB::statement('SET max_parallel_workers_per_gather = 4');
+
+        // **7. SPATIAL REFERENCE SYSTEM**: Ensure optimal SRS
+        
+        // Update spatial_ref_sys if needed for better performance in your region
+        // This is an example for US-focused applications
+        DB::statement("
+            INSERT INTO spatial_ref_sys (srid, auth_name, auth_srid, proj4text, srtext) 
+            VALUES (3857, 'EPSG', 3857, 
+                '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs',
+                'PROJCS[\"WGS 84 / Pseudo-Mercator\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Mercator_1SP\"],PARAMETER[\"central_meridian\",0],PARAMETER[\"scale_factor\",1],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],EXTENSION[\"PROJ4\",\"+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs\"],AUTHORITY[\"EPSG\",\"3857\"]]')
+            ON CONFLICT (srid) DO NOTHING
+        ");
+
+        echo "Applied advanced PostGIS optimizations for park boundaries and place clustering." . PHP_EOL;
+        echo "Created custom spatial functions: point_in_park() and nearby_places_with_parks()" . PHP_EOL;
+        echo "Recommended: Run this migration during low-traffic hours due to CONCURRENT index creation." . PHP_EOL;
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        // Drop custom functions
+        DB::statement('DROP FUNCTION IF EXISTS nearby_places_with_parks(DECIMAL, DECIMAL, INTEGER, INTEGER)');
+        DB::statement('DROP FUNCTION IF EXISTS point_in_park(DECIMAL, DECIMAL)');
+
+        // Drop clustering table
+        DB::statement('DROP TABLE IF EXISTS place_clusters');
+
+        // Drop performance indexes
+        $indexes = [
+            'regions_boundary_precision_idx',
+            'places_multi_resolution_idx',
+            'regions_boundary_simplified_idx'
+        ];
+
+        foreach ($indexes as $index) {
+            DB::statement("DROP INDEX IF EXISTS {$index}");
+        }
+
+        echo "Removed PostGIS performance optimizations." . PHP_EOL;
+    }
+};

@@ -183,7 +183,7 @@
                             <router-link
                                 v-for="child in (showAllNeighborhoods ? childRegions : childRegions.slice(0, 5))"
                                 :key="child.id"
-                                :to="`/regions/${child.slug}`"
+                                :to="getNeighborhoodUrl(child)"
                                 class="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors text-sm"
                             >
                                 {{ child.name }}
@@ -840,6 +840,30 @@ const fetchRegionHierarchy = async (region) => {
         showAllNeighborhoods.value = false
     } catch (error) {
         console.error('Error fetching region hierarchy:', error)
+    }
+}
+
+const getNeighborhoodUrl = (neighborhood) => {
+    // Build the hierarchical URL for the neighborhood
+    // We need state and city from the parent regions
+    if (neighborhood.parent && neighborhood.parent.parent) {
+        // Has full hierarchy loaded
+        const state = neighborhood.parent.parent.slug
+        const city = neighborhood.parent.slug
+        return `/local/${state}/${city}/${neighborhood.slug}`
+    } else if (parentRegion.value && parentRegion.value.parent) {
+        // Use current parent region data
+        const state = parentRegion.value.parent.slug
+        const city = parentRegion.value.slug
+        return `/local/${state}/${city}/${neighborhood.slug}`
+    } else if (currentRegion.value && parentRegion.value) {
+        // Current region is city, parent is state
+        const state = parentRegion.value.slug
+        const city = currentRegion.value.slug
+        return `/local/${state}/${city}/${neighborhood.slug}`
+    } else {
+        // Fallback to the explorer view if we don't have hierarchy
+        return `/regions/${neighborhood.id}/explore`
     }
 }
 

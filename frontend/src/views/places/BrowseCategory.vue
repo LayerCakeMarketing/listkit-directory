@@ -24,6 +24,12 @@
                         </router-link>
                     </li>
                     <li class="text-gray-400">/</li>
+                    <li v-if="parentCategory" class="text-gray-400">/</li>
+                    <li v-if="parentCategory">
+                        <router-link :to="`/places/${state}/${city}/${parentCategory.slug}`" class="text-gray-500 hover:text-gray-700">
+                            {{ parentCategory.name }}
+                        </router-link>
+                    </li>
                     <li class="text-gray-900 font-medium">{{ categoryData?.name || category }}</li>
                 </ol>
             </nav>
@@ -48,6 +54,39 @@
                     <p v-if="categoryData?.description" class="text-gray-600">{{ categoryData.description }}</p>
                     <div class="mt-4 text-sm text-gray-500">
                         {{ entries.length }} {{ entries.length === 1 ? 'place' : 'places' }} found
+                    </div>
+                </div>
+
+                <!-- Subcategory Filter (only for parent categories) -->
+                <div v-if="subcategories && subcategories.length > 0" class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter by type:</span>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                @click="activeSubcategory = null"
+                                :class="[
+                                    'px-3 py-1 rounded-full text-sm transition-colors',
+                                    !activeSubcategory 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ]"
+                            >
+                                All {{ categoryData?.name }}
+                            </button>
+                            <button
+                                v-for="subcategory in subcategories"
+                                :key="subcategory.id"
+                                @click="activeSubcategory = subcategory.slug"
+                                :class="[
+                                    'px-3 py-1 rounded-full text-sm transition-colors',
+                                    activeSubcategory === subcategory.slug 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ]"
+                            >
+                                {{ subcategory.name }}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -89,6 +128,11 @@
                                 <div class="flex items-start justify-between">
                                     <div>
                                         <h3 class="font-semibold text-gray-900 text-lg mb-1">{{ entry.title }}</h3>
+                                        <div v-if="entry.category && isParentCategory" class="mb-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                                {{ entry.category.name }}
+                                            </span>
+                                        </div>
                                         <p v-if="entry.location?.address_line1" class="text-sm text-gray-600 mb-1">
                                             {{ entry.location.address_line1 }}
                                             <span v-if="entry.neighborhood_region">
@@ -131,7 +175,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 
@@ -157,6 +201,10 @@ const error = ref(null)
 const stateData = ref(null)
 const cityData = ref(null)
 const categoryData = ref(null)
+const parentCategory = ref(null)
+const subcategories = ref([])
+const isParentCategory = ref(false)
+const activeSubcategory = ref(null)
 const entries = ref([])
 const sortBy = ref('newest')
 
@@ -194,11 +242,15 @@ const fetchData = async () => {
     error.value = null
 
     try {
-        const response = await axios.get(`/api/places/${props.state}/${props.city}/${props.category}`)
+        const params = activeSubcategory.value ? { subcategory: activeSubcategory.value } : {}
+        const response = await axios.get(`/api/places/${props.state}/${props.city}/${props.category}`, { params })
         
         stateData.value = response.data.state
         cityData.value = response.data.city
         categoryData.value = response.data.category
+        parentCategory.value = response.data.parent_category
+        subcategories.value = response.data.subcategories || []
+        isParentCategory.value = response.data.is_parent_category || false
         entries.value = response.data.entries || []
     } catch (err) {
         error.value = err.response?.data?.message || 'Failed to load category data'
@@ -207,6 +259,11 @@ const fetchData = async () => {
         loading.value = false
     }
 }
+
+// Watch for subcategory filter changes
+watch(() => activeSubcategory.value, () => {
+    fetchData()
+})
 
 // Lifecycle
 onMounted(() => {

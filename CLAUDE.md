@@ -1207,6 +1207,40 @@ php artisan test --testsuite=Feature
 
 ---
 
-**Last Updated**: August 5, 2025
+## Recent Updates (August 11, 2025)
+
+### Place URL Structure Enhancement
+- **Canonical URLs**: Places now use parent categories in URLs for cleaner, SEO-friendly paths
+  - Before: `/places/california/irvine/desserts/handels-ice-cream-103`
+  - After: `/places/california/irvine/restaurants/handels-ice-cream-103`
+- **Category Hierarchy**: 
+  - Database migration added `path` and `depth` columns to categories table
+  - Place model uses `getParentCategoryForUrl()` for URL generation
+  - Frontend components updated to use `canonical_url` from API
+- **Performance Fix**: Resolved memory exhaustion issue caused by Category model's `getPathAttribute()` conflict with database column
+
+### Category Archive Pages Enhancement
+- **Parent Category Browsing**: Archive pages now show all places in parent category and subcategories
+- **Subcategory Filtering**: 
+  - Filter buttons to show only specific subcategories
+  - Visual indication of active filters
+  - Subcategory badges displayed on place entries
+- **API Enhancement**: `browseByCategory` endpoint now returns:
+  - Parent/child category context
+  - List of subcategories for filtering
+  - Support for `?subcategory=slug` query parameter
+- **UI Improvements**:
+  - Hierarchical breadcrumbs showing parent categories
+  - Responsive filter buttons with active states
+  - Category type badges on place listings
+
+### Technical Improvements
+- Fixed Category model accessor naming conflict (`getPathAttribute` → `getAncestorsAttribute`)
+- Enhanced place browsing with parent category aggregation
+- Improved URL routing with materialized path optimization
+
+---
+
+**Last Updated**: August 11, 2025
 **Maintained By**: Development Team
-**Version**: 3.0
+**Version**: 3.1

@@ -1,0 +1,134 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Optimized indexes for region-based place queries with 10,000+ places
+     * These indexes are designed for high-performance geospatial operations
+     */
+    public function up(): void
+    {
+        // 1. **CRITICAL**: Composite index for region hierarchy + geospatial queries
+        // Handles: "Show all places in California" + map viewport
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS places_region_hierarchy_spatial_idx 
+            ON directory_entries USING GIST(state_region_id, city_region_id, geom) 
+            WHERE status = \'published\' AND geom IS NOT NULL
+        ');
+
+        // 2. **HIGH PRIORITY**: Region containment queries (places within park boundaries)
+        // Optimized for: "Find all places within Yosemite National Park boundaries"
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS places_within_region_boundaries_idx 
+            ON directory_entries USING GIST(geom) 
+            INCLUDE (id, title, category_id, state_region_id, is_featured)
+            WHERE status = \'published\' AND geom IS NOT NULL
+        ');
+
+        // 3. **MAPBOX CLUSTERING**: Optimized for viewport-based clustering
+        // Handles map zoom levels 1-18 efficiently
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS places_mapbox_clustering_idx 
+            ON directory_entries USING GIST(geom) 
+            INCLUDE (id, title, category_id, is_featured, is_verified)
+            WHERE status = \'published\' AND latitude IS NOT NULL
+        ');
+
+        // 4. **REGION-SPECIFIC**: Places within specific region types (parks, cities, neighborhoods)
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS places_by_region_type_idx 
+            ON directory_entries (state_region_id, city_region_id, neighborhood_region_id, latitude, longitude)
+            INCLUDE (title, category_id, is_featured)
+            WHERE status = \'published\' AND latitude IS NOT NULL
+        ');
+
+        // 5. **PERFORMANCE**: Materialized view for region statistics (updated hourly)
+        DB::statement('
+            CREATE MATERIALIZED VIEW IF NOT EXISTS region_place_statistics AS
+            SELECT 
+                r.id as region_id,
+                r.name as region_name,
+                r.type as region_type,
+                r.level,
+                COUNT(p.id) as total_places,
+                COUNT(CASE WHEN p.is_featured THEN 1 END) as featured_places,
+                COUNT(CASE WHEN p.is_verified THEN 1 END) as verified_places,
+                ST_Extent(p.geom) as places_bounds,
+                ST_Centroid(ST_Collect(p.geom)) as places_centroid,
+                MAX(p.updated_at) as last_place_update
+            FROM regions r
+            LEFT JOIN directory_entries p ON (
+                p.state_region_id = r.id OR 
+                p.city_region_id = r.id OR 
+                p.neighborhood_region_id = r.id
+            ) AND p.status = \'published\'
+            GROUP BY r.id, r.name, r.type, r.level
+            WITH DATA;
+        ');
+
+        // Index the materialized view
+        DB::statement('CREATE UNIQUE INDEX region_place_statistics_pkey ON region_place_statistics (region_id)');
+        DB::statement('CREATE INDEX region_place_statistics_type_idx ON region_place_statistics (region_type, total_places DESC)');
+        DB::statement('CREATE INDEX region_place_statistics_bounds_idx ON region_place_statistics USING GIST(places_bounds)');
+
+        // 6. **REGION BOUNDARIES**: Optimized spatial index for boundary operations
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS regions_boundary_operations_idx 
+            ON regions USING GIST(boundary) 
+            INCLUDE (id, name, type, level, park_system)
+            WHERE boundary IS NOT NULL
+        ');
+
+        // 7. **HIERARCHICAL QUERIES**: Parent-child traversal optimization
+        DB::statement('
+            CREATE INDEX IF NOT EXISTS regions_hierarchy_traversal_idx 
+            ON regions (parent_id, level, type) 
+            INCLUDE (id, name, slug, cached_place_count)
+            WHERE parent_id IS NOT NULL
+        ');
+
+        // Create function to refresh statistics view (call this hourly via cron)
+        DB::statement('
+            CREATE OR REPLACE FUNCTION refresh_region_place_statistics() 
+            RETURNS void AS $$
+            BEGIN
+                REFRESH MATERIALIZED VIEW region_place_statistics;
+            END;
+            $$ LANGUAGE plpgsql;
+        ');
+
+        // Update table statistics for optimal query planning
+        DB::statement('ANALYZE directory_entries');
+        DB::statement('ANALYZE regions');
+
+        echo "Created production-optimized indexes for region-place queries supporting 10K+ places." . PHP_EOL;
+        echo "CRITICAL: Run 'SELECT refresh_region_place_statistics();' every hour via cron job." . PHP_EOL;
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        // Drop function and materialized view
+        DB::statement('DROP FUNCTION IF EXISTS refresh_region_place_statistics()');
+        DB::statement('DROP MATERIALIZED VIEW IF EXISTS region_place_statistics');
+
+        // Drop all performance indexes
+        $indexes = [
+            'places_region_hierarchy_spatial_idx',
+            'places_within_region_boundaries_idx', 
+            'places_mapbox_clustering_idx',
+            'places_by_region_type_idx',
+            'regions_boundary_operations_idx',
+            'regions_hierarchy_traversal_idx'
+        ];
+
+        foreach ($indexes as $index) {
+            DB::statement("DROP INDEX IF EXISTS {$index}");
+        }
+    }
+};

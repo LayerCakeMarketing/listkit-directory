@@ -236,6 +236,21 @@ const routes = [
     component: () => import('@/views/regions/Index.vue')
   },
 
+  // Region Two-Column Demo (for development/testing)
+  {
+    path: '/demo/regions',
+    name: 'RegionTwoColumnDemo',
+    component: () => import('@/views/regions/TwoColumnExample.vue')
+  },
+
+  // Region Explorer View (AllTrails-style layout)
+  {
+    path: '/regions/:regionId/explore',
+    name: 'RegionExplorer',
+    component: () => import('@/views/regions/RegionExplorerView.vue'),
+    props: route => ({ regionId: parseInt(route.params.regionId) })
+  },
+
   // Profile management (authenticated)
   {
     path: '/profile/edit',

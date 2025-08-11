@@ -46,7 +46,7 @@ class Place extends Model
         'location_updated_at', 'location_verified',
         
         // Hierarchical regions
-        'state_region_id', 'city_region_id', 'neighborhood_region_id', 'regions_updated_at',
+        'state_region_id', 'city_region_id', 'neighborhood_region_id', 'park_region_id', 'regions_updated_at',
         
         // Approval/Rejection fields
         'rejection_reason', 'rejected_at', 'rejected_by',
@@ -174,6 +174,11 @@ class Place extends Model
     public function neighborhoodRegion()
     {
         return $this->belongsTo(Region::class, 'neighborhood_region_id');
+    }
+
+    public function parkRegion()
+    {
+        return $this->belongsTo(Region::class, 'park_region_id');
     }
 
     // Many-to-many relationship with regions (for featured places)
@@ -360,6 +365,25 @@ class Place extends Model
         return $query->with(['stateRegion', 'cityRegion', 'neighborhoodRegion']);
     }
 
+    /**
+     * Scope to efficiently load relationships needed for URL generation
+     * 
+     * This scope loads all necessary relationships to avoid N+1 queries
+     * when generating canonical URLs for multiple places.
+     * 
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeWithUrlRelations($query)
+    {
+        return $query->with([
+            'stateRegion:id,name,slug',
+            'cityRegion:id,name,slug', 
+            'category:id,name,slug,parent_id',
+            'category.parent:id,name,slug'
+        ]);
+    }
+
     public function scopeInRegionHierarchy($query, Region $region)
     {
         // Get all entries within a region and its descendants
@@ -443,7 +467,13 @@ class Place extends Model
 
     /**
      * Get the canonical URL for this entry
-     * Format: /places/{state-slug}/{city-slug}/{category-slug}/{business-slug}-{id}
+     * Format: /places/{state-slug}/{city-slug}/{parent-category-slug}/{business-slug}-{id}
+     * 
+     * Uses parent categories for cleaner URLs and better SEO.
+     * For subcategories, uses the parent category. For root categories, uses the category itself.
+     * 
+     * Performance Note: For bulk operations, use the withUrlRelations() scope to avoid N+1 queries:
+     * Place::withUrlRelations()->get()->each(fn($place) => $place->getCanonicalUrl())
      */
     public function getCanonicalUrl()
     {
@@ -451,16 +481,18 @@ class Place extends Model
         
         // Geographic hierarchy - using full state name
         if ($this->stateRegion) {
-            // Use full state name slug instead of abbreviation
             $parts[] = $this->stateRegion->slug;
         }
         if ($this->cityRegion) {
             $parts[] = $this->cityRegion->slug;
         }
         
-        // Category
+        // Category - use parent category for better URL structure
         if ($this->category) {
-            $parts[] = $this->category->slug;
+            $parentCategory = $this->getParentCategoryForUrl();
+            if ($parentCategory) {
+                $parts[] = $parentCategory->slug;
+            }
         }
         
         // Entry with ID
@@ -483,6 +515,41 @@ class Place extends Model
     public function getNameAttribute()
     {
         return $this->title;
+    }
+
+    /**
+     * Get the parent category for URL construction
+     * 
+     * Performance optimized method that:
+     * - Returns parent category for subcategories
+     * - Returns the category itself for root categories
+     * - Handles cases where category is not loaded
+     * - Returns null if no category is assigned
+     * 
+     * @return Category|null
+     */
+    public function getParentCategoryForUrl()
+    {
+        if (!$this->category) {
+            // Load category if not already loaded
+            if (!$this->relationLoaded('category') && $this->category_id) {
+                $this->load('category.parent');
+            } else {
+                return null;
+            }
+        }
+        
+        // If category has a parent, use the parent for URL
+        if ($this->category->parent_id && $this->category->relationLoaded('parent')) {
+            return $this->category->parent;
+        } elseif ($this->category->parent_id && !$this->category->relationLoaded('parent')) {
+            // Load parent if needed
+            $this->category->load('parent');
+            return $this->category->parent;
+        }
+        
+        // If no parent, use the category itself (it's a root category)
+        return $this->category;
     }
 
     /**
@@ -572,22 +639,27 @@ class Place extends Model
         $this->increment('list_count');
     }
 
-    // Get the URL for this entry
+    // Get the URL for this entry (legacy method - use getCanonicalUrl() for new implementations)
     public function getUrl()
     {
         if (!$this->category) {
             $this->load('category');
         }
         
-        // If it's a subcategory, get parent category
-        if ($this->category && $this->category->parent_id) {
-            $this->category->load('parent');
-            $parentSlug = $this->category->parent->slug;
+        // Use parent category logic for consistency with canonical URLs
+        $parentCategory = $this->getParentCategoryForUrl();
+        
+        if ($parentCategory && $this->category && $this->category->parent_id) {
+            // For subcategories, include both parent and child in URL
+            $parentSlug = $parentCategory->slug;
             $childSlug = $this->category->slug;
             return "/place/{$parentSlug}/{$childSlug}/{$this->slug}";
+        } elseif ($parentCategory) {
+            // For root categories, use simplified URL
+            return "/place/{$parentCategory->slug}/{$this->slug}";
         }
         
-        // If it's a root category or no category, use the legacy route as fallback
+        // Fallback for places without categories
         return "/place/entry/{$this->slug}";
     }
 

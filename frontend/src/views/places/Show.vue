@@ -30,15 +30,20 @@
                         </router-link>
                     </template>
                     
-                    <!-- Category -->
+                    <!-- Category (Parent or Root) -->
                     <template v-if="entry?.category">
                         <span class="text-gray-400">/</span>
                         <router-link 
-                            :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.slug}`" 
+                            :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.parent?.slug || entry.category.slug}`" 
                             class="text-gray-500 hover:text-gray-700"
                         >
-                            {{ entry.category.name }}
+                            {{ entry.category.parent?.name || entry.category.name }}
                         </router-link>
+                        <!-- Subcategory if exists -->
+                        <template v-if="entry.category.parent">
+                            <span class="text-gray-400">/</span>
+                            <span class="text-gray-500">{{ entry.category.name }}</span>
+                        </template>
                     </template>
                     
                     <span class="text-gray-400">/</span>
@@ -98,8 +103,17 @@
                                             />
                                         </div>
                                         <div class="flex flex-wrap gap-2">
+                                            <!-- Parent Category -->
                                             <router-link 
-                                                :to="`/places/${entry.category.slug}`"
+                                                v-if="entry.category.parent"
+                                                :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.parent.slug}`"
+                                                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer"
+                                            >
+                                                {{ entry.category.parent.name }}
+                                            </router-link>
+                                            <!-- Child/Current Category -->
+                                            <router-link 
+                                                :to="`/places/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.category.parent?.slug || entry.category.slug}`"
                                                 class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer"
                                             >
                                                 {{ entry.category.name }}
@@ -365,6 +379,41 @@
                     <div v-if="entry?.location" class="bg-white rounded-lg shadow-md p-6 mt-6">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4">Explore Region</h3>
                         <div class="space-y-3">
+                            <!-- Neighborhood Link -->
+                            <router-link 
+                                v-if="entry.neighborhood_region"
+                                :to="`/local/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}/${entry.neighborhood_region.slug}`"
+                                class="flex items-center justify-between p-3 rounded-md bg-purple-50 hover:bg-purple-100 transition-colors"
+                            >
+                                <div>
+                                    <h4 class="font-medium text-purple-900">{{ entry.neighborhood_region.name }} Neighborhood</h4>
+                                    <p class="text-sm text-purple-700">Explore this neighborhood</p>
+                                </div>
+                                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </router-link>
+                            
+                            <!-- Park Region Link (State or National Park) -->
+                            <router-link 
+                                v-if="entry.park_region"
+                                :to="`/regions/${entry.park_region.id}/explore`"
+                                class="flex items-center justify-between p-3 rounded-md bg-green-50 hover:bg-green-100 transition-colors"
+                            >
+                                <div>
+                                    <h4 class="font-medium text-green-900">{{ entry.park_region.name }}</h4>
+                                    <p class="text-sm text-green-700">
+                                        {{ entry.park_region.park_designation === 'state_park' ? 'State Park' : 
+                                           entry.park_region.park_designation === 'national_park' ? 'National Park' : 
+                                           'Park' }}
+                                    </p>
+                                </div>
+                                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </router-link>
+                            
+                            <!-- City Link -->
                             <router-link 
                                 v-if="entry.location.city && entry.city_region"
                                 :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}/${entry.city_region?.slug || slugify(entry.location.city)}`"
@@ -379,6 +428,7 @@
                                 </svg>
                             </router-link>
                             
+                            <!-- State Link -->
                             <router-link 
                                 v-if="entry.location.state && entry.state_region"
                                 :to="`/regions/${entry.state_region?.slug || slugify(entry.location.state)}`"

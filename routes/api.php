@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\Api\GeocodingController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\RegionController;
+use App\Http\Controllers\Api\RegionMapController;
 use App\Http\Controllers\Api\Admin\RegionManagementController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\HomeController;
@@ -111,6 +112,15 @@ Route::prefix('regions')->group(function () {
     Route::get('/{id}/entries', [RegionController::class, 'entries']);
     Route::get('/{id}/children', [RegionController::class, 'children']);
     Route::get('/{id}/featured', [RegionController::class, 'featured']);
+});
+
+// Region Map routes (for two-column layout with map)
+Route::prefix('region-map')->group(function () {
+    Route::get('/{regionId}/two-column', [RegionMapController::class, 'getTwoColumnLayout']);
+    Route::get('/{regionId}/details', [RegionMapController::class, 'getRegionDetails']);
+    Route::get('/{regionId}/clusters', [RegionMapController::class, 'getClusteredPlaces']);
+    Route::get('/{regionId}/nearby', [RegionMapController::class, 'getNearbyRegions']);
+    Route::post('/viewport-places', [RegionMapController::class, 'getMapViewportPlaces']);
 });
 
 // Local pages routes

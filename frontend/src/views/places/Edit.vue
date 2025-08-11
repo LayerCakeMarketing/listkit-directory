@@ -493,6 +493,72 @@
                                 @validation-complete="handleAddressValidation"
                             />
                             
+                            <!-- Region Associations -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <!-- Neighborhood Association -->
+                                <div>
+                                    <label for="neighborhood_region" class="block text-sm font-medium text-gray-700">
+                                        Neighborhood
+                                        <span class="text-gray-500 text-xs ml-1">(optional)</span>
+                                    </label>
+                                    <select
+                                        v-model="form.neighborhood_region_id"
+                                        id="neighborhood_region"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        @change="updateRegionAssociations"
+                                    >
+                                        <option value="">Select a neighborhood...</option>
+                                        <option 
+                                            v-for="neighborhood in availableNeighborhoods" 
+                                            :key="neighborhood.id"
+                                            :value="neighborhood.id"
+                                        >
+                                            {{ neighborhood.name }}
+                                        </option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Associate this place with a specific neighborhood
+                                    </p>
+                                </div>
+
+                                <!-- Park Association -->
+                                <div>
+                                    <label for="park_region" class="block text-sm font-medium text-gray-700">
+                                        Park or Recreation Area
+                                        <span class="text-gray-500 text-xs ml-1">(optional)</span>
+                                    </label>
+                                    <select
+                                        v-model="form.park_region_id"
+                                        id="park_region"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        @change="updateRegionAssociations"
+                                    >
+                                        <option value="">Select a park...</option>
+                                        <optgroup label="National Parks">
+                                            <option 
+                                                v-for="park in nationalParks" 
+                                                :key="park.id"
+                                                :value="park.id"
+                                            >
+                                                {{ park.name }}
+                                            </option>
+                                        </optgroup>
+                                        <optgroup label="State Parks">
+                                            <option 
+                                                v-for="park in stateParks" 
+                                                :key="park.id"
+                                                :value="park.id"
+                                            >
+                                                {{ park.name }}
+                                            </option>
+                                        </optgroup>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        If this place is within or related to a park
+                                    </p>
+                                </div>
+                            </div>
+                            
                             <!-- Additional location fields -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -572,6 +638,9 @@ const errorTitle = ref('Error loading entry')
 const errorType = ref('general')
 const entry = ref(null)
 const categories = ref([])
+const availableNeighborhoods = ref([])
+const nationalParks = ref([])
+const stateParks = ref([])
 
 const form = reactive({
     title: '',
@@ -586,6 +655,10 @@ const form = reactive({
     logo_url: '',
     cover_image_url: '',
     gallery_images: [],
+    
+    // Region associations
+    neighborhood_region_id: null,
+    park_region_id: null,
     
     // Social Media
     facebook_url: '',
@@ -721,9 +794,15 @@ const fetchEntryData = async () => {
         console.log('Categories API response:', categoriesResponse.data)
         categories.value = categoriesResponse.data.categories || categoriesResponse.data || []
         
-        // Initialize form with entry data
+        // Initialize form with entry data FIRST
         console.log('About to initialize form with entry:', entry.value)
         initializeForm()
+        
+        // THEN fetch neighborhoods and parks after form is initialized
+        await Promise.all([
+            fetchNeighborhoods(),
+            fetchParks()
+        ])
         
         console.log('Form after initialization:', form)
         document.title = `Edit ${entry.value.title}`
@@ -776,6 +855,10 @@ const initializeForm = () => {
     form.cover_image_url = entry.value.cover_image_url || ''
     form.gallery_images = entry.value.gallery_images || []
     
+    // Region associations
+    form.neighborhood_region_id = entry.value.neighborhood_region_id || null
+    form.park_region_id = entry.value.park_region_id || null
+    
     // Initialize existing logo image
     if (entry.value.logo_url) {
         logoImages.value = [{
@@ -810,26 +893,35 @@ const initializeForm = () => {
     form.youtube_channel = entry.value.youtube_channel || ''
     form.messenger_contact = entry.value.messenger_contact || ''
     
+    // Set location data from either location relationship or direct fields
     if (entry.value.location) {
         form.location.address_line1 = entry.value.location.address_line1 || ''
         form.location.address_line2 = entry.value.location.address_line2 || ''
-        form.location.city = entry.value.location.city || ''
-        form.location.state = entry.value.location.state || ''
-        form.location.zip_code = entry.value.location.zip_code || ''
+        form.location.city = entry.value.location.city || entry.value.city || ''
+        form.location.state = entry.value.location.state || entry.value.state || ''
+        form.location.zip_code = entry.value.location.zip_code || entry.value.zip_code || ''
         form.location.country = entry.value.location.country || 'US'
-        form.location.latitude = entry.value.location.latitude || ''
-        form.location.longitude = entry.value.location.longitude || ''
+        form.location.latitude = entry.value.location.latitude || entry.value.latitude || ''
+        form.location.longitude = entry.value.location.longitude || entry.value.longitude || ''
         form.location.cross_streets = entry.value.location.cross_streets || ''
         form.location.neighborhood = entry.value.location.neighborhood || ''
-        
-        // Also update addressData for AddressInput component
-        addressData.value = {
-            address: entry.value.location.address_line1 || '',
-            city: entry.value.location.city || '',
-            state: entry.value.location.state || '',
-            latitude: entry.value.location.latitude || null,
-            longitude: entry.value.location.longitude || null
-        }
+    } else {
+        // Fallback to direct fields if location relationship doesn't exist
+        form.location.address_line1 = entry.value.address_line1 || entry.value.address || ''
+        form.location.city = entry.value.city || ''
+        form.location.state = entry.value.state || ''
+        form.location.zip_code = entry.value.zip_code || ''
+        form.location.latitude = entry.value.latitude || ''
+        form.location.longitude = entry.value.longitude || ''
+    }
+    
+    // Always update addressData for AddressInput component
+    addressData.value = {
+        address: form.location.address_line1,
+        city: form.location.city,
+        state: form.location.state,
+        latitude: form.location.latitude || null,
+        longitude: form.location.longitude || null
     }
 }
 
@@ -889,6 +981,69 @@ const removeCoverImage = () => {
     coverImages.value = []
 }
 
+// Fetch neighborhoods based on the city
+const fetchNeighborhoods = async () => {
+    try {
+        // Get city from multiple possible sources
+        const cityName = addressData.value.city || 
+                        form.location.city || 
+                        entry.value?.city ||
+                        entry.value?.location?.city
+                        
+        console.log('Fetching neighborhoods for city:', cityName)
+        
+        if (!cityName) {
+            console.log('No city found for fetching neighborhoods')
+            return
+        }
+        
+        // Fetch neighborhoods for this city
+        const response = await axios.get('/api/regions/search', {
+            params: {
+                type: 'neighborhood',
+                city: cityName,
+                limit: 50
+            }
+        })
+        
+        console.log('Neighborhoods fetched:', response.data.data)
+        availableNeighborhoods.value = response.data.data || []
+    } catch (error) {
+        console.error('Error fetching neighborhoods:', error)
+        availableNeighborhoods.value = []
+    }
+}
+
+// Fetch parks (state and national)
+const fetchParks = async () => {
+    try {
+        const response = await axios.get('/api/regions/search', {
+            params: {
+                park_designation: true,
+                limit: 100
+            }
+        })
+        
+        const parks = response.data.data || []
+        nationalParks.value = parks.filter(p => p.park_designation === 'national_park')
+        stateParks.value = parks.filter(p => p.park_designation === 'state_park')
+    } catch (error) {
+        console.error('Error fetching parks:', error)
+        nationalParks.value = []
+        stateParks.value = []
+    }
+}
+
+// Update region associations when dropdowns change
+const updateRegionAssociations = () => {
+    // This will be called when the user selects a neighborhood or park
+    // The form values are already bound via v-model
+    console.log('Region associations updated:', {
+        neighborhood: form.neighborhood_region_id,
+        park: form.park_region_id
+    })
+}
+
 // Handle address validation from AddressInput
 const handleAddressValidation = (result) => {
     console.log('Address validation result:', result)
@@ -900,15 +1055,26 @@ const handleAddressValidation = (result) => {
         delete errors.value['location.latitude']
         delete errors.value['location.longitude']
     }
+    
+    // Fetch neighborhoods when city changes
+    if (result.city !== addressData.value.city) {
+        fetchNeighborhoods()
+    }
 }
 
 // Watch addressData and sync with form.location
-watch(addressData, (newVal) => {
+watch(addressData, (newVal, oldVal) => {
     form.location.address_line1 = newVal.address
     form.location.city = newVal.city
     form.location.state = newVal.state
     form.location.latitude = newVal.latitude
     form.location.longitude = newVal.longitude
+    
+    // If city changed, fetch neighborhoods for the new city
+    if (newVal.city && newVal.city !== oldVal?.city) {
+        console.log('City changed to:', newVal.city)
+        fetchNeighborhoods()
+    }
 }, { deep: true })
 
 const submitForm = async () => {

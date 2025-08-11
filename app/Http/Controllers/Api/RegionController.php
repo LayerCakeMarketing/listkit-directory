@@ -24,25 +24,59 @@ class RegionController extends Controller
     public function search(Request $request)
     {
         $request->validate([
-            'q' => 'required|string|min:2'
+            'q' => 'nullable|string|min:2',
+            'type' => 'nullable|string|in:country,state,city,neighborhood',
+            'city' => 'nullable|string',
+            'park_designation' => 'nullable|boolean',
+            'limit' => 'nullable|integer|min:1|max:100'
         ]);
         
-        $query = $request->get('q');
+        $queryBuilder = Region::with(['parent.parent']);
         
-        $regions = Region::where('name', 'ilike', "%{$query}%")
-            ->with(['parent.parent'])
-            ->orderByRaw("
-                CASE 
-                    WHEN level = 2 THEN 1
-                    WHEN level = 3 THEN 2
-                    WHEN level = 1 THEN 3
-                    ELSE 4
-                END
-            ")
-            ->orderByRaw("CASE WHEN name ILIKE ? THEN 0 ELSE 1 END", [$query . '%'])
-            ->orderBy('name')
-            ->limit(20)
-            ->get();
+        // Filter by search query
+        if ($request->has('q')) {
+            $query = $request->get('q');
+            $queryBuilder->where('name', 'ilike', "%{$query}%");
+        }
+        
+        // Filter by type
+        if ($request->has('type')) {
+            $queryBuilder->where('type', $request->get('type'));
+        }
+        
+        // Filter by city name (for neighborhoods)
+        if ($request->has('city')) {
+            $cityName = $request->get('city');
+            $queryBuilder->whereHas('parent', function($q) use ($cityName) {
+                $q->where('name', 'ilike', $cityName)
+                  ->where('type', 'city');
+            });
+        }
+        
+        // Filter by park designation
+        if ($request->boolean('park_designation')) {
+            $queryBuilder->whereNotNull('park_designation');
+        }
+        
+        // Order by relevance
+        $queryBuilder->orderByRaw("
+            CASE 
+                WHEN level = 2 THEN 1
+                WHEN level = 3 THEN 2
+                WHEN level = 1 THEN 3
+                ELSE 4
+            END
+        ");
+        
+        if ($request->has('q')) {
+            $query = $request->get('q');
+            $queryBuilder->orderByRaw("CASE WHEN name ILIKE ? THEN 0 ELSE 1 END", [$query . '%']);
+        }
+        
+        $queryBuilder->orderBy('name');
+        
+        $limit = $request->get('limit', 20);
+        $regions = $queryBuilder->limit($limit)->get();
             
         return response()->json([
             'data' => $regions
@@ -373,13 +407,26 @@ class RegionController extends Controller
         // Apply region filter based on level
         switch ($region->level) {
             case 1: // State
-                $query->where('state_region_id', $id);
+                $query->where(function($q) use ($id) {
+                    $q->where('state_region_id', $id)
+                      ->orWhere('region_id', $id);
+                });
                 break;
             case 2: // City
-                $query->where('city_region_id', $id);
+                $query->where(function($q) use ($id) {
+                    $q->where('city_region_id', $id)
+                      ->orWhere('region_id', $id);
+                });
                 break;
             case 3: // Neighborhood
-                $query->where('neighborhood_region_id', $id);
+                $query->where(function($q) use ($id) {
+                    $q->where('neighborhood_region_id', $id)
+                      ->orWhere('region_id', $id);
+                });
+                break;
+            default:
+                // Fallback to region_id for any level
+                $query->where('region_id', $id);
                 break;
         }
 

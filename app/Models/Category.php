@@ -21,10 +21,13 @@ class Category extends Model
         'quotes',
         'description',
         'order_index',
+        'path',
+        'depth',
     ];
 
     protected $casts = [
         'order_index' => 'integer',
+        'depth' => 'integer',
         'quotes' => 'array',
     ];
 
@@ -43,6 +46,23 @@ class Category extends Model
             $count = static::where('slug', 'like', $category->slug . '%')->count();
             if ($count > 0) {
                 $category->slug = $category->slug . '-' . ($count + 1);
+            }
+            
+            // Auto-populate path and depth
+            $category->updateHierarchyData();
+        });
+
+        static::updating(function ($category) {
+            // Update path and depth if parent or slug changed
+            if ($category->isDirty(['parent_id', 'slug'])) {
+                $category->updateHierarchyData();
+            }
+        });
+
+        static::updated(function ($category) {
+            // Update all descendants' paths if this category's path changed
+            if ($category->wasChanged(['path', 'slug'])) {
+                $category->updateDescendantPaths();
             }
         });
     }
@@ -107,17 +127,17 @@ class Category extends Model
         return $this->name;
     }
 
-    public function getPathAttribute()
+    public function getAncestorsAttribute()
     {
-        $path = collect([$this]);
+        $ancestors = collect([$this]);
         $parent = $this->parent;
         
         while ($parent) {
-            $path->prepend($parent);
+            $ancestors->prepend($parent);
             $parent = $parent->parent;
         }
         
-        return $path;
+        return $ancestors;
     }
 
     // Get all descendant categories
@@ -208,5 +228,188 @@ class Category extends Model
         $svg = preg_replace('/on\w+\s*=\s*["\'][^"\']*["\']/i', '', $svg);
         
         return $svg;
+    }
+
+    // ========================================
+    // OPTIMIZED HIERARCHY METHODS FOR URL ROUTING
+    // ========================================
+
+    /**
+     * Update path and depth based on parent relationship
+     */
+    public function updateHierarchyData()
+    {
+        if ($this->parent_id) {
+            $parent = static::find($this->parent_id);
+            if ($parent) {
+                $this->path = $parent->path . '/' . $this->slug;
+                $this->depth = $parent->depth + 1;
+            }
+        } else {
+            $this->path = '/' . $this->slug;
+            $this->depth = 0;
+        }
+    }
+
+    /**
+     * Update all descendant paths (called when parent path changes)
+     */
+    public function updateDescendantPaths()
+    {
+        $descendants = $this->children()->get();
+        foreach ($descendants as $child) {
+            $child->updateHierarchyData();
+            $child->save();
+            $child->updateDescendantPaths(); // Recursive
+        }
+    }
+
+    /**
+     * Scope: Get only parent (root) categories efficiently
+     */
+    public function scopeParentCategories($query)
+    {
+        return $query->whereNull('parent_id')
+                    ->orderBy('order_index')
+                    ->orderBy('name');
+    }
+
+    /**
+     * Scope: Get categories by depth level
+     */
+    public function scopeByDepth($query, $depth)
+    {
+        return $query->where('depth', $depth)->orderBy('order_index');
+    }
+
+    /**
+     * Scope: Get categories for URL routing (parent categories only)
+     * This is optimized for the new URL structure: /places/{state}/{city}/{parent-category}/{place}
+     */
+    public function scopeForUrlRouting($query)
+    {
+        return $query->parentCategories()
+                    ->select(['id', 'name', 'slug', 'path'])
+                    ->with(['children' => function ($q) {
+                        $q->select(['id', 'name', 'slug', 'parent_id', 'path'])
+                          ->orderBy('order_index');
+                    }]);
+    }
+
+    /**
+     * Get parent category for URL routing
+     * For child categories, return the parent. For parent categories, return self.
+     */
+    public function getUrlParentCategory()
+    {
+        if ($this->parent_id) {
+            return $this->parent;
+        }
+        return $this;
+    }
+
+    /**
+     * Efficiently find category by path (uses materialized path)
+     */
+    public static function findByPath($path)
+    {
+        // Normalize path (ensure leading slash, no trailing slash)
+        $normalizedPath = '/' . trim($path, '/');
+        
+        return static::where('path', $normalizedPath)->first();
+    }
+
+    /**
+     * Get all categories in a subtree (including self) using path prefix
+     */
+    public function getSubtreeCategories()
+    {
+        return static::where('path', 'LIKE', $this->path . '%')
+                    ->orderBy('depth')
+                    ->orderBy('order_index')
+                    ->get();
+    }
+
+    /**
+     * Optimized method to get all places in this category and subcategories
+     * Uses a single query with IN clause instead of recursive PHP calls
+     */
+    public function getAllPlacesOptimized()
+    {
+        // Get all category IDs in this subtree using path prefix
+        $categoryIds = static::where('path', 'LIKE', $this->path . '%')
+                            ->pluck('id');
+
+        return \App\Models\Place::whereIn('category_id', $categoryIds);
+    }
+
+    /**
+     * Get breadcrumb trail for URLs using materialized path
+     */
+    public function getBreadcrumbs()
+    {
+        $pathSegments = array_filter(explode('/', $this->path));
+        $breadcrumbs = collect();
+
+        $currentPath = '';
+        foreach ($pathSegments as $segment) {
+            $currentPath .= '/' . $segment;
+            $category = static::where('path', $currentPath)->first();
+            if ($category) {
+                $breadcrumbs->push($category);
+            }
+        }
+
+        return $breadcrumbs;
+    }
+
+    /**
+     * Check if this category is an ancestor of another category
+     */
+    public function isAncestorOf(Category $category)
+    {
+        return str_starts_with($category->path, $this->path . '/');
+    }
+
+    /**
+     * Check if this category is a descendant of another category
+     */
+    public function isDescendantOf(Category $category)
+    {
+        return str_starts_with($this->path, $category->path . '/');
+    }
+
+    /**
+     * Static method to rebuild all paths (for maintenance/repair)
+     */
+    public static function rebuildAllPaths()
+    {
+        // First, reset all paths and depths
+        static::query()->update(['path' => null, 'depth' => null]);
+
+        // Update root categories
+        static::whereNull('parent_id')->get()->each(function ($category) {
+            $category->path = '/' . $category->slug;
+            $category->depth = 0;
+            $category->save();
+        });
+
+        // Update child categories level by level
+        for ($depth = 1; $depth <= 5; $depth++) {
+            $updated = static::whereNull('path')
+                           ->whereNotNull('parent_id')
+                           ->whereHas('parent', function ($q) use ($depth) {
+                               $q->where('depth', $depth - 1);
+                           })
+                           ->get()
+                           ->each(function ($category) {
+                               $category->updateHierarchyData();
+                               $category->save();
+                           });
+
+            if ($updated->isEmpty()) {
+                break;
+            }
+        }
     }
 }

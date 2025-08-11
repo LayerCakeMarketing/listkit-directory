@@ -4,11 +4,18 @@
  * @returns {string} The URL path for the place
  */
 export function getPlaceUrl(entry) {
-    // Use canonical URL structure: /places/state/city/category/entry-slug-id
+    // If the backend already provides canonical_url, use it
+    if (entry.canonical_url) {
+        return entry.canonical_url
+    }
+    
+    // Use canonical URL structure: /places/state/city/parent-category/entry-slug-id
+    // For subcategories, use the parent category in the URL
     if (entry.state_region && entry.city_region && entry.category) {
         const state = entry.state_region.slug || 'ca'  // Default to CA if no state
         const city = entry.city_region.slug  
-        const category = entry.category.slug
+        // Use parent category if it exists, otherwise use the category itself
+        const category = entry.category.parent?.slug || entry.category.slug
         const entrySlug = `${entry.slug}-${entry.id}`
         return `/places/${state}/${city}/${category}/${entrySlug}`
     }

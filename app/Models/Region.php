@@ -25,7 +25,7 @@ class Region extends Model
         'cached_place_count',
         'boundaries',
         'boundaries_simplified',
-        'centroid',
+        'center_point',
         'cover_image',
         'cloudflare_image_id',
         'intro_text',
@@ -285,7 +285,7 @@ class Region extends Model
         }
 
         return $query->whereRaw(
-            'ST_Contains(boundaries, ST_SetSRID(ST_MakePoint(?, ?), 4326))',
+            'ST_Contains(boundary, ST_SetSRID(ST_MakePoint(?, ?), 4326))',
             [$longitude, $latitude]
         );
     }
@@ -298,7 +298,7 @@ class Region extends Model
 
         // $bounds should be [minLng, minLat, maxLng, maxLat]
         return $query->whereRaw(
-            'ST_Intersects(boundaries, ST_MakeEnvelope(?, ?, ?, ?, 4326))',
+            'ST_Intersects(boundary, ST_MakeEnvelope(?, ?, ?, ?, 4326))',
             $bounds
         );
     }
@@ -310,7 +310,7 @@ class Region extends Model
         }
 
         return $query->whereRaw(
-            'ST_DWithin(centroid, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+            'ST_DWithin(center_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
             [$longitude, $latitude, $distanceInMeters]
         );
     }
@@ -318,12 +318,12 @@ class Region extends Model
     // Helper methods for spatial operations
     public function containsLocation($latitude, $longitude)
     {
-        if (config('database.default') !== 'pgsql' || !$this->boundaries) {
+        if (config('database.default') !== 'pgsql' || !$this->boundary) {
             return false;
         }
 
         $result = DB::selectOne(
-            'SELECT ST_Contains(boundaries, ST_SetSRID(ST_MakePoint(?, ?), 4326)) as contains FROM regions WHERE id = ?',
+            'SELECT ST_Contains(boundary, ST_SetSRID(ST_MakePoint(?, ?), 4326)) as contains FROM regions WHERE id = ?',
             [$longitude, $latitude, $this->id]
         );
 
@@ -332,12 +332,12 @@ class Region extends Model
 
     public function getBoundsArray()
     {
-        if (config('database.default') !== 'pgsql' || !$this->boundaries) {
+        if (config('database.default') !== 'pgsql' || !$this->boundary) {
             return null;
         }
 
         $result = DB::selectOne(
-            'SELECT ST_Extent(boundaries)::text as bounds FROM regions WHERE id = ?',
+            'SELECT ST_Extent(boundary)::text as bounds FROM regions WHERE id = ?',
             [$this->id]
         );
 
@@ -362,7 +362,8 @@ class Region extends Model
             return null;
         }
 
-        $column = $simplified ? 'boundaries_simplified' : 'boundaries';
+        // Only use boundary column since boundaries_simplified doesn't exist
+        $column = 'boundary';
         
         $result = DB::selectOne(
             "SELECT ST_AsGeoJSON({$column}) as geojson FROM regions WHERE id = ?",
@@ -625,5 +626,229 @@ class Region extends Model
             'type' => 'Polygon',
             'coordinates' => [$coordinates]
         ];
+    }
+
+    // **NEW METHODS FOR ENHANCED PARK & GEOSPATIAL SUPPORT**
+
+    /**
+     * Get places within this region using optimized spatial queries
+     */
+    public function getPlacesWithinBoundary($limit = 500)
+    {
+        if (!$this->boundary) {
+            return collect();
+        }
+
+        // Using Place model which maps to directory_entries table
+        return Place::where('status', 'published')
+            ->whereRaw('ST_Contains(?, ST_MakePoint(longitude, latitude))', [$this->boundary])
+            ->with(['category:id,name,slug,color'])
+            ->select(['id', 'title', 'slug', 'latitude', 'longitude', 'category_id', 'is_featured', 'is_verified'])
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Check if this region is a park type
+     */
+    public function isPark(): bool
+    {
+        return in_array($this->type, ['national_park', 'state_park', 'regional_park', 'local_park']);
+    }
+
+    /**
+     * Get park-specific information
+     */
+    public function getParkInfo(): ?array
+    {
+        if (!$this->isPark()) {
+            return null;
+        }
+
+        return [
+            'system' => $this->park_system,
+            'designation' => $this->park_designation,
+            'established' => $this->established_date,
+            'area_acres' => $this->area_acres,
+            'features' => $this->park_features,
+            'activities' => $this->park_activities,
+            'website' => $this->park_website,
+            'phone' => $this->park_phone,
+            'hours' => $this->operating_hours,
+            'fees' => $this->entrance_fees,
+            'reservations_required' => $this->reservations_required,
+            'difficulty' => $this->difficulty_level,
+            'accessibility' => $this->accessibility_features
+        ];
+    }
+
+    /**
+     * Get clustered places for map display at specific zoom level
+     */
+    public function getClusteredPlaces(int $zoomLevel = 12): array
+    {
+        // Use cached clusters if available
+        $clusters = Cache::remember(
+            "region_{$this->id}_clusters_zoom_{$zoomLevel}",
+            3600, // 1 hour cache
+            function () use ($zoomLevel) {
+                return DB::select('
+                    SELECT * FROM place_clusters 
+                    WHERE region_id = ? AND zoom_level = ?
+                    ORDER BY place_count DESC
+                ', [$this->id, $zoomLevel]);
+            }
+        );
+
+        if (!empty($clusters)) {
+            return $clusters;
+        }
+
+        // Fallback: generate clusters on-the-fly
+        return $this->generateClustersForZoom($zoomLevel);
+    }
+
+    /**
+     * Get region's relationship to parks (if it contains or is contained by parks)
+     */
+    public function getParkRelationships(): array
+    {
+        if (config('database.default') !== 'pgsql' || !$this->center_point) {
+            return ['contains' => [], 'within' => []];
+        }
+
+        // Parks that contain this region
+        $containingParks = Region::whereIn('type', ['national_park', 'state_park', 'regional_park', 'local_park'])
+            ->whereNotNull('boundary')
+            ->whereRaw('ST_Contains(boundary, ?)', [$this->center_point])
+            ->select(['id', 'name', 'type', 'park_system'])
+            ->get();
+
+        // Parks contained within this region
+        $containedParks = [];
+        if ($this->boundary) {
+            $containedParks = Region::whereIn('type', ['national_park', 'state_park', 'regional_park', 'local_park'])
+                ->whereNotNull('boundary')
+                ->whereRaw('ST_Contains(?, boundary)', [$this->boundary])
+                ->select(['id', 'name', 'type', 'park_system'])
+                ->get();
+        }
+
+        return [
+            'within' => $containingParks,
+            'contains' => $containedParks
+        ];
+    }
+
+    /**
+     * Get optimal viewport bounds for map display
+     */
+    public function getMapViewport(float $padding = 0.1): ?array
+    {
+        $bounds = $this->getBoundsArray();
+        
+        if (!$bounds) {
+            return null;
+        }
+
+        // Add padding for better map display
+        $latPadding = ($bounds['max_lat'] - $bounds['min_lat']) * $padding;
+        $lngPadding = ($bounds['max_lng'] - $bounds['min_lng']) * $padding;
+
+        return [
+            'center' => [
+                'lat' => ($bounds['max_lat'] + $bounds['min_lat']) / 2,
+                'lng' => ($bounds['max_lng'] + $bounds['min_lng']) / 2
+            ],
+            'bounds' => [
+                'north' => $bounds['max_lat'] + $latPadding,
+                'south' => $bounds['min_lat'] - $latPadding,
+                'east' => $bounds['max_lng'] + $lngPadding,
+                'west' => $bounds['min_lng'] - $lngPadding
+            ]
+        ];
+    }
+
+    /**
+     * Search places within region with spatial optimization
+     */
+    public function searchPlaces(string $query, array $options = []): \Illuminate\Support\Collection
+    {
+        $searchQuery = Place::where('status', 'published')
+            ->whereRaw("to_tsvector('english', name || ' ' || COALESCE(description, '')) @@ plainto_tsquery('english', ?)", [$query]);
+
+        // Apply region filter based on type
+        if ($this->isPark() && $this->boundary) {
+            // Use spatial containment for parks
+            $searchQuery->whereRaw('ST_Contains(?, ST_MakePoint(longitude, latitude))', [$this->boundary]);
+        } else {
+            // Use hierarchical relationship for traditional regions
+            switch ($this->level) {
+                case 1:
+                    $searchQuery->where('state_region_id', $this->id);
+                    break;
+                case 2:
+                    $searchQuery->where('city_region_id', $this->id);
+                    break;
+                case 3:
+                    $searchQuery->where('neighborhood_region_id', $this->id);
+                    break;
+            }
+        }
+
+        if ($options['category_id'] ?? null) {
+            $searchQuery->where('category_id', $options['category_id']);
+        }
+
+        return $searchQuery
+            ->with(['category:id,name,slug'])
+            ->limit($options['limit'] ?? 50)
+            ->get();
+    }
+
+    /**
+     * Generate clusters for specific zoom level
+     */
+    private function generateClustersForZoom(int $zoomLevel): array
+    {
+        $gridSize = $this->getGridSizeForZoom($zoomLevel);
+        
+        $places = $this->getPlacesWithinBoundary(1000);
+        
+        $clusters = [];
+        foreach ($places as $place) {
+            $gridX = floor($place->longitude / $gridSize) * $gridSize;
+            $gridY = floor($place->latitude / $gridSize) * $gridSize;
+            $key = "{$gridX}_{$gridY}";
+            
+            if (!isset($clusters[$key])) {
+                $clusters[$key] = (object) [
+                    'cluster_geom' => ['lat' => $gridY + $gridSize/2, 'lng' => $gridX + $gridSize/2],
+                    'place_count' => 0,
+                    'featured_count' => 0,
+                    'verified_count' => 0
+                ];
+            }
+            
+            $clusters[$key]->place_count++;
+            if ($place->is_featured) $clusters[$key]->featured_count++;
+            if ($place->is_verified) $clusters[$key]->verified_count++;
+        }
+
+        return array_values($clusters);
+    }
+
+    /**
+     * Get appropriate grid size for zoom level
+     */
+    private function getGridSizeForZoom(int $zoomLevel): float
+    {
+        return match (true) {
+            $zoomLevel <= 8 => 0.1,    // ~10km
+            $zoomLevel <= 10 => 0.05,  // ~5km
+            $zoomLevel <= 12 => 0.01,  // ~1km
+            $zoomLevel <= 14 => 0.005, // ~500m
+            default => 0.001           // ~100m
+        };
     }
 }
