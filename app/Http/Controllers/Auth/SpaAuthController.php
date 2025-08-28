@@ -9,7 +9,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Auth\Events\Verified;
 
 class SpaAuthController extends Controller
 {
@@ -69,6 +71,9 @@ class SpaAuthController extends Controller
             'birthdate' => $validated['birthdate'] ?? null,
         ]);
 
+        // Send email verification notification
+        $user->sendEmailVerificationNotification();
+
         Auth::login($user);
 
         $request->session()->regenerate();
@@ -118,9 +123,97 @@ class SpaAuthController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-        // We'll pretend to send the email to avoid revealing whether a user exists
+        // Send the password reset link
+        $status = Password::sendResetLink(
+            $request->only('email')
+        );
+
+        if ($status === Password::RESET_LINK_SENT) {
+            return response()->json([
+                'message' => 'Password reset link has been sent to your email.'
+            ]);
+        }
+
+        // Even if the email doesn't exist, return success to prevent email enumeration
         return response()->json([
             'message' => 'If an account exists for this email, a password reset link has been sent.'
+        ]);
+    }
+    
+    /**
+     * Reset the password.
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => ['required', 'confirmed', 'min:8'],
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password)
+                ])->save();
+            }
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return response()->json([
+                'message' => 'Your password has been reset successfully.'
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Invalid or expired reset token.'
+        ], 422);
+    }
+    
+    /**
+     * Resend email verification notification.
+     */
+    public function resendVerificationEmail(Request $request)
+    {
+        if ($request->user()->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Email already verified.'
+            ]);
+        }
+
+        $request->user()->sendEmailVerificationNotification();
+
+        return response()->json([
+            'message' => 'Verification email sent.'
+        ]);
+    }
+
+    /**
+     * Verify email address.
+     */
+    public function verifyEmail(Request $request, $id, $hash)
+    {
+        $user = User::findOrFail($id);
+
+        if (!hash_equals($hash, sha1($user->getEmailForVerification()))) {
+            return response()->json([
+                'message' => 'Invalid verification link.'
+            ], 422);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Email already verified.'
+            ]);
+        }
+
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        return response()->json([
+            'message' => 'Email verified successfully.'
         ]);
     }
 }

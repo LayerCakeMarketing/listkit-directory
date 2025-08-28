@@ -27,6 +27,13 @@ Route::post('/login', [SpaAuthController::class, 'login']);
 Route::post('/register', [SpaAuthController::class, 'register']);
 Route::post('/logout', [SpaAuthController::class, 'logout'])->middleware('auth');
 Route::post('/forgot-password', [SpaAuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [SpaAuthController::class, 'resetPassword']);
+
+// Email verification routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/email/verification-notification', [SpaAuthController::class, 'resendVerificationEmail']);
+    Route::get('/email/verify/{id}/{hash}', [SpaAuthController::class, 'verifyEmail'])->name('verification.verify');
+});
 
 // Registration status and waitlist
 Route::get('/registration/status', [\App\Http\Controllers\Api\RegistrationController::class, 'status']);

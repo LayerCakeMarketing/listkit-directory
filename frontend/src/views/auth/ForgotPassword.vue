@@ -24,11 +24,11 @@ const submit = async () => {
         await axios.get('/sanctum/csrf-cookie')
         
         // Request password reset link
-        const response = await axios.post('/forgot-password', {
+        const response = await axios.post('/api/forgot-password', {
             email: form.email
         })
         
-        form.status = response.data.status || 'We have emailed your password reset link.'
+        form.status = response.data.message || response.data.status || 'We have emailed your password reset link.'
     } catch (error) {
         if (error.response?.status === 422) {
             form.errors = error.response.data.errors || {}

@@ -23,7 +23,7 @@
             </button>
             <button
               @click="saveProfile"
-              :disabled="saving || activeTab === 'media' || activeTab === 'password' || activeTab === 'channels'"
+              :disabled="saving || activeTab === 'media' || activeTab === 'password' || activeTab === 'channels' || activeTab === 'account'"
               class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
             >
               {{ saving ? 'Saving...' : 'Save Changes' }}
@@ -360,6 +360,12 @@
           </div>
             </div>
 
+            <!-- Account Security Tab -->
+            <div v-show="activeTab === 'account'" class="space-y-8">
+              <!-- Email Verification Section -->
+              <EmailVerification />
+            </div>
+
             <!-- Password Tab -->
             <div v-show="activeTab === 'password'" class="space-y-8">
               <PasswordChangeForm />
@@ -677,6 +683,7 @@ import axios from 'axios'
 import MediaViewer from '@/components/MediaViewer.vue'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
 import PasswordChangeForm from '@/components/profile/PasswordChangeForm.vue'
+import EmailVerification from '@/components/profile/EmailVerification.vue'
 import LocationAutocomplete from '@/components/LocationAutocomplete.vue'
 import { useNotification } from '@/composables/useNotification'
 
@@ -718,6 +725,7 @@ const maxBirthdate = computed(() => {
 
 const tabs = [
   { id: 'basic', name: 'Basic Information' },
+  { id: 'account', name: 'Account Security' },
   { id: 'images', name: 'Images' },
   { id: 'settings', name: 'Settings' },
   { id: 'password', name: 'Password' },

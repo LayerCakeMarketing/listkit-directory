@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watchEffect, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GuestLayout from '@/components/layouts/GuestLayout.vue'
 import InputError from '@/components/InputError.vue'
@@ -12,7 +12,12 @@ import Logo from '@/components/Logo.vue'
 import axios from 'axios'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+
+// Check for verification success message
+const verificationSuccess = ref(route.query.verified === 'true')
+const passwordResetSuccess = ref(route.query.reset === 'success')
 
 defineProps({
     canResetPassword: {
@@ -177,6 +182,37 @@ onUnmounted(() => {
 
                 <div v-if="status" class="mt-4 text-sm font-medium text-green-600">
                     {{ status }}
+                </div>
+
+                <!-- Success messages -->
+                <div v-if="verificationSuccess" class="mt-4 rounded-md bg-green-50 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-green-800">
+                                Your email has been successfully verified! You can now sign in.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="passwordResetSuccess" class="mt-4 rounded-md bg-green-50 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-green-800">
+                                Your password has been reset successfully! Please sign in with your new password.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mt-10">

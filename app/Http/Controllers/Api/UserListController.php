@@ -1046,21 +1046,8 @@ public function showBySlug($username, $slug)
         $originalSlug = $slug;
         $counter = 1;
 
-        // Check for uniqueness within the same scope (user or channel)
-        while (true) {
-            $query = UserList::where('slug', $slug);
-            
-            if ($channelId) {
-                $query->where('channel_id', $channelId);
-            } else {
-                $query->where('user_id', auth()->id())
-                      ->whereNull('channel_id');
-            }
-            
-            if (!$query->exists()) {
-                break;
-            }
-            
+        // Check for global uniqueness (slug must be unique across ALL lists)
+        while (UserList::where('slug', $slug)->exists()) {
             $slug = $originalSlug . '-' . $counter;
             $counter++;
         }

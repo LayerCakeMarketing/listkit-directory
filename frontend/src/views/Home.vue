@@ -290,15 +290,20 @@
                         <div class="bg-white rounded-lg shadow p-4">
                             <h3 class="font-semibold text-gray-900 mb-4">Quick Actions</h3>
                             <div class="space-y-3">
-                                <router-link
-                                    to="/lists/create"
-                                    class="flex items-center text-sm text-blue-600 hover:text-blue-800"
+                                <button
+                                    @click="createQuickList"
+                                    :disabled="isCreatingList"
+                                    class="flex items-center text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg v-if="!isCreatingList" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                     </svg>
-                                    Create New List
-                                </router-link>
+                                    <svg v-else class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    {{ isCreatingList ? 'Creating...' : 'Create New List' }}
+                                </button>
                                 <router-link
                                     to="/places"
                                     class="flex items-center text-sm text-blue-600 hover:text-blue-800"
@@ -335,9 +340,11 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { useNotification } from '@/composables/useNotification'
 import AuthenticatedLayout from '@/components/layouts/AuthenticatedLayout.vue'
 import QuickViewModal from '@/components/QuickViewModal.vue'
 import FeedItemSkeleton from '@/components/FeedItemSkeleton.vue'
@@ -348,6 +355,8 @@ import axios from 'axios'
 
 const authStore = useAuthStore()
 const feedStore = useFeedStore()
+const router = useRouter()
+const { showSuccess, showError } = useNotification()
 const user = computed(() => authStore.user)
 
 // Set page title using document
@@ -364,6 +373,7 @@ const categories = ref([])
 const trendingTags = ref([])
 const showQuickView = ref(false)
 const quickViewItem = ref(null)
+const isCreatingList = ref(false)
 
 // Infinite scroll setup
 const { target: infiniteScrollTarget } = useInfiniteScroll(async () => {
@@ -442,6 +452,33 @@ const loadInitialData = async () => {
 // Pull to refresh functionality
 const refreshFeed = async () => {
     await feedStore.loadFeed(true) // Force refresh
+}
+
+// Quick create new list (frictionless)
+const createQuickList = async () => {
+    if (isCreatingList.value) return
+    
+    isCreatingList.value = true
+    
+    try {
+        const response = await axios.post('/api/lists/quick-create')
+        const createdList = response.data.list || response.data.data || response.data
+        
+        // Navigate directly to edit page
+        router.push({
+            name: 'ListEdit',
+            params: {
+                id: createdList.id
+            }
+        })
+        
+        showSuccess('List created! You can now customize it.')
+    } catch (error) {
+        console.error('Failed to create list:', error)
+        showError('Failed to create list', 'Please try again.')
+    } finally {
+        isCreatingList.value = false
+    }
 }
 
 // Watch for feed errors

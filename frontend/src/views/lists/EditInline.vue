@@ -461,9 +461,9 @@
     />
     
     <SavedItemsModal
-      v-if="showSavedItems"
+      :show="showSavedItems"
       @close="showSavedItems = false"
-      @items-selected="handleAddSavedItems"
+      @add-items="handleAddSavedItems"
     />
 
     <!-- Edit Item Modal (keep existing) -->

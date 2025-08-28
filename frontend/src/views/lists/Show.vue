@@ -169,7 +169,7 @@
 
       <!-- List Items -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Section-based display -->
+        <!-- Section-based display (only if sections exist) -->
         <div v-if="list.structure_version === '2.0' && list.sections && list.sections.length > 0" class="space-y-8">
           <div v-for="section in list.sections" :key="section.id" class="bg-gray-50 rounded-lg p-6">
             <h2 class="text-xl font-bold text-gray-900 mb-4">{{ section.heading || section.title }}</h2>
@@ -290,8 +290,8 @@
           </div>
         </div>
         
-        <!-- Legacy flat list display -->
-        <div v-else-if="list.items && list.items.length > 0" class="space-y-6">
+        <!-- Regular list display (for legacy or 2.0 without sections) -->
+        <div v-if="(!list.structure_version || list.structure_version !== '2.0' || !list.sections || list.sections.length === 0) && list.items && list.items.length > 0" class="space-y-6">
           <div 
             v-for="(item, index) in list.items" 
             :key="item.id"

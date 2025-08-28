@@ -1,84 +1,249 @@
-# Deployment Overview
+# Deployment Guide for Listerino
 
-This repository includes comprehensive documentation for both development and production environments.
+## Production Infrastructure
 
-## Documentation Structure
+- **Server**: DigitalOcean VPS (137.184.113.161)
+- **Domain**: https://listerino.com
+- **Architecture**: Docker containers managed via docker-compose
+- **SSL**: Let's Encrypt with auto-renewal via Nginx
 
-### 📘 [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)
-Complete guide for setting up your local development environment, including:
-- Prerequisites and initial setup
-- Running development servers
-- Testing and code quality
-- Common development tasks
-- Troubleshooting tips
+## Docker Services
 
-### 📗 [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md)
-Detailed documentation of the production infrastructure, including:
-- Docker services configuration
-- Nginx setup and SSL
-- Deployment process
-- Maintenance procedures
-- Security best practices
+All services run in Docker containers:
 
-## Quick Reference
+1. **listerino_app_manual** - Laravel application (webdevops/php-nginx:8.3)
+2. **9106cb440e2f_listerino_db** - PostgreSQL 15 with PostGIS  
+3. **ddeeef0833e6_listerino_redis** - Redis for sessions/cache
 
-### Development
+## Quick Deployment Commands
+
+### Frontend-Only Deployment (Most Common)
+
+When you've only made frontend changes:
+
 ```bash
-# Start all development services
-composer dev
+# 1. Build frontend locally
+cd frontend
+npm run build
+cd ..
 
-# Or run individually
-php artisan serve
-npm run dev --prefix frontend
+# 2. Deploy to production
+tar -czf frontend-deploy.tar.gz frontend/dist
+scp frontend-deploy.tar.gz root@137.184.113.161:/tmp/
+ssh root@137.184.113.161 "cd /var/www/listerino && \
+  tar -xzf /tmp/frontend-deploy.tar.gz && \
+  docker cp frontend/dist/. listerino_app_manual:/app/frontend/dist/ && \
+  docker exec listerino_app_manual chown -R www-data:www-data /app/frontend/dist && \
+  docker exec -w /app listerino_app_manual php artisan view:clear && \
+  docker exec -w /app listerino_app_manual php artisan optimize"
 ```
 
-### Production Deployment
+### Full Deployment (Code + Database)
+
+When you need to deploy backend changes and optionally update the database:
+
 ```bash
-# Build frontend
-npm run build --prefix frontend
+# 1. Build frontend
+cd frontend
+npm run build
+cd ..
 
-# Deploy to production (from local)
-./deploy-simple.sh
+# 2. Export database (optional - only if you want to overwrite production data)
+pg_dump -h localhost -U your_user -d your_db \
+  --no-owner --no-privileges --clean --if-exists > db_export.sql
+
+# 3. Create deployment archive
+tar -czf deploy.tar.gz \
+  --exclude='node_modules' \
+  --exclude='vendor' \
+  --exclude='.git' \
+  --exclude='storage/logs/*' \
+  --exclude='.env' \
+  --exclude='*.md' \
+  --exclude='tests' \
+  .
+
+# 4. Transfer files
+scp deploy.tar.gz root@137.184.113.161:/tmp/
+scp db_export.sql root@137.184.113.161:/tmp/  # Optional
+
+# 5. Deploy on server
+ssh root@137.184.113.161
+cd /var/www/listerino
+tar -xzf /tmp/deploy.tar.gz
+
+# Optional: Import database
+docker exec -i 9106cb440e2f_listerino_db psql -U listerino -d listerino < /tmp/db_export.sql
+
+# Update Laravel
+docker exec -w /app listerino_app_manual composer install --no-dev --optimize-autoloader
+docker exec -w /app listerino_app_manual php artisan migrate --force
+docker exec -w /app listerino_app_manual php artisan config:cache
+docker exec -w /app listerino_app_manual php artisan route:cache
+docker exec -w /app listerino_app_manual php artisan view:cache
+docker exec -w /app listerino_app_manual php artisan optimize
+
+# Set permissions
+docker exec listerino_app_manual chown -R www-data:www-data /app/storage /app/bootstrap/cache
 ```
 
-### Key Differences
+## GitHub Actions Deployment (Automated)
 
-| Aspect | Development | Production |
-|--------|-------------|------------|
-| Database | Local PostgreSQL | Docker PostgreSQL |
-| Redis | Not required | Docker Redis |
-| PHP | Native installation | Docker container |
-| Frontend | Vite dev server | Built static files |
-| SSL | Not required | Let's Encrypt |
-| URL | http://localhost:8000 | https://listerino.com |
+Push to main branch triggers automatic deployment:
 
-## Architecture
-
+```bash
+git add .
+git commit -m "feat: your feature"
+git push origin main
 ```
-Production Infrastructure:
-┌─────────────────────┐
-│   Nginx (Host)      │ ← SSL Termination
-├─────────────────────┤
-│ Docker Containers:  │
-│ - listerino_app     │ ← Laravel (port 8001)
-│ - listerino_db      │ ← PostgreSQL
-│ - listerino_redis   │ ← Cache/Sessions
-└─────────────────────┘
+
+Monitor at: https://github.com/lcreative777/listerino/actions
+
+## Common Maintenance Tasks
+
+### View Logs
+
+```bash
+# Laravel application logs
+docker exec listerino_app_manual tail -f /app/storage/logs/laravel.log
+
+# Container logs
+docker logs --tail 100 listerino_app_manual
+docker logs --tail 100 9106cb440e2f_listerino_db
+```
+
+### Clear Caches
+
+```bash
+docker exec -w /app listerino_app_manual php artisan cache:clear
+docker exec -w /app listerino_app_manual php artisan config:clear
+docker exec -w /app listerino_app_manual php artisan route:clear
+docker exec -w /app listerino_app_manual php artisan view:clear
+docker exec -w /app listerino_app_manual php artisan optimize:clear
+```
+
+### Restart Services
+
+```bash
+# Restart individual container
+docker restart listerino_app_manual
+
+# Restart all services  
+cd /var/www/listerino
+docker-compose -f docker-compose.production.yml restart
+```
+
+### Database Operations
+
+```bash
+# Backup database
+docker exec 9106cb440e2f_listerino_db pg_dump -U listerino listerino > backup_$(date +%Y%m%d).sql
+
+# Access database console
+docker exec -it 9106cb440e2f_listerino_db psql -U listerino -d listerino
+
+# Run specific migration
+docker exec -w /app listerino_app_manual php artisan migrate --path=database/migrations/specific_migration.php
+```
+
+## Troubleshooting
+
+### Container Not Running (502 Error)
+
+```bash
+# Check container status
+docker ps -a
+
+# Start container if stopped
+docker start listerino_app_manual
+
+# If container won't start, check logs
+docker logs listerino_app_manual
+```
+
+### Permission Issues
+
+```bash
+docker exec listerino_app_manual chown -R www-data:www-data /app/storage
+docker exec listerino_app_manual chmod -R 775 /app/storage
+docker exec listerino_app_manual chmod -R 775 /app/bootstrap/cache
+```
+
+### Database Connection Issues
+
+```bash
+# Verify database is running
+docker ps | grep listerino_db
+
+# Test connection from app container
+docker exec listerino_app_manual ping 9106cb440e2f_listerino_db
+
+# Check database credentials in container
+docker exec listerino_app_manual cat /app/.env | grep DB_
+```
+
+### Session/Auth Issues
+
+```bash
+# Clear Redis cache
+docker exec ddeeef0833e6_listerino_redis redis-cli FLUSHDB
+
+# Verify Redis is running
+docker exec ddeeef0833e6_listerino_redis redis-cli ping
+```
+
+## Environment Variables
+
+Key production settings in `/var/www/listerino/.env`:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://listerino.com
+
+DB_HOST=9106cb440e2f_listerino_db
+DB_DATABASE=listerino
+DB_USERNAME=listerino
+DB_PASSWORD=password123
+
+REDIS_HOST=ddeeef0833e6_listerino_redis
+SESSION_DRIVER=redis
+CACHE_STORE=redis
+
+SESSION_DOMAIN=.listerino.com
+SESSION_SECURE_COOKIE=true
+SANCTUM_STATEFUL_DOMAINS=listerino.com,www.listerino.com
 ```
 
 ## Important Notes
 
-1. **Environment Files**: Never commit `.env` files. Use `.env.example` as template.
+1. **Always build frontend locally** before deployment (npm run build)
+2. **Container names are fixed** - use exact names shown above
+3. **Database password**: password123 (production)
+4. **Never commit .env files** to repository
+5. **Test locally first** before deploying to production
 
-2. **Database Migrations**: Always test migrations locally before deploying.
+## Quick Reference
 
-3. **Frontend Builds**: Build frontend assets locally before deployment to avoid server resource usage.
+```bash
+# SSH to server
+ssh root@137.184.113.161
 
-4. **Docker on Production**: The production server uses Docker for all services except Nginx.
+# Navigate to app directory
+cd /var/www/listerino
 
-## Support
+# View running containers
+docker ps
 
-For detailed instructions, refer to the specific documentation files:
-- Development issues → [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)
-- Production issues → [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md)
-- Application architecture → [CLAUDE.md](./CLAUDE.md)
+# Access app container
+docker exec -it listerino_app_manual bash
+
+# Access database
+docker exec -it 9106cb440e2f_listerino_db psql -U listerino -d listerino
+
+# Tail Laravel logs
+docker exec listerino_app_manual tail -f /app/storage/logs/laravel.log
+```
+
+---
+Last Updated: August 2025

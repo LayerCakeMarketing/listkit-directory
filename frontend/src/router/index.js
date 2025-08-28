@@ -29,6 +29,18 @@ const routes = [
     component: () => import('@/views/auth/ForgotPassword.vue'),
     meta: { guest: true }
   },
+  {
+    path: '/reset-password/:token',
+    name: 'ResetPassword',
+    component: () => import('@/views/auth/ResetPassword.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/verify-email/:id/:hash',
+    name: 'VerifyEmail',
+    component: () => import('@/views/auth/VerifyEmail.vue'),
+    meta: { guest: true }
+  },
 
   // Home page for authenticated users
   {
