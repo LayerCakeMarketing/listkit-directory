@@ -285,36 +285,117 @@ onBeforeUnmount(() => {
 :deep(.ProseMirror) {
     min-height: 150px;
     padding: 1rem;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    color: #374151;
 }
 
+/* Paragraphs */
 :deep(.ProseMirror p) {
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    line-height: 1.75;
 }
 
 :deep(.ProseMirror p:last-child) {
     margin-bottom: 0;
 }
 
-:deep(.ProseMirror ul),
-:deep(.ProseMirror ol) {
-    padding-left: 1.5rem;
-    margin-bottom: 0.75rem;
-}
-
-:deep(.ProseMirror li) {
-    margin-bottom: 0.25rem;
-}
-
+/* Headings */
 :deep(.ProseMirror h2) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    margin-top: 1.5rem;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: #111827;
+}
+
+:deep(.ProseMirror h3) {
     font-size: 1.25rem;
     font-weight: 600;
-    margin-bottom: 0.75rem;
-    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    margin-top: 1.25rem;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #111827;
 }
 
+/* Bullet Lists with custom styled bullets */
+:deep(.ProseMirror ul) {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 1rem;
+    margin-top: 0.5rem;
+}
+
+:deep(.ProseMirror ul li) {
+    position: relative;
+    padding-left: 1.25rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.75;
+}
+
+:deep(.ProseMirror ul li::before) {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #9CA3AF;
+    font-size: 1rem;
+    line-height: 1.75;
+    top: 0;
+}
+
+/* Numbered Lists with custom styled numbers */
+:deep(.ProseMirror ol) {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 1rem;
+    margin-top: 0.5rem;
+    counter-reset: list-counter;
+}
+
+:deep(.ProseMirror ol li) {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.75;
+    counter-increment: list-counter;
+}
+
+:deep(.ProseMirror ol li::before) {
+    content: counter(list-counter) ".";
+    position: absolute;
+    left: 0;
+    font-weight: 500;
+    color: #6B7280;
+    line-height: 1.75;
+    top: 0;
+}
+
+/* Nested lists */
+:deep(.ProseMirror ul ul),
+:deep(.ProseMirror ul ol),
+:deep(.ProseMirror ol ul),
+:deep(.ProseMirror ol ol) {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    margin-left: 1.5rem;
+}
+
+/* Strong text */
+:deep(.ProseMirror strong) {
+    font-weight: 600;
+    color: #111827;
+    letter-spacing: -0.01em;
+}
+
+/* Horizontal rule */
 :deep(.ProseMirror hr) {
-    margin: 1rem 0;
-    border-top: 1px solid #e5e7eb;
+    margin: 1.5rem 0;
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #D1D5DB, transparent);
 }
 
 :deep(.ProseMirror p.is-editor-empty:first-child::before) {

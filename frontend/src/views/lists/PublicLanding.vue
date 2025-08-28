@@ -71,7 +71,7 @@
                         <router-link
                             v-for="list in featuredLists"
                             :key="list.id"
-                            :to="`/@${list.user.custom_url || list.user.username}/${list.slug}`"
+                            :to="`/up/@${list.user.custom_url || list.user.username}/${list.slug}`"
                             class="block bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
                         >
                             <div class="h-48 bg-gray-200 overflow-hidden">

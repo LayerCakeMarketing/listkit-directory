@@ -19,9 +19,6 @@
         <div class="absolute bottom-0 left-0 right-0 p-8">
           <div class="max-w-7xl mx-auto">
             <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-white">{{ list.name }}</h1>
-            <p v-if="list.description" class="mt-3 text-lg text-white/90 max-w-3xl">
-              {{ list.description }}
-            </p>
           </div>
         </div>
       </div>
@@ -32,15 +29,12 @@
           <div class="flex items-start justify-between">
             <div class="flex-1">
               <h1 v-if="!list.featured_image_url" class="text-3xl font-bold text-gray-900">{{ list.name }}</h1>
-              <p v-if="list.description && !list.featured_image_url" class="mt-2 text-lg text-gray-600">
-                {{ list.description }}
-              </p>
               
               <!-- List Meta -->
               <div class="mt-4 flex items-center space-x-6 text-sm text-gray-500">
                 <router-link 
                   v-if="list.owner_type === 'App\\Models\\Channel' && list.owner"
-                  :to="`/@${list.owner.slug}`"
+                  :to="`/${list.owner.slug}`"
                   class="flex items-center hover:text-gray-700"
                 >
                   <img 
@@ -65,7 +59,7 @@
                 <!-- Fallback to legacy display -->
                 <router-link 
                   v-else-if="list.channel"
-                  :to="`/@${list.channel.slug}`"
+                  :to="`/${list.channel.slug}`"
                   class="flex items-center hover:text-gray-700"
                 >
                   <img 
@@ -155,6 +149,13 @@
         </div>
       </div>
 
+      <!-- Description Section -->
+      <div v-if="list.description" class="bg-white border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div class="list-description prose prose-lg max-w-4xl mx-auto" v-html="list.description"></div>
+        </div>
+      </div>
+
       <!-- Comments Section -->
       <div v-if="showComments" class="bg-gray-50 border-y">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -208,13 +209,13 @@
                   <!-- Text Type -->
                   <div v-else-if="item.type === 'text'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600" v-html="item.content"></p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                   </div>
 
                   <!-- Location Type -->
                   <div v-else-if="item.type === 'location'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                     <div v-if="item.data" class="mt-2 text-sm text-gray-500">
                       <span v-if="item.data.address">📍 {{ item.data.address }}</span>
                     </div>
@@ -223,7 +224,7 @@
                   <!-- Event Type -->
                   <div v-else-if="item.type === 'event'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                     <div v-if="item.data" class="mt-2 text-sm text-gray-500">
                       <span v-if="item.data.start_date">
                         📅 {{ formatDate(item.data.start_date) }}
@@ -323,13 +324,13 @@
                   <!-- Text Type -->
                   <div v-else-if="item.type === 'text'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600" v-html="item.content"></p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                   </div>
 
                   <!-- Location Type -->
                   <div v-else-if="item.type === 'location'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                     <div v-if="item.data" class="mt-2 text-sm text-gray-500">
                       <span v-if="item.data.address">📍 {{ item.data.address }}</span>
                     </div>
@@ -338,7 +339,7 @@
                   <!-- Event Type -->
                   <div v-else-if="item.type === 'event'">
                     <h3 class="text-lg font-semibold text-gray-900">{{ item.title }}</h3>
-                    <p v-if="item.content" class="mt-1 text-gray-600">{{ item.content }}</p>
+                    <div v-if="item.content" class="mt-1 prose prose-sm max-w-none text-gray-600" v-html="item.content"></div>
                     <div v-if="item.data" class="mt-2 text-sm text-gray-500">
                       <span v-if="item.data.start_date">
                         📅 {{ formatDate(item.data.start_date) }}
@@ -415,7 +416,7 @@
         <div class="mt-8 text-center">
           <router-link
             v-if="list.channel"
-            :to="`/@${list.channel.slug}`"
+            :to="`/${list.channel.slug}`"
             class="text-indigo-600 hover:text-indigo-500"
           >
             ← Back to {{ list.channel.name }}
@@ -527,7 +528,7 @@ async function fetchList() {
     
     // Check if this is a channel list or user list
     if (route.params.channelSlug) {
-      // Channel list: /@{channel}/{list}
+      // Channel list: /{channel}/{list}
       const { channelSlug, slug } = route.params
       console.log('Fetching channel list:', channelSlug, slug || route.params.listSlug)
       const listSlug = slug || route.params.listSlug
@@ -592,3 +593,242 @@ onMounted(() => {
   fetchList()
 })
 </script>
+
+<style scoped>
+/* Prose styles for list items - using deep selectors for dynamic content */
+.prose :deep(*) {
+  @apply text-gray-700;
+}
+
+/* Bullet Lists */
+.prose :deep(ul) {
+  @apply my-2 ml-0 list-none;
+}
+
+.prose :deep(ul li) {
+  @apply relative pl-6 mb-2;
+  line-height: 1.6;
+}
+
+.prose :deep(ul li::before) {
+  content: "•";
+  @apply absolute text-gray-400;
+  left: 0;
+  font-size: 1rem;
+  line-height: inherit;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+/* Numbered Lists */
+.prose :deep(ol) {
+  @apply my-2 ml-0 list-none;
+  counter-reset: list-counter;
+}
+
+.prose :deep(ol li) {
+  @apply relative pl-7 mb-2;
+  line-height: 1.6;
+  counter-increment: list-counter;
+}
+
+.prose :deep(ol li::before) {
+  content: counter(list-counter) ".";
+  @apply absolute left-0 font-medium text-gray-500;
+  line-height: inherit;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+/* Paragraphs in lists */
+.prose :deep(li p) {
+  @apply inline-block m-0;
+  line-height: inherit;
+}
+
+/* Nested lists */
+.prose :deep(ul ul),
+.prose :deep(ul ol),
+.prose :deep(ol ul),
+.prose :deep(ol ol) {
+  @apply mt-1 mb-1 ml-6;
+}
+
+/* Headings in prose */
+.prose :deep(h2) {
+  @apply text-xl font-bold text-gray-900 mt-3 mb-2;
+}
+
+.prose :deep(h3) {
+  @apply text-lg font-semibold text-gray-900 mt-2 mb-1;
+}
+
+/* Strong text */
+.prose :deep(strong) {
+  @apply font-semibold text-gray-900;
+}
+
+/* Horizontal rule */
+.prose :deep(hr) {
+  @apply my-4 border-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent;
+}
+
+/* Elegant typography for list description */
+.list-description {
+  @apply text-gray-800;
+  line-height: 1.8;
+  font-size: 1.125rem;
+}
+
+/* Headings */
+.list-description :deep(h2) {
+  @apply text-2xl font-bold text-gray-900 mt-8 mb-4;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.list-description :deep(h3) {
+  @apply text-xl font-semibold text-gray-900 mt-6 mb-3;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.list-description :deep(h4) {
+  @apply text-lg font-semibold text-gray-800 mt-5 mb-2;
+  line-height: 1.4;
+}
+
+/* Paragraphs */
+.list-description :deep(p) {
+  @apply mb-4 text-gray-700;
+  line-height: 1.75;
+  font-size: 1.0625rem;
+}
+
+.list-description :deep(p:first-child) {
+  @apply mt-0;
+}
+
+.list-description :deep(p:last-child) {
+  @apply mb-0;
+}
+
+/* Strong text */
+.list-description :deep(strong) {
+  @apply font-semibold text-gray-900;
+  letter-spacing: -0.01em;
+}
+
+/* Lists */
+.list-description :deep(ul) {
+  @apply my-4 ml-0 list-none;
+}
+
+.list-description :deep(ul li) {
+  @apply relative pl-7 mb-2 text-gray-700;
+  line-height: 1.75;
+  font-size: 1.0625rem;
+}
+
+.list-description :deep(ul li:before) {
+  content: "•";
+  @apply absolute left-0 text-gray-400;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  top: -0.05em;
+}
+
+.list-description :deep(ol) {
+  @apply my-4 ml-0 list-none;
+  counter-reset: list-counter;
+}
+
+.list-description :deep(ol li) {
+  @apply relative pl-8 mb-3 text-gray-700;
+  line-height: 1.75;
+  font-size: 1.0625rem;
+  counter-increment: list-counter;
+}
+
+.list-description :deep(ol li:before) {
+  content: counter(list-counter) ".";
+  @apply absolute left-0 font-medium text-gray-500;
+  top: 0;
+}
+
+/* Nested lists */
+.list-description :deep(li ul),
+.list-description :deep(li ol) {
+  @apply mt-2 mb-2;
+}
+
+.list-description :deep(li li) {
+  @apply text-base;
+  font-size: 1rem;
+}
+
+/* Horizontal rule */
+.list-description :deep(hr) {
+  @apply my-8 border-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent;
+}
+
+/* Links */
+.list-description :deep(a) {
+  @apply text-blue-600 underline decoration-blue-200 hover:decoration-blue-600 transition-colors;
+}
+
+/* Blockquotes */
+.list-description :deep(blockquote) {
+  @apply pl-6 my-6 border-l-4 border-gray-300 italic text-gray-700;
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+
+/* Code */
+.list-description :deep(code) {
+  @apply px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-sm;
+  font-family: 'SF Mono', Monaco, Inconsolata, 'Fira Code', monospace;
+}
+
+.list-description :deep(pre) {
+  @apply my-4 p-4 bg-gray-50 rounded-lg overflow-x-auto;
+}
+
+.list-description :deep(pre code) {
+  @apply p-0 bg-transparent;
+}
+
+/* Tables */
+.list-description :deep(table) {
+  @apply w-full my-6 border-collapse;
+}
+
+.list-description :deep(th) {
+  @apply text-left font-semibold text-gray-900 border-b-2 border-gray-300 pb-2 px-3;
+}
+
+.list-description :deep(td) {
+  @apply border-b border-gray-200 py-2 px-3 text-gray-700;
+}
+
+/* Images in content */
+.list-description :deep(img) {
+  @apply my-6 rounded-lg shadow-sm;
+}
+
+/* First paragraph after heading - larger text */
+.list-description :deep(h2 + p),
+.list-description :deep(h3 + p) {
+  font-size: 1.125rem;
+  @apply text-gray-700;
+}
+
+/* Emphasis on first paragraph */
+.list-description > :deep(p:first-of-type) {
+  @apply text-lg leading-relaxed text-gray-800;
+  font-size: 1.25rem;
+  line-height: 1.75;
+}
+</style>

@@ -49,7 +49,7 @@ class User extends Authenticatable
         'cover_updated_at' => 'datetime',
     ];
     
-    protected $appends = ['avatar_url', 'gravatar_url', 'default_avatar_url', 'has_custom_avatar'];
+    protected $appends = ['name', 'avatar_url', 'gravatar_url', 'default_avatar_url', 'has_custom_avatar'];
 
 
     // Role-based permissions
@@ -89,6 +89,12 @@ class User extends Authenticatable
     }
     
     // Accessors
+    public function getNameAttribute()
+    {
+        $name = trim(($this->firstname ?? '') . ' ' . ($this->lastname ?? ''));
+        return $name ?: $this->username;
+    }
+    
     public function getAvatarUrlAttribute()
     {
         if ($this->avatar_cloudflare_id) {

@@ -189,6 +189,42 @@ class Region extends Model
             ->orderByPivot('priority', 'asc');
     }
 
+    // Featured sub-regions relationship (regions featured within this region)
+    public function featuredRegions()
+    {
+        return $this->belongsToMany(Region::class, 'featured_regions', 'region_id', 'featured_region_id')
+            ->withPivot('display_order', 'is_active', 'label', 'description', 'custom_data', 'featured_until')
+            ->withTimestamps()
+            ->wherePivot('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('featured_regions.featured_until')
+                    ->orWhere('featured_regions.featured_until', '>=', now());
+            })
+            ->orderByPivot('display_order', 'asc');
+    }
+
+    // All featured regions (including inactive ones, for admin management)
+    public function allFeaturedRegions()
+    {
+        return $this->belongsToMany(Region::class, 'featured_regions', 'region_id', 'featured_region_id')
+            ->withPivot('display_order', 'is_active', 'label', 'description', 'custom_data', 'featured_until')
+            ->withTimestamps()
+            ->orderByPivot('display_order', 'asc');
+    }
+
+    // Regions where this region is featured (inverse relationship)
+    public function featuredInRegions()
+    {
+        return $this->belongsToMany(Region::class, 'featured_regions', 'featured_region_id', 'region_id')
+            ->withPivot('display_order', 'is_active', 'label', 'description', 'custom_data', 'featured_until')
+            ->withTimestamps()
+            ->wherePivot('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('featured_regions.featured_until')
+                    ->orWhere('featured_regions.featured_until', '>=', now());
+            });
+    }
+
     // All featured entries (including inactive)
     public function allFeaturedEntries()
     {
@@ -738,6 +774,33 @@ class Region extends Model
             'within' => $containingParks,
             'contains' => $containedParks
         ];
+    }
+
+    /**
+     * Get parsed coordinates from PostGIS geometry
+     */
+    public function getCoordinatesAttribute()
+    {
+        if (!$this->center_point) {
+            return null;
+        }
+
+        // If database is PostgreSQL with PostGIS, get coordinates using ST_X and ST_Y
+        if (config('database.default') === 'pgsql') {
+            $result = \DB::selectOne(
+                'SELECT ST_X(center_point) as lng, ST_Y(center_point) as lat FROM regions WHERE id = ?',
+                [$this->id]
+            );
+            
+            if ($result && $result->lng !== null && $result->lat !== null) {
+                return [
+                    'lng' => floatval($result->lng),
+                    'lat' => floatval($result->lat)
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**

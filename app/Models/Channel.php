@@ -16,6 +16,8 @@ class Channel extends Model
     protected $fillable = [
         'user_id',
         'slug',
+        'slug_customized',
+        'slug_customized_at',
         'name',
         'description',
         'avatar_image',
@@ -27,6 +29,8 @@ class Channel extends Model
 
     protected $casts = [
         'is_public' => 'boolean',
+        'slug_customized' => 'boolean',
+        'slug_customized_at' => 'datetime',
     ];
 
     protected $appends = ['followers_count', 'lists_count', 'chains_count', 'is_following', 'avatar_url', 'banner_url'];
@@ -131,9 +135,13 @@ class Channel extends Model
         $slug = Str::slug($name);
         $originalSlug = $slug;
         $count = 1;
+        
+        // Get forbidden slugs from config
+        $forbiddenSlugs = config('channels.forbidden_slugs', []);
 
-        // Check against both channels and users
+        // Check against forbidden slugs, channels, and users
         while (
+            in_array(strtolower($slug), array_map('strtolower', $forbiddenSlugs)) ||
             static::where('slug', $slug)->exists() ||
             User::where('username', $slug)->exists() ||
             User::where('custom_url', $slug)->exists()
@@ -143,6 +151,53 @@ class Channel extends Model
         }
 
         return $slug;
+    }
+    
+    /**
+     * Sanitize a slug by removing @ prefix if present
+     */
+    public static function sanitizeSlug(string $slug): string
+    {
+        return ltrim($slug, '@');
+    }
+    
+    /**
+     * Get the channel URL (without @ prefix)
+     */
+    public function getUrlAttribute(): string
+    {
+        return '/' . $this->slug;
+    }
+    
+    /**
+     * Check if a slug is valid and available
+     */
+    public static function isSlugAvailable(string $slug, ?int $excludeId = null): bool
+    {
+        $slug = self::sanitizeSlug($slug);
+        
+        // Check forbidden slugs
+        $forbiddenSlugs = config('channels.forbidden_slugs', []);
+        if (in_array(strtolower($slug), array_map('strtolower', $forbiddenSlugs))) {
+            return false;
+        }
+        
+        // Check channel uniqueness
+        $query = static::where('slug', $slug);
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+        if ($query->exists()) {
+            return false;
+        }
+        
+        // Check user conflicts
+        if (User::where('username', $slug)->exists() || 
+            User::where('custom_url', $slug)->exists()) {
+            return false;
+        }
+        
+        return true;
     }
 
     /**
@@ -219,5 +274,24 @@ class Channel extends Model
 
         // Followers can view private channels
         return $this->followers()->where('user_id', $user->id)->exists();
+    }
+    
+    /**
+     * Check if the slug can be customized
+     */
+    public function canCustomizeSlug(): bool
+    {
+        return !$this->slug_customized;
+    }
+    
+    /**
+     * Mark slug as customized
+     */
+    public function markSlugAsCustomized(): void
+    {
+        $this->update([
+            'slug_customized' => true,
+            'slug_customized_at' => now(),
+        ]);
     }
 }

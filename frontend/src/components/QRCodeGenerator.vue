@@ -200,7 +200,7 @@ const url = computed(() => {
       // Check for owner-based URL
       if (props.data.owner_custom_url || props.data.owner_username) {
         const ownerSlug = props.data.owner_custom_url || props.data.owner_username
-        return `${baseUrl}/@${ownerSlug}/${props.data.slug}`
+        return `${baseUrl}/${ownerSlug}/${props.data.slug}`
       }
       // Fallback to simple list URL
       return `${baseUrl}/lists/${props.data.slug || props.data.id}`

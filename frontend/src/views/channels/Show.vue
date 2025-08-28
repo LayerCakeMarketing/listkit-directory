@@ -142,7 +142,7 @@
             :key="list.id"
             class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden relative"
           >
-            <router-link :to="`/@${channel.slug}/${list.slug}`">
+            <router-link :to="`/${channel.slug}/${list.slug}`">
               <div v-if="list.featured_image_url" class="h-48 bg-gray-200">
                 <img
                   :src="list.featured_image_url"
@@ -195,7 +195,7 @@
                 <template #content>
                   <div class="py-1">
                     <router-link
-                      :to="`/@${channel.slug}/${list.slug}`"
+                      :to="`/${channel.slug}/${list.slug}`"
                       class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <svg class="inline-block w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -278,7 +278,7 @@
             :key="chain.id"
             class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
           >
-            <router-link :to="`/@${channel.slug}/chains/${chain.slug}`">
+            <router-link :to="`/${channel.slug}/chains/${chain.slug}`">
               <div v-if="chain.featured_image" class="h-48 bg-gray-200">
                 <img
                   :src="chain.featured_image"
@@ -393,7 +393,7 @@ const fetchChannel = async () => {
   error.value = null
   
   try {
-    const response = await axios.get(`/api/@${props.slug}`)
+    const response = await axios.get(`/api/channels/${props.slug}`)
     channel.value = response.data
     isFollowing.value = response.data.is_following || false
     
@@ -479,7 +479,7 @@ const loadMoreChains = () => {
 
 const shareList = (list) => {
   // Copy link to clipboard
-  const listUrl = `${window.location.origin}/@${channel.value.slug}/${list.slug}`
+  const listUrl = `${window.location.origin}/${channel.value.slug}/${list.slug}`
   navigator.clipboard.writeText(listUrl).then(() => {
     alert('List link copied to clipboard!')
   }).catch(err => {

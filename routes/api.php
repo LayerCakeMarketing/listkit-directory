@@ -108,6 +108,7 @@ Route::prefix('regions')->group(function () {
     Route::get('/nearby', [RegionController::class, 'nearby']);
     Route::get('/by-slug/{slug}', [RegionController::class, 'getBySlug']);
     Route::get('/by-slug/{state}/{city?}/{neighborhood?}', [RegionController::class, 'showBySlug']);
+    Route::get('/{slug}/featured-regions', [RegionController::class, 'getFeaturedRegions']); // NEW - Get featured regions
     Route::get('/{id}', [RegionController::class, 'show']);
     Route::get('/{id}/entries', [RegionController::class, 'entries']);
     Route::get('/{id}/children', [RegionController::class, 'children']);
@@ -331,8 +332,10 @@ Route::middleware(['auth'])->group(function () {
     // User's own lists
     Route::get('/lists', [UserListController::class, 'index']);
     Route::post('/lists', [UserListController::class, 'store']);
+    Route::post('/lists/quick-create', [UserListController::class, 'quickCreate']); // Quick create with defaults
     Route::get('/lists/{id}', [UserListController::class, 'show']);
     Route::put('/lists/{id}', [UserListController::class, 'update']);
+    Route::patch('/lists/{id}/field', [UserListController::class, 'patchField']); // Single field update for inline editing
     Route::delete('/lists/{id}', [UserListController::class, 'destroy']);
     
     // User's own places
@@ -487,6 +490,17 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/image/{imageId}', [App\Http\Controllers\Api\CloudflareImageController::class, 'deleteImage']);
         Route::get('/stats', [App\Http\Controllers\Api\CloudflareImageController::class, 'getStats']);
     });
+
+    // Media management routes
+    Route::prefix('media')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\MediaController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\Api\MediaController::class, 'store']);
+        Route::get('/statistics', [App\Http\Controllers\Api\MediaController::class, 'statistics']);
+        Route::get('/{media}', [App\Http\Controllers\Api\MediaController::class, 'show']);
+        Route::put('/{media}', [App\Http\Controllers\Api\MediaController::class, 'update']);
+        Route::delete('/{media}', [App\Http\Controllers\Api\MediaController::class, 'destroy']);
+        Route::post('/bulk-delete', [App\Http\Controllers\Api\MediaController::class, 'bulkDelete']);
+    });
     
     // Entity media routes
     Route::get('/entities/{entityType}/{entityId}/media', [\App\Http\Controllers\Api\EntityMediaController::class, 'getEntityMedia']);
@@ -589,6 +603,14 @@ Route::middleware(['auth'])->group(function () {
             // Featured lists management
             Route::post('/{region}/featured-lists', [RegionManagementController::class, 'addFeaturedList']);
             Route::delete('/{region}/featured-lists/{list}', [RegionManagementController::class, 'removeFeaturedList']);
+            
+            // Featured regions management (NEW)
+            Route::get('/{region}/featured-regions', [RegionManagementController::class, 'getFeaturedRegions']);
+            Route::post('/{region}/featured-regions', [RegionManagementController::class, 'addFeaturedRegion']);
+            Route::put('/{region}/featured-regions/{featuredRegion}', [RegionManagementController::class, 'updateFeaturedRegion']);
+            Route::delete('/{region}/featured-regions/{featuredRegion}', [RegionManagementController::class, 'removeFeaturedRegion']);
+            Route::put('/{region}/featured-regions/order', [RegionManagementController::class, 'updateFeaturedRegionsOrder']);
+            Route::get('/{region}/search-regions-to-feature', [RegionManagementController::class, 'searchRegionsToFeature']);
         });
         
         // Place management routes
@@ -634,10 +656,13 @@ Route::middleware(['auth'])->group(function () {
         // List categories for admin
         Route::get('/list-categories', [\App\Http\Controllers\Api\Admin\ListCategoryController::class, 'index']);
         
-        // Media management routes
-        Route::get('/media', [\App\Http\Controllers\Api\Admin\MediaController::class, 'index']);
+        // Media management routes - Using new MediaManagementController
+        Route::get('/media', [\App\Http\Controllers\Api\Admin\MediaManagementController::class, 'index']);
+        Route::get('/media/sync-cloudflare', [\App\Http\Controllers\Api\Admin\MediaManagementController::class, 'syncWithCloudflare']);
+        Route::post('/media/import-cloudflare', [\App\Http\Controllers\Api\Admin\MediaManagementController::class, 'importFromCloudflare']);
+        Route::post('/media/bulk-import', [\App\Http\Controllers\Api\Admin\MediaManagementController::class, 'bulkImport']);
+        Route::delete('/media/{id}', [\App\Http\Controllers\Api\Admin\MediaManagementController::class, 'destroy']);
         Route::get('/media/stats', [\App\Http\Controllers\Api\Admin\MediaController::class, 'stats']);
-        Route::delete('/media/{cloudflareId}', [\App\Http\Controllers\Api\Admin\MediaController::class, 'destroy']);
         Route::post('/media/bulk-delete', [\App\Http\Controllers\Api\Admin\MediaController::class, 'bulkDelete']);
         Route::post('/media/cleanup', [\App\Http\Controllers\Api\Admin\MediaController::class, 'cleanup']);
         

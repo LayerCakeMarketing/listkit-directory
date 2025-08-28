@@ -33,12 +33,16 @@ class CommentController extends Controller
 
         $comments = $model->rootComments()
             ->with([
-                'user:id,firstname,lastname,username,avatar_cloudflare_id',
+                'user', // Load all user fields to get accessors
+                'replyToUser:id,firstname,lastname,username', // Load who they're replying to
                 'replies' => function ($query) {
-                    $query->with('user:id,firstname,lastname,username,avatar_cloudflare_id')
-                          ->withCount('likes')
-                          ->latest()
-                          ->limit(3); // Load first 3 replies
+                    $query->with([
+                        'user', // Load all user fields to get accessors
+                        'replyToUser:id,firstname,lastname,username'
+                    ])
+                    ->withCount('likes')
+                    ->latest()
+                    ->limit(3); // Load first 3 replies
                 }
             ])
             ->withCount(['likes', 'replies'])
@@ -72,14 +76,34 @@ class CommentController extends Controller
             return response()->json(['message' => 'Resource not found'], 404);
         }
 
-        $comment = $model->comment(
-            auth()->user(),
-            $request->content,
-            $request->parent_id
-        );
+        // Calculate depth and get parent info
+        $depth = Comment::calculateDepth($request->parent_id);
+        $replyToUserId = null;
+
+        if ($request->parent_id) {
+            $parent = Comment::find($request->parent_id);
+            if ($parent) {
+                $replyToUserId = $parent->user_id;
+            }
+        }
+
+        // Create the comment with depth and reply_to_user_id
+        $comment = new Comment([
+            'user_id' => auth()->id(),
+            'commentable_type' => get_class($model),
+            'commentable_id' => $model->id,
+            'content' => $request->content,
+            'parent_id' => $request->parent_id,
+            'depth' => $depth,
+            'reply_to_user_id' => $replyToUserId,
+            'mentions' => $this->extractMentions($request->content),
+        ]);
+
+        $comment->save();
 
         $comment->load([
-            'user:id,firstname,lastname,username,avatar_cloudflare_id'
+            'user', // Load all user fields to get accessors
+            'replyToUser:id,firstname,lastname,username'
         ])->loadCount(['likes', 'replies']);
 
         $comment->is_liked = false; // New comment is not liked
@@ -146,7 +170,10 @@ class CommentController extends Controller
         ]);
 
         $replies = $comment->replies()
-            ->with('user:id,firstname,lastname,username,avatar_cloudflare_id')
+            ->with([
+                'user', // Load all user fields to get accessors
+                'replyToUser' // Load all fields for reply-to user as well
+            ])
             ->withCount('likes')
             ->paginate($request->get('per_page', 20));
 

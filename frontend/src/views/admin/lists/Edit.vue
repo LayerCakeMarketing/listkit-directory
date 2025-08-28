@@ -285,7 +285,7 @@
             <div class="flex justify-between items-center pt-6 border-t">
               <div class="flex space-x-3">
                 <router-link
-                  :to="`/@${list.user?.username || list.channel?.slug}/${list.slug}`"
+                  :to="list.channel?.slug ? `/${list.channel.slug}/${list.slug}` : `/up/@${list.user?.username}/${list.slug}`"
                   target="_blank"
                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >

@@ -84,7 +84,6 @@
                     <!-- List Info -->
                     <div class="p-4">
                         <h3 class="font-semibold text-gray-900 mb-1">{{ list.name }}</h3>
-                        <p v-if="list.description" class="text-sm text-gray-600 line-clamp-2 mb-3">{{ list.description }}</p>
                         
                         <!-- Meta Info -->
                         <div class="flex items-center justify-between text-sm text-gray-500">
@@ -160,7 +159,7 @@ import Pagination from '@/components/Pagination.vue'
 const getListUrl = (list) => {
     if (list.owner_type === 'App\\Models\\Channel' && (list.owner || list.channel_data)) {
         const channel = list.owner || list.channel_data
-        return `/@${channel.slug}/${list.slug}`
+        return `/${channel.slug}/${list.slug}`
     }
     return `/up/@${list.user.custom_url || list.user.username}/${list.slug}`
 }

@@ -300,9 +300,9 @@ const userProfileImage = computed(() => {
 // My Page URL
 const myPageUrl = computed(() => {
     if (user.value?.custom_url) {
-        return `/@${user.value.custom_url}`
+        return `/up/@${user.value.custom_url}`
     }
-    return `/@${user.value?.username || user.value?.id}`
+    return `/up/@${user.value?.username || user.value?.id}`
 })
 
 // Generate default avatar for mobile view

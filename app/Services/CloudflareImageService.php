@@ -267,16 +267,34 @@ class CloudflareImageService
         try {
             $response = Http::withHeaders(
                 $this->getAuthHeaders()
-            )->get("{$this->baseUrl}/{$imageId}");
+            )->timeout(10)->get("{$this->baseUrl}/{$imageId}");
+
+            // Log the response status for debugging
+            Log::debug('Cloudflare getImageDetails response', [
+                'image_id' => $imageId,
+                'status' => $response->status(),
+                'successful' => $response->successful()
+            ]);
+            
+            if ($response->status() === 404) {
+                // Image might not be propagated yet
+                throw new Exception('Image not found in Cloudflare (may still be processing)');
+            }
 
             if (!$response->successful()) {
-                throw new Exception('Failed to get image details from Cloudflare');
+                $errorMessage = 'Failed to get image details from Cloudflare';
+                $body = $response->json();
+                if (isset($body['errors']) && !empty($body['errors'])) {
+                    $errorMessage .= ': ' . json_encode($body['errors']);
+                }
+                throw new Exception($errorMessage);
             }
 
             return $response->json();
         } catch (Exception $e) {
             Log::error('Failed to get Cloudflare image details: ' . $e->getMessage(), [
-                'image_id' => $imageId
+                'image_id' => $imageId,
+                'error_type' => get_class($e)
             ]);
             throw $e;
         }

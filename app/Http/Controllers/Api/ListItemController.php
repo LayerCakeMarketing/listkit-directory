@@ -122,8 +122,7 @@ class ListItemController extends Controller
             'data' => 'nullable|array',
             'affiliate_url' => 'nullable|url',
             'notes' => 'nullable|string',
-            'item_image' => 'nullable|string',
-            'item_image_url' => 'nullable|url'
+            'item_image_cloudflare_id' => 'nullable|string'
         ]);
 
         // Update based on item type
@@ -147,12 +146,8 @@ class ListItemController extends Controller
             $item->notes = $validated['notes'];
         }
         
-        if (isset($validated['item_image'])) {
-            $item->item_image_cloudflare_id = $validated['item_image'];
-        }
-        
-        if (isset($validated['item_image_url'])) {
-            $item->item_image_url = $validated['item_image_url'];
+        if (isset($validated['item_image_cloudflare_id'])) {
+            $item->item_image_cloudflare_id = $validated['item_image_cloudflare_id'];
         }
 
         $item->save();

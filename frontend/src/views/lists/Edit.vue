@@ -5,7 +5,7 @@
                 <!-- Header -->
                 <div class="mb-6 flex justify-between items-center">
                     <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                        Edit List: {{ list.name || 'Loading...' }}
+                        {{ list.name && list.name.startsWith('Untitled List') ? 'New List' : `Edit List: ${list.name || 'Loading...'}` }}
                     </h2>
                     <div class="flex items-center space-x-4">
                         <button
@@ -553,10 +553,10 @@ const newSectionHeading = ref('')
 const backLink = computed(() => {
     // Check if it's a channel list
     if (list.value.owner_type === 'App\\Models\\Channel' && list.value.channel) {
-        return `/@${list.value.channel.slug}`
+        return `/${list.value.channel.slug}`
     } else if (list.value.channel_id && list.value.channel) {
         // Legacy channel list
-        return `/@${list.value.channel.slug}`
+        return `/${list.value.channel.slug}`
     }
     // Default to user lists
     return '/mylists'
@@ -661,10 +661,10 @@ const previewList = () => {
     // Check if it's a channel list or user list based on owner_type
     if (list.value.owner_type === 'App\\Models\\Channel' && list.value.channel) {
         // Channel list
-        listUrl = `/@${list.value.channel.slug}/${list.value.slug}`
+        listUrl = `/${list.value.channel.slug}/${list.value.slug}`
     } else if (list.value.channel_id && list.value.channel) {
         // Legacy channel list
-        listUrl = `/@${list.value.channel.slug}/${list.value.slug}`
+        listUrl = `/${list.value.channel.slug}/${list.value.slug}`
     } else {
         // User list
         const user = list.value.user

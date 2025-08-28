@@ -296,10 +296,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   
-  // Edit list
+  // Edit list - Using new inline editing interface
   {
     path: '/mylists/:id/edit',
     name: 'ListEdit',
+    component: () => import('@/views/lists/EditInline.vue'),
+    meta: { requiresAuth: true },
+    props: true
+  },
+  // Legacy edit with drawer (kept for reference)
+  {
+    path: '/mylists/:id/edit-drawer',
+    name: 'ListEditDrawer',
     component: () => import('@/views/lists/Edit.vue'),
     meta: { requiresAuth: true },
     props: true
@@ -512,6 +520,12 @@ const routes = [
     component: () => import('@/views/admin/claims/Index.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
+  {
+    path: '/admin/media',
+    name: 'AdminMedia',
+    component: () => import('@/views/admin/Media.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
   // User profile routes (with /up/ prefix)
   {
     path: '/up/@:username',
@@ -533,32 +547,18 @@ const routes = [
     props: true
   },
   
-  // Channel routes (with @ prefix)
+  // Legacy channel routes with @ prefix (redirect to new URLs)
   {
     path: '/@:slug',
-    name: 'ChannelProfile',
-    component: () => import('@/views/channels/Show.vue'),
-    props: route => ({ slug: route.params.slug })
+    redirect: to => ({ path: `/${to.params.slug}` })
   },
   {
     path: '/@:channelSlug/:listSlug',
-    name: 'ChannelList',
-    component: () => import('@/views/lists/Show.vue'),
-    props: route => ({ 
-      channelSlug: route.params.channelSlug,
-      slug: route.params.listSlug,
-      isChannelList: true
-    })
+    redirect: to => ({ path: `/${to.params.channelSlug}/${to.params.listSlug}` })
   },
   {
     path: '/@:channelSlug/chains/:chainSlug',
-    name: 'ChannelChain',
-    component: () => import('@/views/chains/Show.vue'),
-    props: route => ({ 
-      channelSlug: route.params.channelSlug,
-      slug: route.params.chainSlug,
-      isChannelChain: true
-    })
+    redirect: to => ({ path: `/${to.params.channelSlug}/chains/${to.params.chainSlug}` })
   },
   
   // Generic category routes (should be after user routes)
@@ -575,21 +575,65 @@ const routes = [
     props: true
   },
 
-  // Marketing/Public pages at root level (must be after all specific routes)
+  // Channel routes (without @ prefix) - must come before catch-all
+  {
+    path: '/:channelSlug/chains/:chainSlug',
+    name: 'ChannelChain',
+    component: () => import('@/views/chains/Show.vue'),
+    props: route => ({ 
+      channelSlug: route.params.channelSlug,
+      slug: route.params.chainSlug,
+      isChannelChain: true
+    }),
+    beforeEnter: (to, from, next) => {
+      // Check if this could be a channel chain route
+      const forbiddenSlugs = ['admin', 'api', 'places', 'lists', 'regions', 'login', 'register', 
+                             'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 
+                             'myplaces', 'saved', 'channels', 'edit', 'create', 'new', 'p', 'up'];
+      if (forbiddenSlugs.includes(to.params.channelSlug.toLowerCase())) {
+        next({ name: 'NotFound' });
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    path: '/:channelSlug/:listSlug',
+    name: 'ChannelList',
+    component: () => import('@/views/lists/Show.vue'),
+    props: route => ({ 
+      channelSlug: route.params.channelSlug,
+      slug: route.params.listSlug,
+      isChannelList: true
+    }),
+    beforeEnter: (to, from, next) => {
+      // Check if this could be a channel list route
+      const forbiddenSlugs = ['admin', 'api', 'places', 'lists', 'regions', 'login', 'register', 
+                             'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 
+                             'myplaces', 'saved', 'channels', 'edit', 'create', 'new', 'p', 'up'];
+      if (forbiddenSlugs.includes(to.params.channelSlug.toLowerCase())) {
+        next({ name: 'NotFound' });
+      } else {
+        next();
+      }
+    }
+  },
+  
+  // Channel profile or marketing page (single slug)
   {
     path: '/:slug',
-    name: 'PublicPage',
-    component: () => import('@/views/pages/Show.vue'),
+    name: 'DynamicPage',
+    component: () => import('@/views/DynamicPage.vue'),
     props: true,
-    // Only match if it doesn't start with @ and isn't a reserved route
     beforeEnter: (to, from, next) => {
-      const reservedPaths = ['admin', 'api', 'places', 'lists', 'regions', 'login', 'register', 
-                            'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 'myplaces', 'p'];
+      const forbiddenSlugs = ['admin', 'api', 'places', 'lists', 'regions', 'login', 'register', 
+                             'logout', 'dashboard', 'profile', 'settings', 'home', 'local', 'mylists', 
+                             'myplaces', 'saved', 'channels', 'edit', 'create', 'new', 'p', 'up',
+                             'notifications', 'messages', 'search', 'explore', 'discover'];
       const slug = to.params.slug;
       
-      console.log('PublicPage route check:', slug, 'Reserved:', reservedPaths.includes(slug));
-      
-      if (slug.startsWith('@') || reservedPaths.includes(slug)) {
+      // Reject if it's a forbidden slug
+      if (forbiddenSlugs.includes(slug.toLowerCase())) {
         next({ name: 'NotFound' });
       } else {
         next();

@@ -138,10 +138,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- Description -->
-                                    <p v-if="item.description" class="text-gray-700 mb-3">
-                                        {{ truncate(item.description, 200) }}
-                                    </p>
 
                                     <!-- Meta Info -->
                                     <div class="flex flex-wrap items-center gap-4 text-sm">
@@ -217,10 +213,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- Description -->
-                                    <p v-if="item.description" class="text-gray-700 mb-3">
-                                        {{ truncate(item.description, 200) }}
-                                    </p>
 
                                     <!-- Location -->
                                     <div v-if="item.location" class="flex items-center text-sm text-gray-600">

@@ -175,6 +175,64 @@ class UserListController extends Controller
         ], 201);
     }
 
+    /**
+     * Quick create a new list with default values
+     * Used for frictionless list creation - immediately redirect to edit
+     */
+    public function quickCreate(Request $request)
+    {
+        // Optional: Allow channel_id to be passed for channel lists
+        $channelId = $request->input('channel_id');
+        
+        // If channel_id is provided, verify the user owns the channel
+        if ($channelId) {
+            $channel = \App\Models\Channel::findOrFail($channelId);
+            if ($channel->user_id !== auth()->id()) {
+                return response()->json(['message' => 'You do not own this channel'], 403);
+            }
+            $owner = $channel;
+        } else {
+            $owner = auth()->user();
+        }
+        
+        // Generate a unique untitled list name
+        $baseTitle = 'Untitled List';
+        $title = $baseTitle;
+        $counter = 1;
+        
+        // Check for existing untitled lists and increment counter
+        while (UserList::where('owner_type', get_class($owner))
+                      ->where('owner_id', $owner->id)
+                      ->where('name', $title)
+                      ->exists()) {
+            $counter++;
+            $title = $baseTitle . ' ' . $counter;
+        }
+        
+        // Create the list with default values
+        $list = UserList::create([
+            'user_id' => auth()->id(), // Keep for backward compatibility
+            'channel_id' => $channelId, // Keep for backward compatibility
+            'owner_type' => get_class($owner),
+            'owner_id' => $owner->id,
+            'name' => $title,
+            'slug' => $this->generateUniqueSlug($title, $channelId),
+            'description' => '',
+            'visibility' => 'private', // Always default to private
+            'is_draft' => true, // Start as draft
+            'published_at' => null,
+            'category_id' => 1, // Default category - "General" or first available
+            'structure_version' => '2.0', // Use latest structure version for sections support
+        ]);
+        
+        $list->load('owner', 'user', 'channel', 'category');
+        
+        return response()->json([
+            'message' => 'List created successfully',
+            'list' => $list
+        ], 201);
+    }
+
     public function show($id)
     {
         $list = UserList::with(['owner', 'user', 'channel', 'category', 'tags', 'items' => function($query) {
@@ -291,6 +349,62 @@ class UserListController extends Controller
         return response()->json([
             'message' => 'List updated successfully',
             'list' => $list
+        ]);
+    }
+
+    /**
+     * Update a single field of the list (for inline editing)
+     * Used for real-time auto-save functionality
+     */
+    public function patchField(Request $request, $id)
+    {
+        $list = UserList::findOrFail($id);
+
+        if (!$list->canEdit()) {
+            abort(403, 'Unauthorized to edit this list');
+        }
+
+        $field = $request->input('field');
+        $value = $request->input('value');
+
+        // Validate based on field
+        $rules = [
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'visibility' => 'in:public,unlisted,private',
+            'category_id' => 'exists:list_categories,id',
+            'is_draft' => 'boolean',
+            'featured_image_cloudflare_id' => 'nullable|string',
+        ];
+
+        if (!isset($rules[$field])) {
+            return response()->json(['message' => 'Invalid field'], 400);
+        }
+
+        $validated = $request->validate([
+            'value' => $rules[$field]
+        ]);
+
+        // Special handling for certain fields
+        if ($field === 'name') {
+            $list->name = $value;
+            $list->slug = $this->generateUniqueSlug($value, $list->channel_id);
+        } else {
+            $list->$field = $value;
+        }
+
+        // Handle publishing logic
+        if ($field === 'is_draft' && !$value && $list->is_draft) {
+            $list->published_at = now();
+        }
+
+        $list->save();
+
+        return response()->json([
+            'message' => 'Field updated successfully',
+            'field' => $field,
+            'value' => $value,
+            'slug' => $field === 'name' ? $list->slug : null
         ]);
     }
 

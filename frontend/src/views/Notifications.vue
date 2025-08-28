@@ -87,7 +87,7 @@
                         </router-link>
                         followed your channel
                         <router-link
-                          :to="`/@${notification.data.channel_slug}`"
+                          :to="`/${notification.data.channel_slug}`"
                           class="font-medium text-indigo-600 hover:text-indigo-800"
                         >
                           "{{ notification.data.channel_name }}"

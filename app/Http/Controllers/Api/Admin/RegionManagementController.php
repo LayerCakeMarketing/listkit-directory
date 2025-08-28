@@ -775,4 +775,219 @@ class RegionManagementController extends Controller
             return response()->json(['error' => 'Failed to merge regions: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Get featured regions for a specific region.
+     */
+    public function getFeaturedRegions($id)
+    {
+        $region = Region::with(['allFeaturedRegions.parent'])->findOrFail($id);
+        
+        return response()->json([
+            'success' => true,
+            'featured_regions' => $region->allFeaturedRegions->map(function ($featuredRegion) {
+                return [
+                    'id' => $featuredRegion->id,
+                    'name' => $featuredRegion->name,
+                    'full_name' => $featuredRegion->full_name,
+                    'slug' => $featuredRegion->slug,
+                    'type' => $featuredRegion->type,
+                    'level' => $featuredRegion->level,
+                    'cover_image_url' => $featuredRegion->getCoverImageUrl(),
+                    'intro_text' => $featuredRegion->intro_text,
+                    'cached_place_count' => $featuredRegion->cached_place_count,
+                    'parent' => $featuredRegion->parent ? [
+                        'id' => $featuredRegion->parent->id,
+                        'name' => $featuredRegion->parent->name,
+                        'slug' => $featuredRegion->parent->slug,
+                    ] : null,
+                    'center_point' => $featuredRegion->center_point,
+                    'pivot' => [
+                        'display_order' => $featuredRegion->pivot->display_order,
+                        'is_active' => $featuredRegion->pivot->is_active,
+                        'label' => $featuredRegion->pivot->label,
+                        'description' => $featuredRegion->pivot->description,
+                        'featured_until' => $featuredRegion->pivot->featured_until,
+                    ]
+                ];
+            })
+        ]);
+    }
+
+    /**
+     * Add a featured region.
+     */
+    public function addFeaturedRegion(Request $request, $id)
+    {
+        $request->validate([
+            'featured_region_id' => 'required|exists:regions,id',
+            'label' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'display_order' => 'nullable|integer',
+            'is_active' => 'nullable|boolean',
+            'featured_until' => 'nullable|date',
+        ]);
+
+        $region = Region::findOrFail($id);
+        $featuredRegionId = $request->featured_region_id;
+
+        // Prevent featuring the same region or parent regions
+        if ($featuredRegionId == $id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A region cannot feature itself.'
+            ], 422);
+        }
+
+        // Check if it's already featured
+        if ($region->allFeaturedRegions()->where('featured_region_id', $featuredRegionId)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This region is already featured.'
+            ], 422);
+        }
+
+        // Get the next display order
+        $maxOrder = $region->allFeaturedRegions()->max('display_order') ?? -1;
+
+        // Attach the featured region
+        $region->allFeaturedRegions()->attach($featuredRegionId, [
+            'label' => $request->label,
+            'description' => $request->description,
+            'display_order' => $request->display_order ?? ($maxOrder + 1),
+            'is_active' => $request->is_active ?? true,
+            'featured_until' => $request->featured_until,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Region featured successfully.'
+        ]);
+    }
+
+    /**
+     * Update a featured region.
+     */
+    public function updateFeaturedRegion(Request $request, $id, $featuredRegionId)
+    {
+        $request->validate([
+            'label' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'display_order' => 'nullable|integer',
+            'is_active' => 'nullable|boolean',
+            'featured_until' => 'nullable|date',
+        ]);
+
+        $region = Region::findOrFail($id);
+
+        $region->allFeaturedRegions()->updateExistingPivot($featuredRegionId, [
+            'label' => $request->label,
+            'description' => $request->description,
+            'display_order' => $request->display_order,
+            'is_active' => $request->is_active,
+            'featured_until' => $request->featured_until,
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Featured region updated successfully.'
+        ]);
+    }
+
+    /**
+     * Remove a featured region.
+     */
+    public function removeFeaturedRegion($id, $featuredRegionId)
+    {
+        $region = Region::findOrFail($id);
+        $region->allFeaturedRegions()->detach($featuredRegionId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Featured region removed successfully.'
+        ]);
+    }
+
+    /**
+     * Update the order of featured regions.
+     */
+    public function updateFeaturedRegionsOrder(Request $request, $id)
+    {
+        $request->validate([
+            'regions' => 'required|array',
+            'regions.*.id' => 'required|exists:regions,id',
+            'regions.*.display_order' => 'required|integer',
+        ]);
+
+        $region = Region::findOrFail($id);
+
+        foreach ($request->regions as $featuredRegion) {
+            $region->allFeaturedRegions()->updateExistingPivot($featuredRegion['id'], [
+                'display_order' => $featuredRegion['display_order'],
+                'updated_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Featured regions order updated successfully.'
+        ]);
+    }
+
+    /**
+     * Search for regions to feature (excluding current region and its parents).
+     */
+    public function searchRegionsToFeature(Request $request, $id)
+    {
+        $request->validate([
+            'search' => 'nullable|string',
+            'type' => 'nullable|string',
+        ]);
+
+        $currentRegion = Region::with('parent.parent.parent')->findOrFail($id);
+        
+        // Get parent IDs to exclude
+        $excludeIds = [$id];
+        $parent = $currentRegion->parent;
+        while ($parent) {
+            $excludeIds[] = $parent->id;
+            $parent = $parent->parent;
+        }
+
+        $query = Region::whereNotIn('id', $excludeIds)
+            ->select('id', 'name', 'full_name', 'slug', 'type', 'level', 'parent_id', 'cached_place_count', 'center_point');
+
+        if ($request->filled('search')) {
+            $query->where('name', 'ilike', '%' . $request->search . '%');
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $regions = $query->with('parent:id,name,slug')
+            ->orderBy('cached_place_count', 'desc')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'regions' => $regions->map(function ($region) {
+                return [
+                    'id' => $region->id,
+                    'name' => $region->name,
+                    'full_name' => $region->full_name ?: $region->name,
+                    'slug' => $region->slug,
+                    'type' => $region->type,
+                    'level' => $region->level,
+                    'place_count' => $region->cached_place_count,
+                    'parent_name' => $region->parent ? $region->parent->name : null,
+                    'has_coordinates' => !empty($region->center_point),
+                ];
+            })
+        ]);
+    }
 }

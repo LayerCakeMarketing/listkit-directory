@@ -19,7 +19,10 @@
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 placeholder="My Awesome Channel"
               >
-              <p class="mt-1 text-sm text-gray-500">This will generate your channel URL: @{{ generatedSlug || 'channel-slug' }}</p>
+              <p class="mt-1 text-sm text-gray-500">
+                This will generate your channel URL: /{{ generatedSlug || 'channel-slug' }}
+                <span class="text-xs text-gray-400 block mt-1">You can customize this URL once after creating the channel</span>
+              </p>
             </div>
 
             <!-- Description -->
@@ -230,6 +233,9 @@ const createChannel = async () => {
   error.value = null
   
   try {
+    // Ensure we have CSRF token
+    await axios.get('/sanctum/csrf-cookie')
+    
     const payload = {
       name: form.value.name,
       description: form.value.description || '',
@@ -243,7 +249,7 @@ const createChannel = async () => {
     const response = await axios.post('/api/channels', payload)
     
     // Redirect to the new channel
-    router.push(`/@${response.data.channel.slug}`)
+    router.push(`/${response.data.channel.slug}`)
   } catch (err) {
     console.error('Error creating channel:', err)
     error.value = err.response?.data?.message || 'Failed to create channel. Please try again.'

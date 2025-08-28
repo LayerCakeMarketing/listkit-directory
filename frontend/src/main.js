@@ -34,10 +34,10 @@ if (token) {
       config.headers['X-XSRF-TOKEN'] = decodeURIComponent(xsrfToken)
     }
     
-    // Debug logging
-    console.log('Request:', config.method.toUpperCase(), config.url)
-    console.log('Headers:', config.headers)
-    console.log('Cookies:', document.cookie)
+    // Debug logging (temporarily disabled)
+    // console.log('Request:', config.method.toUpperCase(), config.url)
+    // console.log('Headers:', config.headers)
+    // console.log('Cookies:', document.cookie)
     
     return config
   })
@@ -61,12 +61,12 @@ const processQueue = (error, token = null) => {
 
 axios.interceptors.response.use(
   response => {
-    console.log('Response:', response.config.method.toUpperCase(), response.config.url, 'Status:', response.status)
+    // console.log('Response:', response.config.method.toUpperCase(), response.config.url, 'Status:', response.status)
     return response
   },
   async error => {
-    console.log('Response Error:', error.config?.method?.toUpperCase(), error.config?.url, 'Status:', error.response?.status)
-    console.log('Error details:', error.response?.data)
+    // console.log('Response Error:', error.config?.method?.toUpperCase(), error.config?.url, 'Status:', error.response?.status)
+    // console.log('Error details:', error.response?.data)
     const originalRequest = error.config
 
     if (error.response?.status === 419 && !originalRequest._retry) {

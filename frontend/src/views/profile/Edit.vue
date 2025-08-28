@@ -567,7 +567,7 @@
                     </div>
                     <div class="mt-4 flex items-center space-x-2">
                       <router-link
-                        :to="`/@${channel.slug}`"
+                        :to="`/${channel.slug}`"
                         class="flex-1 text-center px-3 py-1 border rounded text-sm text-gray-700 hover:bg-gray-50"
                       >
                         View
@@ -609,7 +609,7 @@
                   <router-link
                     v-for="channel in followedChannels"
                     :key="channel.id"
-                    :to="`/@${channel.slug}`"
+                    :to="`/${channel.slug}`"
                     class="border rounded-lg p-4 hover:shadow-md transition-shadow"
                   >
                     <div class="flex items-start space-x-3">

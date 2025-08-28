@@ -50,7 +50,7 @@
               <!-- Info -->
               <div class="flex-1 min-w-0">
                 <h3 class="text-lg font-semibold text-gray-900 truncate">
-                  <router-link :to="`/@${channel.slug}`" class="hover:text-blue-600">
+                  <router-link :to="`/${channel.slug}`" class="hover:text-blue-600">
                     {{ channel.name }}
                   </router-link>
                 </h3>
@@ -76,7 +76,7 @@
             <!-- Actions -->
             <div class="mt-4 flex items-center space-x-2">
               <router-link
-                :to="`/@${channel.slug}`"
+                :to="`/${channel.slug}`"
                 class="flex-1 text-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 View

@@ -1241,6 +1241,57 @@ php artisan test --testsuite=Feature
 
 ---
 
-**Last Updated**: August 11, 2025
+## Recent Updates (August 28, 2025)
+
+### Comment System Enhancements
+- **X.com-Style Reply Threading**: Implemented single-level indentation with "replying to" labels
+  - Added `depth` and `reply_to_user_id` columns to comments table
+  - Direct replies (depth=1) show with visual indentation
+  - Nested replies (depth≥2) display at top level with "Replying to @username" label
+  - Prevents infinite indentation for better readability
+  - Migration: `2025_08_28_000001_add_depth_and_reply_to_comments.php`
+
+- **User Avatar Display Fixes**:
+  - Fixed broken avatar images in comments and posts
+  - Added proper fallback to default SVG avatar (`/images/default-avatar.svg`)
+  - Updated CommentController to load all user fields for accessor support
+  - Added `name` accessor to User model for consistent display names
+  - Frontend components properly handle avatar_url from backend
+  - Added VITE_CLOUDFLARE_ACCOUNT_HASH to frontend .env
+
+- **API Optimizations**:
+  - HomeController now properly selects `featured_image` (not `featured_image_url`)
+  - Comment endpoints return full user objects with computed accessors
+  - Improved eager loading to prevent N+1 queries
+
+### Home Feed Improvements
+- **Feed Display Fix**: Resolved issue where posts weren't showing
+  - Fixed column name mismatch in HomeController (`featured_image_url` → `featured_image`)
+  - Added following relationships for test users
+  - Feed now properly displays posts from followed users
+
+- **UI Cleanup**: Removed description/excerpt from feed items
+  - Cleaner, more compact display on /home and /mylists pages
+  - Focus on essential metadata (title, badges, counts)
+  - Backend optimized to exclude description from API responses
+
+### Technical Updates
+- **Frontend Environment**: Added `VITE_CLOUDFLARE_ACCOUNT_HASH=nCX0WluV4kb4MYRWgWWi4A` to frontend/.env
+- **Database**: Updated comment depth tracking for all existing comments
+- **Models**: User model now includes `name` accessor in `$appends` array
+- **Files Modified**:
+  - `/app/Http/Controllers/Api/HomeController.php`
+  - `/app/Http/Controllers/Api/CommentController.php`
+  - `/app/Models/Comment.php`
+  - `/app/Models/User.php`
+  - `/frontend/src/components/social/CommentItem.vue`
+  - `/frontend/src/components/PostItem.vue`
+  - `/frontend/src/views/Home.vue`
+  - `/frontend/src/views/lists/Index.vue`
+  - `/database/migrations/2025_08_28_000001_add_depth_and_reply_to_comments.php`
+
+---
+
+**Last Updated**: August 28, 2025
 **Maintained By**: Development Team
-**Version**: 3.1
+**Version**: 3.2

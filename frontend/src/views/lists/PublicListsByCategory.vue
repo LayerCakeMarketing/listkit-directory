@@ -109,7 +109,6 @@
                         <!-- List Info -->
                         <div class="p-4">
                             <h3 class="font-semibold text-gray-900 mb-1">{{ list.name }}</h3>
-                            <p v-if="list.description" class="text-sm text-gray-600 line-clamp-2 mb-3">{{ list.description }}</p>
                             
                             <!-- Meta Info -->
                             <div class="flex items-center justify-between text-sm text-gray-500">

@@ -16,13 +16,18 @@
               Create Chain
             </router-link>
             <button
-              @click="showCreateModal = true"
-              class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+              @click="createQuickList"
+              :disabled="isCreating"
+              class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-if="!isCreating" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              Create List
+              <svg v-else class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ isCreating ? 'Creating...' : 'Create List' }}
             </button>
           </div>
         </div>
@@ -162,9 +167,6 @@
                 </div>
               </div>
               
-              <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
-                {{ list.description }}
-              </p>
 
               <div class="flex items-center justify-between text-sm text-gray-500">
                 <span>{{ list.items_count }} items</span>
@@ -344,64 +346,6 @@
       @confirm="handleDeleteConfirm"
     />
 
-    <!-- Create List Modal (simplified) -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-lg max-w-md w-full p-6">
-        <h2 class="text-lg font-medium mb-4">Create New List</h2>
-        <form @submit.prevent="createList">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">List Name</label>
-            <input
-              v-model="newList.name"
-              type="text"
-              required
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              v-model="newList.description"
-              rows="3"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            ></textarea>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
-            <select
-              v-model="newList.visibility"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="private">Private</option>
-              <option value="public">Public</option>
-            </select>
-          </div>
-          <div class="mb-4">
-            <TagInput
-              v-model="newList.tags"
-              label="Tags"
-              placeholder="Add tags..."
-              :max-tags="10"
-            />
-          </div>
-          <div class="flex justify-end space-x-3">
-            <button
-              type="button"
-              @click="showCreateModal = false"
-              class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-            >
-              Create List
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
 
   </div>
 </template>
@@ -413,7 +357,6 @@ import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { EllipsisVerticalIcon } from '@heroicons/vue/20/solid'
-import TagInput from '@/components/TagInput.vue'
 import DeleteConfirmationModal from '@/components/DeleteConfirmationModal.vue'
 import { useNotification } from '@/composables/useNotification'
 
@@ -425,22 +368,14 @@ const loading = ref(true)
 const lists = ref([])
 const chains = ref([])
 const activeTab = ref('lists')
-const showCreateModal = ref(false)
 const currentUser = computed(() => authStore.user)
+const isCreating = ref(false)
 
 // Delete confirmation modal state
 const showDeleteModal = ref(false)
 const deleteTarget = ref(null)
 const deleteType = ref('list') // 'list' or 'chain'
 const deleteModalRef = ref(null)
-
-const newList = reactive({
-  name: '',
-  description: '',
-  visibility: 'private',
-  category_id: 1, // Default category - you may want to fetch categories and let user select
-  tags: []
-})
 
 // Fetch user's lists
 async function fetchLists() {
@@ -462,30 +397,33 @@ async function fetchLists() {
   }
 }
 
-// Create new list
-async function createList() {
+// Quick create new list (frictionless)
+async function createQuickList() {
+  if (isCreating.value) return
+  
+  isCreating.value = true
+  
   try {
-    const response = await axios.post('/api/lists', newList)
+    const response = await axios.post('/api/lists/quick-create')
     const createdList = response.data.list || response.data.data || response.data
+    
+    // Add to lists array immediately for visual feedback
     lists.value.unshift(createdList)
     
-    // Reset form and close modal
-    newList.name = ''
-    newList.description = ''
-    newList.visibility = 'private'
-    newList.tags = []
-    showCreateModal.value = false
-    
-    // Navigate to the new list
+    // Navigate directly to edit page
     router.push({
-      name: 'UserList',
+      name: 'ListEdit',
       params: {
-        username: currentUser.value?.custom_url || currentUser.value?.username,
-        slug: createdList.slug
+        id: createdList.id
       }
     })
+    
+    showSuccess('List created! You can now customize it.')
   } catch (error) {
-    alert('Failed to create list. Please try again.')
+    console.error('Failed to create list:', error)
+    showError('Failed to create list. Please try again.')
+  } finally {
+    isCreating.value = false
   }
 }
 

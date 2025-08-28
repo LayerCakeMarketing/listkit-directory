@@ -42,7 +42,7 @@
         <router-link
           v-for="channel in channels"
           :key="channel.id"
-          :to="`/@${channel.slug}`"
+          :to="`/${channel.slug}`"
           class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden group"
         >
           <!-- Banner -->

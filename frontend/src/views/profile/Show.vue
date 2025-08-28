@@ -326,7 +326,7 @@
                     <div>
                       <h3 class="text-lg font-semibold text-gray-900">
                         <router-link 
-                          :to="`/@${person.custom_url || person.username}`"
+                          :to="`/up/@${person.custom_url || person.username}`"
                           class="hover:text-blue-600"
                         >
                           {{ person.name }}

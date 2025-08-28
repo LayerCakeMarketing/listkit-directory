@@ -1011,6 +1011,14 @@
                 </div>
               </div>
 
+              <!-- Featured Regions Tab -->
+              <div v-if="activeTab[region.id] === 'featured-regions'">
+                <FeaturedRegionsManager 
+                  :region-id="region.id"
+                  @updated="fetchRegions"
+                />
+              </div>
+
               <!-- Statistics Tab -->
               <div v-if="activeTab[region.id] === 'stats'">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1134,6 +1142,7 @@ import Modal from '@/components/Modal.vue'
 import Pagination from '@/components/Pagination.vue'
 import CloudflareDragDropUploader from '@/components/CloudflareDragDropUploader.vue'
 import MediaViewer from '@/components/MediaViewer.vue'
+import FeaturedRegionsManager from '@/components/admin/FeaturedRegionsManager.vue'
 
 // State
 const regions = ref([])
@@ -1170,6 +1179,7 @@ const tabs = [
   { key: 'geodata', name: 'Geodata' },
   { key: 'featured-places', name: 'Featured Places' },
   { key: 'featured-lists', name: 'Featured Lists' },
+  { key: 'featured-regions', name: 'Featured Regions' },
   { key: 'stats', name: 'Statistics' }
 ]
 

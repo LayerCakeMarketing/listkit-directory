@@ -25,7 +25,8 @@
           <img
             :src="getUserAvatar(post.user)"
             :alt="`${post.user?.name || 'User'}`"
-            class="h-10 w-10 rounded-full hover:ring-2 hover:ring-blue-500 transition-all"
+            class="h-10 w-10 rounded-full hover:ring-2 hover:ring-blue-500 transition-all bg-gray-100"
+            @error="handleAvatarError"
           />
         </router-link>
         
@@ -420,19 +421,30 @@ const handlePostDeleted = () => {
 
 // Get user avatar URL
 const getUserAvatar = (user) => {
-  if (!user) return `https://ui-avatars.com/api/?name=User&background=3B82F6&color=fff`
+  if (!user) return '/images/default-avatar.svg'
   
+  // Priority 1: Check avatar_url from backend (this is computed by Laravel)
   if (user.avatar_url) {
     return user.avatar_url
   }
-  if (user.avatar_cloudflare_id) {
-    return `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${user.avatar_cloudflare_id}/avatar`
+  
+  // Priority 2: Build from Cloudflare ID if present
+  if (user.avatar_cloudflare_id && import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH) {
+    return `https://imagedelivery.net/${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH}/${user.avatar_cloudflare_id}/public`
   }
+  
+  // Priority 3: Local avatar
   if (user.avatar) {
     return user.avatar
   }
-  const fullName = user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'User'
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=3B82F6&color=fff`
+  
+  // Use local default avatar as fallback
+  return '/images/default-avatar.svg'
+}
+
+// Handle avatar loading error
+const handleAvatarError = (event) => {
+  event.target.src = '/images/default-avatar.svg'
 }
 
 // Custom directive for click outside

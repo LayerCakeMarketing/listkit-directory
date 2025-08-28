@@ -105,7 +105,7 @@
                 <div class="p-4">
                     <!-- List Header -->
                     <div class="flex justify-between items-start mb-3">
-                        <h4 class="text-lg font-medium text-gray-900 truncate">{{ list.title }}</h4>
+                        <h4 class="text-lg font-medium text-gray-900 truncate">{{ list.title || list.name }}</h4>
                         <div class="flex items-center space-x-1 text-xs text-gray-500">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -114,11 +114,6 @@
                             <span>{{ list.views_count || 0 }}</span>
                         </div>
                     </div>
-
-                    <!-- List Description -->
-                    <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {{ list.description }}
-                    </p>
 
                     <!-- User Info -->
                     <div class="flex items-center mb-3">

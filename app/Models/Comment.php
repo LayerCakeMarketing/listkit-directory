@@ -20,6 +20,8 @@ class Comment extends Model
         'commentable_id',
         'content',
         'parent_id',
+        'depth',
+        'reply_to_user_id',
         'mentions',
     ];
 
@@ -100,5 +102,41 @@ class Comment extends Model
         }
 
         return User::whereIn('username', $this->mentions)->get();
+    }
+
+    /**
+     * Get the user this comment is replying to.
+     */
+    public function replyToUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reply_to_user_id');
+    }
+
+    /**
+     * Calculate depth for a new reply.
+     */
+    public static function calculateDepth($parentId): int
+    {
+        if (!$parentId) {
+            return 0; // Root comment
+        }
+
+        $parent = self::find($parentId);
+        if (!$parent) {
+            return 0;
+        }
+
+        // Only allow one level of visual indentation
+        // depth 0 = root, depth 1 = direct reply (indented), depth 2+ = nested reply (not indented)
+        return min($parent->depth + 1, 2);
+    }
+
+    /**
+     * Scope to get comments for display (ordered by thread).
+     */
+    public function scopeThreaded($query)
+    {
+        return $query->orderBy('created_at', 'desc')
+                    ->orderBy('depth', 'asc');
     }
 }

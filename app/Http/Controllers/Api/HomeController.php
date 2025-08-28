@@ -43,6 +43,7 @@ class HomeController extends Controller
                           ->whereIn('user_id', $userIds);
                 })
                 ->where('visibility', 'public')
+                ->select(['id', 'name', 'slug', 'owner_type', 'owner_id', 'user_id', 'category_id', 'visibility', 'featured_image', 'featured_image_cloudflare_id', 'view_count', 'created_at', 'updated_at'])
                 ->with(['owner', 'user', 'category', 'tags'])
                 ->withCount('items')
                 ->latest()
@@ -57,6 +58,7 @@ class HomeController extends Controller
             // Only get places if the table and model exist
             if (Schema::hasTable('places') && class_exists('App\Models\Place')) {
                 $places = \App\Models\Place::where('status', 'published')
+                    ->select(['id', 'title', 'slug', 'category_id', 'featured_image', 'status', 'created_at', 'updated_at'])
                     ->with(['category', 'location'])
                     ->latest()
                     ->skip($offset)
@@ -183,6 +185,7 @@ class HomeController extends Controller
                           ->whereIn('user_id', $userIds);
                 })
                 ->where('visibility', 'public')
+                ->select(['id', 'name', 'slug', 'owner_type', 'owner_id', 'user_id', 'category_id', 'visibility', 'featured_image', 'featured_image_cloudflare_id', 'view_count', 'created_at', 'updated_at'])
                 ->with(['owner', 'user', 'category', 'tags'])
                 ->withCount('items')
                 ->latest()

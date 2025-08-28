@@ -51,9 +51,6 @@
 
               <!-- List Info -->
               <h3 class="font-semibold text-lg text-gray-900 mb-2">{{ list.name }}</h3>
-              <p v-if="list.description" class="text-gray-600 text-sm mb-4 line-clamp-2">
-                {{ list.description }}
-              </p>
 
               <!-- List Stats -->
               <div class="flex items-center justify-between text-sm">
@@ -100,7 +97,7 @@
         <!-- Back to Profile -->
         <div class="mt-8 text-center">
           <router-link
-            :to="`/@${user.custom_url || user.username}`"
+            :to="`/up/@${user.custom_url || user.username}`"
             class="text-indigo-600 hover:text-indigo-500"
           >
             ← Back to {{ user.name }}'s profile

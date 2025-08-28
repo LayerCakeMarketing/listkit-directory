@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $middleware->group('api', []);
             
             // Then append the middleware in the correct order
+            $middleware->appendToGroup('api', \Illuminate\Http\Middleware\HandleCors::class);
             $middleware->appendToGroup('api', \App\Http\Middleware\EncryptCookies::class);
             $middleware->appendToGroup('api', \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class);
             $middleware->appendToGroup('api', \Illuminate\Session\Middleware\StartSession::class);
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         } else {
             // Non-SPA mode: just prepend Sanctum middleware
             $middleware->api(prepend: [
+                \Illuminate\Http\Middleware\HandleCors::class,
                 \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             ]);
         }

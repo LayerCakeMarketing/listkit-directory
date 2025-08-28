@@ -144,11 +144,6 @@
                         </span>
                     </div>
 
-                    <!-- List Description -->
-                    <p v-if="list.description" class="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {{ list.description }}
-                    </p>
-
                     <!-- Tags -->
                     <div v-if="list.tags && list.tags.length > 0" class="flex flex-wrap gap-1 mb-3">
                         <span

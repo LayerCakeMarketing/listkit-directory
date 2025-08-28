@@ -115,6 +115,14 @@
           </ul>
         </div>
 
+        <!-- Featured Regions -->
+        <FeaturedRegionsGrid 
+          v-if="stateData"
+          :region-slug="state"
+          :region-name="stateData.name"
+          class="mb-8"
+        />
+
         <!-- Cities List with Map -->
         <div class="bg-white shadow-sm rounded-lg">
           <div class="px-6 py-4 border-b border-gray-200">
@@ -345,6 +353,7 @@ import axios from 'axios'
 import SaveButton from '@/components/SaveButton.vue'
 import RegionDetailsTab from '@/components/regions/RegionDetailsTab.vue'
 import RegionEditDrawer from '@/components/regions/RegionEditDrawer.vue'
+import FeaturedRegionsGrid from '@/components/regions/FeaturedRegionsGrid.vue'
 import { CogIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 import { useMapbox } from '@/composables/useMapbox'
@@ -512,12 +521,74 @@ const initStateMap = async () => {
         }
       })
       
-      // Fit bounds to show all cities
-      const citiesWithCoords = cities.value.filter(c => c.lat && c.lng)
-      if (citiesWithCoords.length > 1) {
+      // Add markers for featured regions
+      if (stateData.value?.featured_regions_map_data) {
+        stateData.value.featured_regions_map_data.forEach(region => {
+          if (region.coordinates) {
+            // Different marker styles based on region type
+            const markerColors = {
+              'national_park': '#10B981', // Green
+              'state_park': '#06B6D4', // Cyan
+              'regional_park': '#8B5CF6', // Violet
+              'local_park': '#F59E0B', // Amber
+              'city': '#EC4899', // Pink
+              'neighborhood': '#F97316' // Orange
+            }
+            const markerColor = markerColors[region.type] || '#6B7280' // Gray default
+            
+            // Create custom marker element for featured regions
+            const el = document.createElement('div')
+            el.className = 'featured-region-marker'
+            el.style.width = '30px'
+            el.style.height = '30px'
+            el.style.borderRadius = '50%'
+            el.style.backgroundColor = markerColor
+            el.style.border = '3px solid white'
+            el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+            el.style.cursor = 'pointer'
+            
+            const marker = new window.mapboxgl.Marker(el)
+              .setLngLat([region.coordinates.lng, region.coordinates.lat])
+              .setPopup(new window.mapboxgl.Popup().setHTML(`
+                <div class="p-3">
+                  <h3 class="font-semibold">${region.name}</h3>
+                  ${region.label ? `<span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">${region.label}</span>` : ''}
+                  <p class="text-sm text-gray-600 mt-1 capitalize">${region.type.replace(/_/g, ' ')}</p>
+                  ${region.description ? `<p class="text-sm text-gray-600 mt-1">${region.description}</p>` : ''}
+                  <a href="${region.url}" 
+                     class="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 inline-block">
+                    View ${region.type.replace(/_/g, ' ')} →
+                  </a>
+                </div>
+              `))
+              .addTo(map.value)
+          }
+        })
+      }
+      
+      // Fit bounds to show all cities and featured regions
+      const allMarkers = []
+      
+      // Add cities to bounds
+      cities.value.forEach(city => {
+        if (city.lat && city.lng) {
+          allMarkers.push([city.lng, city.lat])
+        }
+      })
+      
+      // Add featured regions to bounds
+      if (stateData.value?.featured_regions_map_data) {
+        stateData.value.featured_regions_map_data.forEach(region => {
+          if (region.coordinates) {
+            allMarkers.push([region.coordinates.lng, region.coordinates.lat])
+          }
+        })
+      }
+      
+      if (allMarkers.length > 1) {
         const bounds = new window.mapboxgl.LngLatBounds()
-        citiesWithCoords.forEach(city => {
-          bounds.extend([city.lng, city.lat])
+        allMarkers.forEach(coords => {
+          bounds.extend(coords)
         })
         map.value.fitBounds(bounds, { padding: 50 })
       }

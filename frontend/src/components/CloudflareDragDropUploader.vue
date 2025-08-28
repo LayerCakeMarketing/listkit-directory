@@ -226,7 +226,7 @@ const props = defineProps({
     }
 })
 
-const emit = defineEmits(['upload-success', 'upload-error', 'upload-progress', 'update:modelValue'])
+const emit = defineEmits(['upload-success', 'upload-error', 'upload-progress', 'upload-warning', 'update:modelValue'])
 
 const dropZone = ref(null)
 const fileInput = ref(null)
@@ -464,7 +464,7 @@ const uploadFile = async (fileObj, uploadURL) => {
                 }
             })
             
-            xhr.addEventListener('load', () => {
+            xhr.addEventListener('load', async () => {
                 console.log('Cloudflare response status:', xhr.status)
                 console.log('Cloudflare response:', xhr.responseText)
                 
@@ -491,9 +491,21 @@ const uploadFile = async (fileObj, uploadURL) => {
                         }
 
                         // Confirm upload with database tracking
-                        confirmUpload(fileObj.result)
+                        const confirmResponse = await confirmUpload(fileObj.result)
                         
-                        emit('upload-success', fileObj.result)
+                        // Emit comprehensive upload data
+                        const uploadData = {
+                            cloudflare_id: imageId,
+                            urls: {
+                                original: fileObj.result.url,
+                                public: fileObj.result.url,
+                                thumbnail: `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${imageId}/thumbnail`
+                            },
+                            filename: fileObj.name,
+                            ...confirmResponse
+                        }
+                        
+                        emit('upload-success', uploadData)
                         
                         // Emit v-model update for single file uploads
                         if (props.maxFiles === 1) {
@@ -545,26 +557,54 @@ const uploadFile = async (fileObj, uploadURL) => {
 }
 
 const confirmUpload = async (uploadResult) => {
-    try {
-        const requestBody = {
-            cloudflare_id: uploadResult.id,
-            filename: uploadResult.filename,
-        }
-        
-        if (props.context) requestBody.context = props.context
-        if (props.entityType) requestBody.entity_type = props.entityType
-        if (props.entityId) requestBody.entity_id = props.entityId
-        if (props.metadata && Object.keys(props.metadata).length > 0) {
-            requestBody.metadata = props.metadata
-        }
+    let retries = 0
+    const maxRetries = 3
+    const retryDelay = 1000 // 1 second
+    
+    while (retries < maxRetries) {
+        try {
+            const requestBody = {
+                cloudflare_id: uploadResult.id,
+                filename: uploadResult.filename,
+            }
+            
+            if (props.context) requestBody.context = props.context
+            if (props.entityType) requestBody.entity_type = props.entityType
+            if (props.entityId) requestBody.entity_id = props.entityId
+            if (props.metadata && Object.keys(props.metadata).length > 0) {
+                requestBody.metadata = props.metadata
+            }
 
-        const axios = (await import('axios')).default
-        const response = await axios.post('/api/cloudflare/confirm-upload', requestBody)
-        
-        console.log('Upload confirmed in database:', response.data)
-    } catch (error) {
-        console.warn('Error confirming upload:', error)
-        // Don't fail the upload for database tracking errors
+            const axios = (await import('axios')).default
+            const response = await axios.post('/api/cloudflare/confirm-upload', requestBody)
+            
+            console.log('Upload confirmed in database:', response.data)
+            return response.data // Success, exit the retry loop
+            
+        } catch (error) {
+            retries++
+            console.warn(`Error confirming upload (attempt ${retries}/${maxRetries}):`, error)
+            
+            // Check if it's a validation error (422) - no point in retrying
+            if (error.response && error.response.status === 422) {
+                console.error('Validation error, not retrying:', error.response.data)
+                break
+            }
+            
+            // If not the last retry, wait before trying again
+            if (retries < maxRetries) {
+                console.log(`Retrying in ${retryDelay * retries}ms...`)
+                await new Promise(resolve => setTimeout(resolve, retryDelay * retries))
+            } else {
+                // Log the final error but don't fail the entire upload
+                console.error('Failed to confirm upload after all retries:', error)
+                // Optionally emit a warning event
+                emit('upload-warning', { 
+                    message: 'Image uploaded but database tracking failed. The image is still available.',
+                    cloudflare_id: uploadResult.id 
+                })
+            }
+        }
     }
 }
 
@@ -591,8 +631,17 @@ const handleMediaSelected = (mediaItem) => {
         files.value[files.value.length - 1] = selectedFile
     }
 
-    // Emit the upload success event
-    emit('upload-success', selectedFile.result)
+    // Emit the upload success event with comprehensive structure
+    const uploadData = {
+        cloudflare_id: selectedFile.result.id,
+        urls: {
+            original: selectedFile.result.url,
+            public: selectedFile.result.url,
+            thumbnail: `https://imagedelivery.net/nCX0WluV4kb4MYRWgWWi4A/${selectedFile.result.id}/thumbnail`
+        },
+        filename: selectedFile.result.filename
+    }
+    emit('upload-success', uploadData)
 
     // Emit v-model update for single file uploads
     if (props.maxFiles === 1) {

@@ -58,7 +58,7 @@
                 </label>
                 <div class="mt-1 flex rounded-md shadow-sm">
                   <span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                    /@{{ channel.slug }}/
+                    /{{ channel.slug }}/
                   </span>
                   <input
                     id="slug"
@@ -71,7 +71,7 @@
                 <p v-if="slugError" class="mt-1 text-sm text-red-600">{{ slugError }}</p>
                 <p v-else-if="slugChecking" class="mt-1 text-sm text-gray-500">Checking availability...</p>
                 <p v-else-if="slugAvailable === true" class="mt-1 text-sm text-green-600">This URL is available</p>
-                <p class="mt-1 text-sm text-gray-500">URL: /@{{ channel.slug }}/{{ form.slug || 'your-list-slug' }}</p>
+                <p class="mt-1 text-sm text-gray-500">URL: /{{ channel.slug }}/{{ form.slug || 'your-list-slug' }}</p>
               </div>
 
               <!-- Description -->
@@ -332,8 +332,8 @@ const createList = async () => {
     
     // Redirect to the new list
     if (response.data.list && response.data.list.slug) {
-      console.log('Redirecting to:', `/@${channel.value.slug}/${response.data.list.slug}`)
-      router.push(`/@${channel.value.slug}/${response.data.list.slug}`)
+      console.log('Redirecting to:', `/${channel.value.slug}/${response.data.list.slug}`)
+      router.push(`/${channel.value.slug}/${response.data.list.slug}`)
     } else {
       // Fallback to channel edit page if no slug
       console.log('No slug in response, redirecting to channel edit')

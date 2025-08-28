@@ -11,7 +11,7 @@
               Channel updated successfully!
             </span>
             <router-link
-              :to="`/@${channel.slug}`"
+              :to="`/${channel.slug}`"
               class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancel
@@ -24,7 +24,7 @@
               {{ saving ? 'Saving...' : 'Save Changes' }}
             </button>
             <a
-              :href="`/@${channel.slug}`"
+              :href="`/${channel.slug}`"
               target="_blank"
               class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
               title="View Channel"
@@ -90,23 +90,38 @@
                   <div>
                     <label for="slug" class="block text-sm font-medium text-gray-700">
                       Channel URL
+                      <span v-if="!channel.slug_customized" class="ml-2 text-xs text-indigo-600">(One-time customization available)</span>
+                      <span v-else class="ml-2 text-xs text-gray-500">(Permanently set)</span>
                     </label>
                     <div class="mt-1 flex rounded-md shadow-sm">
                       <span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                        @
+                        {{ siteOrigin }}/
                       </span>
                       <input
                         id="slug"
                         v-model="form.slug"
                         type="text"
                         required
-                        class="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        :disabled="channel.slug_customized"
+                        :class="[
+                          'flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm',
+                          channel.slug_customized ? 'bg-gray-100 cursor-not-allowed' : ''
+                        ]"
                         @blur="checkSlugAvailability"
                       >
                     </div>
                     <p v-if="slugError" class="mt-1 text-sm text-red-600">{{ slugError }}</p>
                     <p v-else-if="slugChecking" class="mt-1 text-sm text-gray-500">Checking availability...</p>
-                    <p v-else-if="slugAvailable === true" class="mt-1 text-sm text-green-600">This URL is available</p>
+                    <p v-else-if="slugAvailable === true && !channel.slug_customized" class="mt-1 text-sm text-green-600">This URL is available</p>
+                    <p v-if="channel.slug_customized" class="mt-1 text-sm text-amber-600">
+                      <svg class="inline-block w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                      </svg>
+                      URL has been permanently customized and cannot be changed
+                    </p>
+                    <p v-else class="mt-1 text-sm text-gray-500">
+                      ⚠️ Warning: You can only customize your URL once. Choose carefully!
+                    </p>
                   </div>
 
                   <!-- Description -->
@@ -310,7 +325,7 @@
                       </div>
                       <div class="flex items-center space-x-2 ml-4">
                         <router-link
-                          :to="`/@${channel.slug}/${list.slug}`"
+                          :to="`/${channel.slug}/${list.slug}`"
                           class="text-gray-400 hover:text-gray-600"
                           title="View List"
                         >
@@ -389,7 +404,7 @@
                       </div>
                       <div class="flex items-center space-x-2 ml-4">
                         <router-link
-                          :to="`/@${channel.slug}/chains/${chain.slug}`"
+                          :to="`/${channel.slug}/chains/${chain.slug}`"
                           class="text-gray-400 hover:text-gray-600"
                           title="View Chain"
                         >
@@ -545,6 +560,14 @@ const channelLists = ref([])
 const listsLoading = ref(false)
 const channelChains = ref([])
 const chainsLoading = ref(false)
+
+// Computed property for site origin
+const siteOrigin = computed(() => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+  return 'http://localhost:5173' // fallback
+})
 
 // Methods
 const fetchChannel = async () => {

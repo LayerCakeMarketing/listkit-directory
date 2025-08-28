@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Channel;
 use App\Models\User;
+use App\Rules\ValidChannelSlug;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -68,6 +69,7 @@ class ChannelController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'slug' => ['nullable', 'string', new ValidChannelSlug()],
             'description' => 'nullable|string|max:1000',
             'is_public' => 'boolean',
             'avatar_cloudflare_id' => 'nullable|string',
@@ -77,7 +79,13 @@ class ChannelController extends Controller
         ]);
 
         $validated['user_id'] = auth()->id();
-        $validated['slug'] = Channel::generateUniqueSlug($validated['name']);
+        
+        // Generate slug if not provided or sanitize if provided
+        if (!empty($validated['slug'])) {
+            $validated['slug'] = Channel::sanitizeSlug($validated['slug']);
+        } else {
+            $validated['slug'] = Channel::generateUniqueSlug($validated['name']);
+        }
 
         DB::beginTransaction();
         try {
@@ -115,6 +123,9 @@ class ChannelController extends Controller
     {
         $query = Channel::with(['user:id,name,username,custom_url,avatar,avatar_cloudflare_id'])
             ->withCount(['lists', 'followers']);
+
+        // Sanitize slug by removing @ if present
+        $slugOrId = Channel::sanitizeSlug($slugOrId);
 
         // If it's numeric, search by ID, otherwise by slug
         if (is_numeric($slugOrId)) {
@@ -163,14 +174,7 @@ class ChannelController extends Controller
                 'sometimes',
                 'required',
                 'string',
-                'max:255',
-                Rule::unique('channels')->ignore($channel->id),
-                function ($attribute, $value, $fail) {
-                    // Check against usernames
-                    if (User::where('username', $value)->orWhere('custom_url', $value)->exists()) {
-                        $fail('This slug is already taken by a user.');
-                    }
-                },
+                new ValidChannelSlug($channel->id, true),
             ],
             'description' => 'nullable|string|max:1000',
             'is_public' => 'boolean',
@@ -183,9 +187,20 @@ class ChannelController extends Controller
 
         DB::beginTransaction();
         try {
-            // Handle slug change
+            // Handle slug change - only allow if not yet customized
             if (isset($validated['slug']) && $validated['slug'] !== $channel->slug) {
-                $validated['slug'] = Str::slug($validated['slug']);
+                // Check if slug has already been customized
+                if ($channel->slug_customized) {
+                    return response()->json([
+                        'message' => 'Channel URL has already been customized and cannot be changed again.',
+                        'errors' => ['slug' => ['This channel URL has been permanently set and cannot be changed.']]
+                    ], 422);
+                }
+                
+                $validated['slug'] = Channel::sanitizeSlug($validated['slug']);
+                // Mark slug as customized since it's being changed from the auto-generated one
+                $validated['slug_customized'] = true;
+                $validated['slug_customized_at'] = now();
             }
 
             // Handle Cloudflare avatar upload
@@ -282,6 +297,40 @@ class ChannelController extends Controller
         }
     }
 
+    /**
+     * Check if a slug is available.
+     */
+    public function checkSlug(Request $request)
+    {
+        $request->validate([
+            'slug' => 'required|string',
+            'exclude_id' => 'nullable|integer'
+        ]);
+        
+        $slug = Channel::sanitizeSlug($request->input('slug'));
+        $excludeId = $request->input('exclude_id');
+        
+        // If checking for an existing channel, verify it hasn't been customized already
+        if ($excludeId) {
+            $channel = Channel::find($excludeId);
+            if ($channel && $channel->slug_customized && $channel->slug !== $slug) {
+                return response()->json([
+                    'available' => false,
+                    'message' => 'This channel URL has been permanently set and cannot be changed.',
+                    'slug_customized' => true
+                ]);
+            }
+        }
+        
+        $isAvailable = Channel::isSlugAvailable($slug, $excludeId);
+        
+        return response()->json([
+            'available' => $isAvailable,
+            'slug' => $slug,
+            'message' => $isAvailable ? 'This URL is available' : 'This URL is not available'
+        ]);
+    }
+    
     /**
      * Follow a channel.
      */
@@ -431,39 +480,6 @@ class ChannelController extends Controller
         return response()->json($list);
     }
 
-    /**
-     * Check slug availability.
-     */
-    public function checkSlug(Request $request)
-    {
-        $request->validate([
-            'slug' => 'required|string|max:255',
-            'exclude_id' => 'nullable|exists:channels,id',
-        ]);
-
-        $slug = Str::slug($request->input('slug'));
-        $excludeId = $request->input('exclude_id');
-
-        // Check against channels
-        $channelQuery = Channel::where('slug', $slug);
-        if ($excludeId) {
-            $channelQuery->where('id', '!=', $excludeId);
-        }
-        $channelExists = $channelQuery->exists();
-
-        // Check against users
-        $userExists = User::where('username', $slug)
-            ->orWhere('custom_url', $slug)
-            ->exists();
-
-        $available = !$channelExists && !$userExists;
-
-        return response()->json([
-            'available' => $available,
-            'slug' => $slug,
-            'message' => $available ? 'Slug is available' : 'Slug is already taken',
-        ]);
-    }
 
     /**
      * Get channels for the authenticated user.

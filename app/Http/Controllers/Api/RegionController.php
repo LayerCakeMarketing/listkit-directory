@@ -8,6 +8,7 @@ use App\Models\Place;
 use App\Services\LocationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class RegionController extends Controller
 {
@@ -527,6 +528,9 @@ class RegionController extends Controller
                     },
                     'featuredLists' => function($query) {
                         $query->with(['user', 'category']);
+                    },
+                    'featuredRegions' => function($query) {
+                        $query->select('regions.*', 'featured_regions.label', 'featured_regions.description as featured_description');
                     }
                 ])
                 ->withCount([
@@ -547,7 +551,83 @@ class RegionController extends Controller
         $region->display_name = $region->display_name;
         $region->cover_image_url = $region->getCoverImageUrl();
         
+        // Format featured regions for map display
+        if ($region->featuredRegions) {
+            $region->featured_regions_map_data = $region->featuredRegions->map(function ($fr) {
+                // Get coordinates using accessor or parse from raw value
+                $coords = null;
+                
+                // Try to get parsed coordinates from accessor
+                if (method_exists($fr, 'getCoordinatesAttribute')) {
+                    $parsedCoords = $fr->getCoordinatesAttribute();
+                    if ($parsedCoords) {
+                        $coords = $parsedCoords;
+                    }
+                } elseif ($fr->center_point) {
+                    // Fallback to manual parsing if needed
+                    // PostgreSQL point format: "(lng,lat)"
+                    if (preg_match('/\(([^,]+),([^)]+)\)/', $fr->center_point, $matches)) {
+                        $coords = [
+                            'lng' => floatval($matches[1]),
+                            'lat' => floatval($matches[2])
+                        ];
+                    }
+                }
+                
+                return [
+                    'id' => $fr->id,
+                    'name' => $fr->name,
+                    'type' => $fr->type,
+                    'slug' => $fr->slug,
+                    'url' => '/local/' . $fr->getUrlPath(),
+                    'label' => $fr->pivot->label,
+                    'description' => $fr->pivot->description,
+                    'coordinates' => $coords
+                ];
+            })->filter(function ($fr) {
+                return $fr['coordinates'] !== null; // Only include regions with coordinates
+            })->values();
+        }
+        
         return response()->json(['data' => $region]);
+    }
+    
+    /**
+     * Get featured regions for a specific region (public endpoint).
+     */
+    public function getFeaturedRegions($slug)
+    {
+        $region = Region::where('slug', $slug)->firstOrFail();
+        
+        $featuredRegions = $region->featuredRegions()
+            ->with(['parent:id,name,slug'])
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'featured_regions' => $featuredRegions->map(function ($featuredRegion) {
+                return [
+                    'id' => $featuredRegion->id,
+                    'name' => $featuredRegion->name,
+                    'full_name' => $featuredRegion->full_name,
+                    'slug' => $featuredRegion->slug,
+                    'type' => $featuredRegion->type,
+                    'level' => $featuredRegion->level,
+                    'url' => '/local/' . $featuredRegion->getUrlPath(),
+                    'cover_image_url' => $featuredRegion->getCoverImageUrl(),
+                    'intro_text' => Str::limit($featuredRegion->intro_text, 150),
+                    'cached_place_count' => $featuredRegion->cached_place_count,
+                    'parent' => $featuredRegion->parent ? [
+                        'id' => $featuredRegion->parent->id,
+                        'name' => $featuredRegion->parent->name,
+                        'slug' => $featuredRegion->parent->slug,
+                    ] : null,
+                    'center_point' => $featuredRegion->center_point,
+                    'label' => $featuredRegion->pivot->label,
+                    'description' => $featuredRegion->pivot->description,
+                ];
+            })
+        ]);
     }
     
     /**

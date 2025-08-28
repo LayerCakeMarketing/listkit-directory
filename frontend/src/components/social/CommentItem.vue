@@ -2,13 +2,14 @@
   <div class="flex gap-3">
     <!-- Avatar -->
     <router-link 
-      :to="`/@${comment.user.username}`"
+      :to="`/up/@${comment.user.username}`"
       class="flex-shrink-0"
     >
       <img
         :src="userAvatar"
-        :alt="comment.user.name"
-        class="w-10 h-10 rounded-full object-cover"
+        :alt="comment.user.name || comment.user.username"
+        class="w-10 h-10 rounded-full object-cover bg-gray-100"
+        @error="handleAvatarError"
       >
     </router-link>
 
@@ -17,11 +18,16 @@
       <!-- Header -->
       <div class="flex items-start justify-between gap-2">
         <div>
+          <!-- Show "Replying to" if this is a nested reply (depth >= 2) -->
+          <div v-if="comment.depth >= 2 && comment.reply_to_user" class="text-xs text-gray-500 mb-1">
+            Replying to <router-link :to="`/up/@${comment.reply_to_user.username}`" class="text-blue-600 hover:underline">@{{ comment.reply_to_user.username }}</router-link>
+          </div>
+          
           <router-link 
-            :to="`/@${comment.user.username}`"
+            :to="`/up/@${comment.user.username}`"
             class="font-medium text-gray-900 hover:underline"
           >
-            {{ comment.user.firstname }} {{ comment.user.lastname }}
+            {{ getUserDisplayName(comment.user) }}
           </router-link>
           <div class="flex items-center gap-2 text-xs text-gray-500">
             <span>@{{ comment.user.username }}</span>
@@ -121,10 +127,14 @@
         />
       </div>
 
-      <!-- Replies -->
-      <div v-if="comment.replies && comment.replies.length > 0" class="mt-3 space-y-3 pl-4 border-l-2 border-gray-100">
+      <!-- Replies - Only indent if depth is 0 (first level replies) -->
+      <div 
+        v-if="comment.replies && comment.replies.length > 0" 
+        class="mt-3 space-y-3"
+        :class="comment.depth === 0 ? 'pl-4 border-l-2 border-gray-100' : ''"
+      >
         <CommentItem
-          v-for="reply in comment.replies"
+          v-for="reply in sortedReplies"
           :key="reply.id"
           :comment="reply"
           :type="type"
@@ -199,10 +209,31 @@ const canDelete = computed(() => {
 })
 
 const userAvatar = computed(() => {
-  if (props.comment.user.avatar_cloudflare_id) {
-    return `https://imagedelivery.net/${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH}/${props.comment.user.avatar_cloudflare_id}/avatar`
+  // Check multiple possible avatar fields
+  const user = props.comment.user
+  
+  if (!user) {
+    return '/images/default-avatar.svg'
   }
-  return '/images/default-avatar.png'
+  
+  // Priority 1: Check avatar_url from backend (this should be the Cloudflare URL)
+  if (user.avatar_url) {
+    return user.avatar_url
+  }
+  
+  // Priority 2: Build URL from cloudflare_id if no avatar_url
+  if (user.avatar_cloudflare_id && import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH) {
+    // Use 'public' variant instead of 'avatar' which might not exist
+    return `https://imagedelivery.net/${import.meta.env.VITE_CLOUDFLARE_ACCOUNT_HASH}/${user.avatar_cloudflare_id}/public`
+  }
+  
+  // Priority 3: Local avatar path
+  if (user.avatar) {
+    return user.avatar
+  }
+  
+  // Use default avatar SVG
+  return '/images/default-avatar.svg'
 })
 
 const hasMoreReplies = computed(() => {
@@ -287,4 +318,25 @@ const loadMoreReplies = async () => {
     loadingReplies.value = false
   }
 }
+
+const getUserDisplayName = (user) => {
+  if (user.name) return user.name
+  if (user.firstname || user.lastname) {
+    return `${user.firstname || ''} ${user.lastname || ''}`.trim()
+  }
+  return user.username || 'Unknown'
+}
+
+const handleAvatarError = (event) => {
+  // Fallback to default avatar on error
+  event.target.src = '/images/default-avatar.svg'
+}
+
+const sortedReplies = computed(() => {
+  if (!props.comment.replies) return []
+  // Sort replies by created_at for better thread flow
+  return [...props.comment.replies].sort((a, b) => 
+    new Date(a.created_at) - new Date(b.created_at)
+  )
+})
 </script>
