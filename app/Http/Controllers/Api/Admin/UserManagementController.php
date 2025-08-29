@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\UserSuspendedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class UserManagementController extends Controller
@@ -125,6 +127,82 @@ class UserManagementController extends Controller
         return response()->json(['message' => 'Password updated successfully']);
     }
 
+    public function suspend(Request $request, User $user)
+    {
+        // Prevent suspending yourself
+        if ($user->id === auth()->id()) {
+            return response()->json(['error' => 'Cannot suspend your own account'], 422);
+        }
+
+        // Prevent suspending the last admin
+        if ($user->role === 'admin') {
+            $activeAdminCount = User::where('role', 'admin')
+                ->where('is_suspended', false)
+                ->count();
+            if ($activeAdminCount <= 1) {
+                return response()->json(['error' => 'Cannot suspend the last active admin'], 422);
+            }
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        DB::transaction(function () use ($user, $validated) {
+            $user->update([
+                'is_suspended' => true,
+                'suspended_at' => now(),
+                'suspension_reason' => $validated['reason'],
+                'suspended_by' => auth()->id(),
+            ]);
+
+            // Send suspension notification
+            try {
+                $user->notify(new UserSuspendedNotification($validated['reason'], auth()->user()->name));
+            } catch (\Exception $e) {
+                // Log error but don't fail the suspension
+                \Log::error('Failed to send suspension notification: ' . $e->getMessage());
+            }
+        });
+
+        return response()->json([
+            'message' => 'User suspended successfully',
+            'user' => $user
+        ]);
+    }
+
+    public function unsuspend(User $user)
+    {
+        $user->update([
+            'is_suspended' => false,
+            'suspended_at' => null,
+            'suspension_reason' => null,
+            'suspended_by' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'User unsuspended successfully',
+            'user' => $user
+        ]);
+    }
+
+    public function resendSuspensionEmail(User $user)
+    {
+        if (!$user->is_suspended) {
+            return response()->json(['error' => 'User is not suspended'], 422);
+        }
+
+        try {
+            $user->notify(new UserSuspendedNotification(
+                $user->suspension_reason ?? 'Account suspended',
+                User::find($user->suspended_by)?->name
+            ));
+            return response()->json(['message' => 'Suspension email sent successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to send email'], 500);
+        }
+    }
+
     public function destroy(User $user)
     {
         // Prevent deleting yourself
@@ -140,7 +218,168 @@ class UserManagementController extends Controller
             }
         }
 
-        $user->delete();
+        // Handle related data before deletion
+        DB::transaction(function () use ($user) {
+            // Get a default admin user to reassign non-nullable foreign keys
+            $defaultAdminId = User::where('role', 'admin')
+                ->where('id', '!=', $user->id)
+                ->orderBy('id')
+                ->value('id');
+            
+            // If no other admin exists, use the first available user
+            if (!$defaultAdminId) {
+                $defaultAdminId = User::where('id', '!=', $user->id)
+                    ->orderBy('id')
+                    ->value('id');
+            }
+            
+            // Handle directory_entries - created_by_user_id might be NOT NULL
+            if ($defaultAdminId) {
+                // Reassign to another user
+                DB::table('directory_entries')
+                    ->where('created_by_user_id', $user->id)
+                    ->update(['created_by_user_id' => $defaultAdminId]);
+            } else {
+                // If no other users exist, we have to delete the entries
+                DB::table('directory_entries')
+                    ->where('created_by_user_id', $user->id)
+                    ->delete();
+            }
+            
+            // These columns are nullable, so we can set them to null
+            DB::table('directory_entries')
+                ->where('owner_user_id', $user->id)
+                ->update(['owner_user_id' => null]);
+                
+            DB::table('directory_entries')
+                ->where('updated_by_user_id', $user->id)
+                ->update(['updated_by_user_id' => null]);
+                
+            DB::table('directory_entries')
+                ->where('rejected_by', $user->id)
+                ->update(['rejected_by' => null]);
+                
+            DB::table('directory_entries')
+                ->where('approved_by', $user->id)
+                ->update(['approved_by' => null]);
+            
+            DB::table('directory_entries')
+                ->where('ownership_transferred_by', $user->id)
+                ->update(['ownership_transferred_by' => null]);
+            
+            // Handle lists - user_id is nullable in most cases, but handle both scenarios
+            try {
+                // Try to set to null first (if column is nullable)
+                DB::table('lists')
+                    ->where('user_id', $user->id)
+                    ->update(['user_id' => null]);
+            } catch (\Exception $e) {
+                // If that fails (NOT NULL constraint), reassign or delete
+                if ($defaultAdminId) {
+                    DB::table('lists')
+                        ->where('user_id', $user->id)
+                        ->update(['user_id' => $defaultAdminId]);
+                } else {
+                    // Delete if no other user exists
+                    DB::table('lists')
+                        ->where('user_id', $user->id)
+                        ->delete();
+                }
+            }
+                
+            DB::table('lists')
+                ->where('status_changed_by', $user->id)
+                ->update(['status_changed_by' => null]);
+            
+            // Handle polymorphic lists owned by this user - always delete these
+            DB::table('lists')
+                ->where('owner_type', 'App\\Models\\User')
+                ->where('owner_id', $user->id)
+                ->delete();
+            
+            // Handle suspended_by references before deleting user
+            DB::table('users')
+                ->where('suspended_by', $user->id)
+                ->update(['suspended_by' => null]);
+            
+            // Handle claims - set approval/rejection references to null
+            DB::table('claims')
+                ->where('approved_by', $user->id)
+                ->update(['approved_by' => null]);
+            
+            DB::table('claims')
+                ->where('rejected_by', $user->id)
+                ->update(['rejected_by' => null]);
+            
+            // Delete claims created by this user
+            DB::table('claims')
+                ->where('user_id', $user->id)
+                ->delete();
+            
+            // Handle claim documents - set verified_by to null
+            if (\Schema::hasTable('claim_documents')) {
+                DB::table('claim_documents')
+                    ->where('verified_by', $user->id)
+                    ->update(['verified_by' => null]);
+            }
+            
+            // Handle place_managers - set invited_by to null
+            if (\Schema::hasTable('place_managers')) {
+                DB::table('place_managers')
+                    ->where('invited_by', $user->id)
+                    ->update(['invited_by' => null]);
+            }
+            
+            // Delete user's posts
+            DB::table('posts')->where('user_id', $user->id)->delete();
+            
+            // Handle comments - update reply references and delete user's comments
+            DB::table('comments')
+                ->where('reply_to_user_id', $user->id)
+                ->update(['reply_to_user_id' => null]);
+                
+            DB::table('comments')->where('user_id', $user->id)->delete();
+            
+            // Delete user's channels
+            DB::table('channels')->where('user_id', $user->id)->delete();
+            
+            // Delete follows
+            if (\Schema::hasTable('follows')) {
+                DB::table('follows')
+                    ->where('follower_id', $user->id)
+                    ->orWhere('following_id', $user->id)
+                    ->delete();
+            }
+            
+            // Delete user_follows
+            if (\Schema::hasTable('user_follows')) {
+                DB::table('user_follows')
+                    ->where('follower_id', $user->id)
+                    ->orWhere('following_id', $user->id)
+                    ->delete();
+            }
+            
+            // Delete saved items
+            if (\Schema::hasTable('saved_items')) {
+                DB::table('saved_items')->where('user_id', $user->id)->delete();
+            }
+            
+            // Delete notifications
+            if (\Schema::hasTable('notifications')) {
+                DB::table('notifications')
+                    ->where('notifiable_type', 'App\\Models\\User')
+                    ->where('notifiable_id', $user->id)
+                    ->delete();
+            }
+            
+            // Delete app_notifications
+            if (\Schema::hasTable('app_notifications')) {
+                DB::table('app_notifications')->where('recipient_id', $user->id)->delete();
+            }
+            
+            // Finally delete the user
+            $user->delete();
+        });
 
         return response()->json(['message' => 'User deleted successfully']);
     }

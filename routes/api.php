@@ -575,6 +575,9 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/users/{user}/password', [UserManagementController::class, 'updatePassword']);
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy']);
         Route::post('/users/bulk-update', [UserManagementController::class, 'bulkUpdate']);
+        Route::post('/users/{user}/suspend', [UserManagementController::class, 'suspend']);
+        Route::post('/users/{user}/unsuspend', [UserManagementController::class, 'unsuspend']);
+        Route::post('/users/{user}/resend-suspension-email', [UserManagementController::class, 'resendSuspensionEmail']);
         
         // Placeholder for entries endpoint used by dashboard
         Route::get('/entries', function (Request $request) {

@@ -190,22 +190,41 @@
                                             {{ user.last_active_at ? formatDate(user.last_active_at) : 'Never' }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span v-if="user.email_verified_at" class="text-green-600 text-sm">Verified</span>
-                                            <span v-else class="text-yellow-600 text-sm">Unverified</span>
+                                            <div class="flex flex-col space-y-1">
+                                                <span v-if="user.email_verified_at" class="text-green-600 text-sm">Verified</span>
+                                                <span v-else class="text-yellow-600 text-sm">Unverified</span>
+                                                <span v-if="user.is_suspended" class="text-red-600 text-sm font-semibold">SUSPENDED</span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                @click="editUser(user)"
-                                                class="text-blue-600 hover:text-blue-900 mr-3"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                @click="deleteUser(user)"
-                                                class="text-red-600 hover:text-red-900"
-                                            >
-                                                Delete
-                                            </button>
+                                            <div class="flex justify-end space-x-2">
+                                                <button
+                                                    @click="editUser(user)"
+                                                    class="text-blue-600 hover:text-blue-900"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    v-if="!user.is_suspended"
+                                                    @click="suspendUser(user)"
+                                                    class="text-orange-600 hover:text-orange-900"
+                                                >
+                                                    Suspend
+                                                </button>
+                                                <button
+                                                    v-else
+                                                    @click="unsuspendUser(user)"
+                                                    class="text-green-600 hover:text-green-900"
+                                                >
+                                                    Unsuspend
+                                                </button>
+                                                <button
+                                                    @click="deleteUser(user)"
+                                                    class="text-red-600 hover:text-red-900"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -428,15 +447,54 @@ const editUser = (user) => {
     showModal.value = true
 }
 
-const deleteUser = async (user) => {
-    if (!confirm(`Are you sure you want to delete ${user.name}?`)) return
+const suspendUser = async (user) => {
+    const reason = prompt(`Please provide a reason for suspending ${user.name}:`)
+    if (!reason) return
 
     try {
+        await axios.get('/sanctum/csrf-cookie')
+        await axios.post(`/api/admin/users/${user.id}/suspend`, { reason })
+        fetchUsers()
+        alert('User suspended successfully. An email notification has been sent.')
+    } catch (error) {
+        console.error('Error suspending user:', error)
+        alert('Error suspending user: ' + (error.response?.data?.message || error.message))
+    }
+}
+
+const unsuspendUser = async (user) => {
+    if (!confirm(`Are you sure you want to unsuspend ${user.name}?`)) return
+
+    try {
+        await axios.get('/sanctum/csrf-cookie')
+        await axios.post(`/api/admin/users/${user.id}/unsuspend`)
+        fetchUsers()
+        alert('User unsuspended successfully.')
+    } catch (error) {
+        console.error('Error unsuspending user:', error)
+        alert('Error unsuspending user: ' + (error.response?.data?.message || error.message))
+    }
+}
+
+const deleteUser = async (user) => {
+    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) return
+
+    try {
+        // Ensure we have CSRF token
+        await axios.get('/sanctum/csrf-cookie')
         await axios.delete(`/api/admin/users/${user.id}`)
         fetchUsers()
         fetchStats()
+        alert('User deleted successfully.')
     } catch (error) {
-        alert('Error deleting user')
+        console.error('Error deleting user:', error)
+        if (error.response?.status === 401) {
+            alert('Authentication error. Please refresh the page and try again.')
+        } else if (error.response?.data?.error) {
+            alert('Error: ' + error.response.data.error)
+        } else {
+            alert('Error deleting user. Please check the console for details.')
+        }
     }
 }
 
