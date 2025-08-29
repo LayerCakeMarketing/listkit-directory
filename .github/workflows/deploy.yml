@@ -43,7 +43,7 @@ jobs:
           
           # Backup current state
           echo "📦 Creating backup..."
-          docker exec listerino_db pg_dump -U listerino listerino > /backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql || true
+          docker exec 9106cb440e2f_listerino_db pg_dump -U listerino listerino > /backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql || true
           
           # Pull latest code
           echo "📥 Pulling latest code from GitHub..."
@@ -66,8 +66,8 @@ jobs:
           # Wait for services to be ready
           sleep 10
           
-          # Get the app container name - explicitly use listerino_app
-          APP_CONTAINER="listerino_app"
+          # Get the app container name - use the manual container
+          APP_CONTAINER="listerino_app_manual"
           echo "Using app container: $APP_CONTAINER"
           
           # Verify container is running
@@ -124,7 +124,7 @@ jobs:
         script: |
           cd /var/www/listerino
           # Use explicit container name
-          APP_CONTAINER="listerino_app"
+          APP_CONTAINER="listerino_app_manual"
           # Copy built frontend to the Docker container
           docker cp frontend/dist/. $APP_CONTAINER:/app/frontend/dist/
           echo "✅ Frontend deployed!"
@@ -140,7 +140,7 @@ jobs:
         script: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deployment successful!"
-            docker exec -w /app listerino_app php artisan about
+            docker exec -w /app listerino_app_manual php artisan about
           else
             echo "❌ Deployment failed!"
             tail -20 /var/www/listerino/storage/logs/laravel.log || true
